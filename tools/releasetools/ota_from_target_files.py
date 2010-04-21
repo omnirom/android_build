@@ -134,6 +134,10 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   --backup <boolean>
       Enable or disable the execution of backuptool.sh.
       Disabled by default.
+
+  --override_device <device>
+      Override device-specific asserts. Can be a comma-separated list.
+
 """
 
 from __future__ import print_function
@@ -186,6 +190,7 @@ OPTIONS.payload_signer = None
 OPTIONS.payload_signer_args = []
 OPTIONS.extracted_input = None
 OPTIONS.backuptool = False
+OPTIONS.override_device = 'auto'
 
 METADATA_NAME = 'META-INF/com/android/metadata'
 UNZIP_PATTERN = ['IMAGES/*', 'META/*']
@@ -201,8 +206,11 @@ def SignOutput(temp_zip_name, output_zip_name):
 
 def AppendAssertions(script, info_dict, oem_dicts=None):
   oem_props = info_dict.get("oem_fingerprint_properties")
-  if not oem_props:
-    device = GetBuildProp("ro.product.device", info_dict)
+  if oem_props is None or len(oem_props) == 0:
+    if OPTIONS.override_device == "auto":
+      device = GetBuildProp("ro.product.device", info_dict)
+    else:
+      device = OPTIONS.override_device
     script.AssertDevice(device)
   else:
     if not oem_dicts:
@@ -1337,6 +1345,8 @@ def main(argv):
       OPTIONS.extracted_input = a
     elif o in ("--backup"):
       OPTIONS.backuptool = bool(a.lower() == 'true')
+    elif o in ("--override_device"):
+      OPTIONS.override_device = a
     else:
       return False
     return True
@@ -1369,6 +1379,7 @@ def main(argv):
                                  "payload_signer_args=",
                                  "extracted_input_target_files=",
                                  "backup=",
+                                 "override_device=",
                              ], extra_option_handler=option_handler)
 
   if len(args) != 2:
