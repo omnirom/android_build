@@ -272,6 +272,8 @@ _product_list_vars += PRODUCT_DEX_PREOPT_GENERATE_DM_FILES
 _product_list_vars += PRODUCT_DEX_PREOPT_NEVER_ALLOW_STRIPPING
 _product_list_vars += PRODUCT_DEX_PREOPT_RESOLVE_STARTUP_STRINGS
 
+_product_var_list += PRODUCT_BUILD_PROP_OVERRIDES
+
 # Boot image options.
 _product_single_value_vars += \
     PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE \
