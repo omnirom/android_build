@@ -202,6 +202,13 @@ A/B OTA specific options
       ones. Should only be used if caller knows it's safe to do so (e.g. all the
       postinstall work is to dexopt apps and a data wipe will happen immediately
       after). Only meaningful when generating A/B OTAs.
+
+  --override_device <device>
+      Override device-specific asserts. Can be a comma-separated list.
+
+  --backup <boolean>
+      Enable or disable the execution of backuptool.sh.
+      Disabled by default.
 """
 
 from __future__ import print_function
@@ -266,6 +273,8 @@ OPTIONS.output_metadata_path = None
 OPTIONS.disable_fec_computation = False
 OPTIONS.force_non_ab = False
 OPTIONS.boot_variable_file = None
+OPTIONS.override_device = 'auto'
+OPTIONS.backuptool = False
 
 
 METADATA_NAME = 'META-INF/com/android/metadata'
@@ -809,6 +818,13 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   # All other partitions as well as the data wipe use 10% of the progress, and
   # the update of the system partition takes the remaining progress.
   system_progress = 0.9 - (len(block_diff_dict) - 1) * 0.1
+  if OPTIONS.backuptool:
+    script.Mount("/system")
+    script.RunBackup("backup")
+    script.Unmount("/system")
+
+  system_progress = 0.75
+
   if OPTIONS.wipe_user_data:
     system_progress -= 0.1
   progress_dict = {partition: 0.1 for partition in block_diff_dict}
@@ -836,6 +852,13 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   common.CheckSize(boot_img.data, "boot.img", target_info)
   common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
+  if OPTIONS.backuptool:
+    script.ShowProgress(0.02, 10)
+    script.Mount("/system")
+    script.RunBackup("restore")
+    script.Unmount("/system")
+
+  script.ShowProgress(0.05, 5)
   script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.1, 10)
@@ -2108,6 +2131,10 @@ def main(argv):
       OPTIONS.force_non_ab = True
     elif o == "--boot_variable_file":
       OPTIONS.boot_variable_file = a
+    elif o in ("--override_device"):
+      OPTIONS.override_device = a
+    elif o in ("--backup"):
+      OPTIONS.backuptool = bool(a.lower() == 'true')
     else:
       return False
     return True
@@ -2146,6 +2173,8 @@ def main(argv):
                                  "disable_fec_computation",
                                  "force_non_ab",
                                  "boot_variable_file=",
+                                 "override_device=",
+                                 "backup=",
                              ], extra_option_handler=option_handler)
 
   if len(args) != 2:
