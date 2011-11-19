@@ -309,10 +309,10 @@ def LoadRecoveryFSTab(read_helper, fstab_version, system_root_image=False):
       if not line or line.startswith("#"):
         continue
       pieces = line.split()
-      if not 3 <= len(pieces) <= 4:
+      if not (3 <= len(pieces) <= 7):
         raise ValueError("malformed recovery.fstab line: \"%s\"" % (line,))
       options = None
-      if len(pieces) >= 4:
+      if len(pieces) >= 4 and pieces[3] != 'NULL':
         if pieces[3].startswith("/"):
           device2 = pieces[3]
           if len(pieces) >= 5:
@@ -1578,13 +1578,16 @@ DataImage = blockimgdiff.DataImage
 
 # map recovery.fstab's fs_types to mount/format "partition types"
 PARTITION_TYPES = {
-    "yaffs2": "MTD",
-    "mtd": "MTD",
+    "bml": "BML",
+    "ext2": "EMMC",
+    "ext3": "EMMC",
     "ext4": "EMMC",
     "emmc": "EMMC",
+    "mtd": "MTD",
     "f2fs": "EMMC",
-    "squashfs": "EMMC"
-}
+    "squashfs": "EMMC",
+    "yaffs2": "MTD",
+    "vfat": "EMMC" }
 
 def GetTypeAndDevice(mount_point, info):
   fstab = info["fstab"]
