@@ -96,7 +96,7 @@ endif
 android_config_h := $(call select-android-config-h,linux-arm)
 
 TARGET_GLOBAL_CFLAGS += \
-			-msoft-float -fpic -fPIE \
+			-msoft-float -fpic $(PIE_GLOBAL_CFLAGS) \
 			-ffunction-sections \
 			-fdata-sections \
 			-funwind-tables \
@@ -255,7 +255,7 @@ $(hide) $(PRIVATE_CXX) \
 endef
 
 define transform-o-to-executable-inner
-$(hide) $(PRIVATE_CXX) -nostdlib -Bdynamic -fPIE -pie \
+$(hide) $(PRIVATE_CXX) -nostdlib -Bdynamic $(PIE_EXECUTABLE_TRANSFORM) \
 	-Wl,-dynamic-linker,/system/bin/linker \
 	-Wl,--gc-sections \
 	-Wl,-z,nocopyreloc \
