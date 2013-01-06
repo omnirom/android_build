@@ -67,6 +67,9 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   --override_device <device>
       Override device-specific asserts. Can be a comma-separated list.
 
+  --extras_file <file>
+      Extras file
+
   --override_prop <boolean>
       Override build.prop items with custom vendor init.
       Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
@@ -140,6 +143,7 @@ if OPTIONS.worker_threads == 0:
   OPTIONS.worker_threads = 1
 OPTIONS.backuptool = False
 OPTIONS.override_device = 'auto'
+OPTIONS.extras_file = 'build/tools/releasetools/extras.txt'
 OPTIONS.override_prop = False
 OPTIONS.override_boot_partition = ''
 OPTIONS.mount_by_label = False
@@ -369,6 +373,7 @@ def CopyPartitionFiles(itemset, input_zip, output_zip=None, substitute=None):
   """
 
   symlinks = []
+  extras_list = [line.strip() for line in open(OPTIONS.extras_file)]
 
   partition = itemset.partition
 
@@ -380,7 +385,10 @@ def CopyPartitionFiles(itemset, input_zip, output_zip=None, substitute=None):
                          "/" + partition + "/" + basefilename))
       else:
         info2 = copy.copy(info)
-        fn = info2.filename = partition + "/" + basefilename
+        if basefilename in extras_list:
+          fn = info2.filename = "extras/" + basefilename
+        else:
+          fn = info2.filename = "system/" + basefilename
         if substitute and fn in substitute and substitute[fn] is None:
           continue
         if output_zip is not None:
@@ -1488,6 +1496,8 @@ def main(argv):
       OPTIONS.backuptool = bool(a.lower() == 'true')
     elif o in ("--override_device"):
       OPTIONS.override_device = a
+    elif o in ("--extras_file"):
+      OPTIONS.extras_file = str(a)
     elif o in ("--override_prop"):
       OPTIONS.override_prop = bool(a.lower() == 'true')
     elif o in ("--override_boot_partition"):
@@ -1522,6 +1532,7 @@ def main(argv):
                                               "aslr_mode=",
                                               "backup=",
                                               "override_device=",
+                                              "extras_file=",
                                               "override_prop=",
                                               "override_boot_partition=",
                                               "two_step",
