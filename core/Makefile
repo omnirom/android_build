@@ -1592,6 +1592,12 @@ else
     $(INTERNAL_OTA_PACKAGE_TARGET): mount_by_label := false
 endif
 
+ifneq ($(TARGET_OTA_EXTRAS_FILE),)
+    $(INTERNAL_OTA_PACKAGE_TARGET): extras_file := $(TARGET_OTA_EXTRAS_FILE)
+else
+    $(INTERNAL_OTA_PACKAGE_TARGET): extras_file := build/tools/releasetools/extras.txt
+endif
+
 $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	@echo -e ${PRT_HST}"Package OTA: $@"${CL_RST}
 	MKBOOTIMG=$(BOARD_CUSTOM_BOOTIMG_MK) \
@@ -1601,6 +1607,7 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	   -k $(KEY_CERT_PAIR) \
 	   --backup=$(backuptool) \
 	   --override_device=$(override_device) \
+	   --extras_file=$(extras_file) \
 	   --override_prop=$(override_prop) \
 	   --mount_by_label=$(mount_by_label) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \

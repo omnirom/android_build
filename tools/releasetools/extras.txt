@@ -1,0 +1,7 @@
+app/Example.apk
+
+fonts/Example.ttf
+
+lib/libexample.so
+
+media/audio/ringtones/Example.ogg
