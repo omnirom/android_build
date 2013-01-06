@@ -63,6 +63,9 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
       Override build.prop items with custom vendor init.
       Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
 
+  --extras_file <file>
+      Extras file
+
 """
 
 import sys
@@ -102,6 +105,8 @@ OPTIONS.worker_threads = 3
 OPTIONS.backuptool = False
 OPTIONS.override_device = 'auto'
 OPTIONS.override_prop = False
+OPTIONS.extras_file = 'build/tools/releasetools/extras.txt'
+
 
 def MostPopularKey(d, default):
   """Given a dict, return the key corresponding to the largest
@@ -319,6 +324,7 @@ def CopySystemFiles(input_zip, output_zip=None,
   """
 
   symlinks = []
+  extras_list = [line.strip() for line in open(OPTIONS.extras_file)]
 
   for info in input_zip.infolist():
     if info.filename.startswith("SYSTEM/"):
@@ -328,7 +334,10 @@ def CopySystemFiles(input_zip, output_zip=None,
                          "/system/" + basefilename))
       else:
         info2 = copy.copy(info)
-        fn = info2.filename = "system/" + basefilename
+        if basefilename in extras_list:
+          fn = info2.filename = "extras/" + basefilename
+        else:
+          fn = info2.filename = "system/" + basefilename
         if substitute and fn in substitute and substitute[fn] is None:
           continue
         if output_zip is not None:
@@ -878,6 +887,8 @@ def main(argv):
       OPTIONS.override_device = a
     elif o in ("--override_prop"):
       OPTIONS.override_prop = bool(a.lower() == 'true')
+    elif o in ("--extras_file"):
+      OPTIONS.extras_file = str(a)
     else:
       return False
     return True
@@ -894,7 +905,8 @@ def main(argv):
                                               "aslr_mode=",
                                               "backup=",
                                               "override_device=",
-                                              "override_prop="],
+                                              "override_prop=",
+                                              "extras_file="],
                              extra_option_handler=option_handler)
 
   if len(args) != 2:
