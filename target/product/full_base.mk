@@ -21,12 +21,11 @@
 
 PRODUCT_PACKAGES := \
     libfwdlockengine \
-    OpenWnn \
     libWnnEngDic \
-    libWnnJpnDic \
     libwnndict \
     WAPPushManager
 
+ifneq ($(TARGET_EXCLUDE_LIVEWALLPAPERS), true)
 PRODUCT_PACKAGES += \
     Galaxy4 \
     HoloSpiralWallpaper \
@@ -36,11 +35,18 @@ PRODUCT_PACKAGES += \
     NoiseField \
     PhaseBeam \
     PhotoTable
+else
+PRODUCT_PACKAGES += \
+    LiveWallpapersPicker \
+    PhotoTable
+endif
 
+ifeq ($(AOSP_SOUND_CONFIG),true)
 # Additional settings used in all AOSP builds
 PRODUCT_PROPERTY_OVERRIDES := \
     ro.config.ringtone=Ring_Synth_04.ogg \
     ro.config.notification_sound=pixiedust.ogg
+endif
 
 # Put en_US first in the list, so make it default.
 PRODUCT_LOCALES := en_US
