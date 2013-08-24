@@ -16,4 +16,9 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/full_base_telephony.mk)
 
 PRODUCT_PACKAGES += \
+    Telecom \
+    TeleService \
+    MmsService
+
+PRODUCT_PACKAGES += \
     messaging
