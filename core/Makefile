@@ -34,7 +34,6 @@ unique_product_copy_files_destinations :=
 $(foreach cf,$(unique_product_copy_files_pairs), \
     $(eval _src := $(call word-colon,1,$(cf))) \
     $(eval _dest := $(call word-colon,2,$(cf))) \
-    $(call check-product-copy-files,$(cf)) \
     $(if $(filter $(unique_product_copy_files_destinations),$(_dest)), \
         $(info PRODUCT_COPY_FILES $(cf) ignored.), \
         $(eval _fulldest := $(call append-path,$(PRODUCT_OUT),$(_dest))) \
@@ -259,6 +258,7 @@ endif
 	$(hide) TARGET_BUILD_TYPE="$(TARGET_BUILD_VARIANT)" \
 			TARGET_BUILD_FLAVOR="$(TARGET_BUILD_FLAVOR)" \
 			TARGET_DEVICE="$(TARGET_DEVICE)" \
+			OMNI_DEVICE="$(TARGET_DEVICE)" \
 			PRODUCT_NAME="$(TARGET_PRODUCT)" \
 			PRODUCT_BRAND="$(PRODUCT_BRAND)" \
 			PRODUCT_DEFAULT_LOCALE="$(call get-default-product-locale,$(PRODUCT_LOCALES))" \
@@ -288,6 +288,7 @@ endif
 			TARGET_CPU_ABI="$(TARGET_CPU_ABI)" \
 			TARGET_CPU_ABI2="$(TARGET_CPU_ABI2)" \
 			TARGET_AAPT_CHARACTERISTICS="$(TARGET_AAPT_CHARACTERISTICS)" \
+			$(PRODUCT_BUILD_PROP_OVERRIDES) \
 	        bash $(BUILDINFO_SH) >> $@
 ifndef property_overrides_split_enabled
 	$(hide) TARGET_BOOTLOADER_BOARD_NAME="$(TARGET_BOOTLOADER_BOARD_NAME)" \
@@ -611,6 +612,13 @@ INTERNAL_MKBOOTIMG_VERSION_ARGS := \
     --os_version $(PLATFORM_VERSION) \
     --os_patch_level $(PLATFORM_SECURITY_PATCH)
 
+INSTALLED_DTIMAGE_TARGET := $(PRODUCT_OUT)/dt.img
+
+ifeq ($(strip $(BOARD_KERNEL_SEPARATED_DT)),true)
+  INTERNAL_BOOTIMAGE_ARGS += --dt $(INSTALLED_DTIMAGE_TARGET)
+  BOOTIMAGE_EXTRA_DEPS    := $(INSTALLED_DTIMAGE_TARGET)
+endif
+
 INSTALLED_BOOTIMAGE_TARGET := $(PRODUCT_OUT)/boot.img
 
 # BOARD_USES_RECOVERY_AS_BOOT = true must have BOARD_BUILD_SYSTEM_ROOT_IMAGE = true.
@@ -650,7 +658,7 @@ bootimage-nodeps: $(MKBOOTIMG) $(AVBTOOL)
 
 else ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)) # BOARD_AVB_ENABLE != true
 
-$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES) $(BOOT_SIGNER)
+$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES) $(BOOT_SIGNER) $(BOOTIMAGE_EXTRA_DEPS)
 	$(call pretty,"Target boot image: $@")
 	$(hide) $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
 	$(BOOT_SIGNER) /boot $@ $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $@
@@ -665,7 +673,7 @@ bootimage-nodeps: $(MKBOOTIMG) $(BOOT_SIGNER)
 
 else ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)) # PRODUCT_SUPPORTS_BOOT_SIGNER != true
 
-$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES) $(VBOOT_SIGNER) $(FUTILITY)
+$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES) $(VBOOT_SIGNER) $(FUTILITY) $(BOOTIMAGE_EXTRA_DEPS)
 	$(call pretty,"Target boot image: $@")
 	$(hide) $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@.unsigned
 	$(VBOOT_SIGNER) $(FUTILITY) $@.unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_SUBKEY).vbprivk $@.keyblock $@
@@ -680,7 +688,7 @@ bootimage-nodeps: $(MKBOOTIMG) $(VBOOT_SIGNER) $(FUTILITY)
 
 else # PRODUCT_SUPPORTS_VBOOT != true
 
-$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES)
+$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_FILES) $(BOOTIMAGE_EXTRA_DEPS)
 	$(call pretty,"Target boot image: $@")
 	$(hide) $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
 	$(hide) $(call assert-max-image-size,$@,$(BOARD_BOOTIMAGE_PARTITION_SIZE))
@@ -1131,6 +1139,10 @@ endif
 ifdef BOARD_KERNEL_PAGESIZE
   INTERNAL_RECOVERYIMAGE_ARGS += --pagesize $(BOARD_KERNEL_PAGESIZE)
 endif
+ifeq ($(strip $(BOARD_KERNEL_SEPARATED_DT)),true)
+  INTERNAL_RECOVERYIMAGE_ARGS += --dt $(INSTALLED_DTIMAGE_TARGET)
+  RECOVERYIMAGE_EXTRA_DEPS    := $(INSTALLED_DTIMAGE_TARGET)
+endif
 
 # Keys authorized to sign OTA packages this build will accept.  The
 # build always uses dev-keys for this; release packaging tools will
@@ -1293,6 +1305,10 @@ ifeq ($(BOARD_NAND_SPARE_SIZE),)
 BOARD_NAND_SPARE_SIZE := 64
 endif
 
+ifdef BOARD_CUSTOM_BOOTIMG_MK
+include $(BOARD_CUSTOM_BOOTIMG_MK)
+endif
+
 # -----------------------------------------------------------------
 # system image
 #
@@ -1342,7 +1358,7 @@ systemimage_intermediates := \
 BUILT_SYSTEMIMAGE := $(systemimage_intermediates)/system.img
 
 # Create symlink /system/vendor to /vendor if necessary.
-ifdef BOARD_USES_VENDORIMAGE
+ifneq "$(or $(BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE),$(BOARD_NEEDS_VENDORIMAGE_SYMLINK))" ""
 define create-system-vendor-symlink
 $(hide) if [ -d $(TARGET_OUT)/vendor ] && [ ! -h $(TARGET_OUT)/vendor ]; then \
   echo 'Non-symlink $(TARGET_OUT)/vendor detected!' 1>&2; \
@@ -2180,6 +2196,9 @@ endif
 ifdef BOARD_KERNEL_PAGESIZE
 	$(hide) echo "$(BOARD_KERNEL_PAGESIZE)" > $(zip_root)/$(PRIVATE_RECOVERY_OUT)/pagesize
 endif
+ifeq ($(strip $(BOARD_KERNEL_SEPARATED_DT)),true)
+	$(hide) $(ACP) $(INSTALLED_DTIMAGE_TARGET) $(zip_root)/RECOVERY/dt
+endif
 endif # INSTALLED_RECOVERYIMAGE_TARGET defined or BOARD_USES_RECOVERY_AS_BOOT is true
 	@# Components of the boot image
 	$(hide) mkdir -p $(zip_root)/BOOT
@@ -2207,6 +2226,9 @@ ifdef BOARD_KERNEL_BASE
 endif
 ifdef BOARD_KERNEL_PAGESIZE
 	$(hide) echo "$(BOARD_KERNEL_PAGESIZE)" > $(zip_root)/BOOT/pagesize
+endif
+ifeq ($(strip $(BOARD_KERNEL_SEPARATED_DT)),true)
+	$(hide) $(ACP) $(INSTALLED_DTIMAGE_TARGET) $(zip_root)/BOOT/dt
 endif
 endif # BOARD_USES_RECOVERY_AS_BOOT
 	$(hide) $(foreach t,$(INSTALLED_RADIOIMAGE_TARGET),\
@@ -2320,7 +2342,7 @@ endif
 	$(call generate-userimage-prop-dictionary, $(zip_root)/META/misc_info.txt)
 ifneq ($(INSTALLED_RECOVERYIMAGE_TARGET),)
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
-	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
+#	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
 endif
 ifeq ($(AB_OTA_UPDATER),true)
 	@# When using the A/B updater, include the updater config files in the zip.
@@ -2427,20 +2449,51 @@ INTERNAL_OTA_PACKAGE_TARGET := $(PRODUCT_OUT)/$(name).zip
 
 $(INTERNAL_OTA_PACKAGE_TARGET): KEY_CERT_PAIR := $(DEFAULT_KEY_CERT_PAIR)
 
+ifneq ($(CUSTOM_BUILD),)
+    $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := true
+else
+    $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := false
+endif
+
+ifeq ($(TARGET_OTA_ASSERT_DEVICE),)
+    $(INTERNAL_OTA_PACKAGE_TARGET): override_device := auto
+else
+    $(INTERNAL_OTA_PACKAGE_TARGET): override_device := $(TARGET_OTA_ASSERT_DEVICE)
+endif
+
+ifeq ($(TARGET_RELEASETOOL_OTA_FROM_TARGET_SCRIPT),)
+    OTA_FROM_TARGET_SCRIPT := ./build/tools/releasetools/ota_from_target_files
+else
+    OTA_FROM_TARGET_SCRIPT := $(TARGET_RELEASETOOL_OTA_FROM_TARGET_SCRIPT)
+endif
+
 $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) \
 		build/tools/releasetools/ota_from_target_files
 	@echo "Package OTA: $@"
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
-	   ./build/tools/releasetools/ota_from_target_files -v \
-	   --block \
+	   $(OTA_FROM_TARGET_SCRIPT) -v \
+	   $(if $(CUSTOM_BUILD),, --block) \
 	   --extracted_input_target_files $(patsubst %.zip,%,$(BUILT_TARGET_FILES_PACKAGE)) \
 	   -p $(HOST_OUT) \
 	   -k $(KEY_CERT_PAIR) \
+	   --backup=$(backuptool) \
+	   --override_device=$(override_device) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
 
-.PHONY: otapackage
+ifneq ($(TARGET_CUSTOM_RELEASETOOL),)
+	@echo "Running releasetool"
+        $(TARGET_CUSTOM_RELEASETOOL)
+endif
+
+CUSTOM_TARGET_PACKAGE := $(PRODUCT_OUT)/omni-$(ROM_VERSION).zip
+
+.PHONY: otapackage bacon
 otapackage: $(INTERNAL_OTA_PACKAGE_TARGET)
+bacon: otapackage
+	$(hide) ln -f $(INTERNAL_OTA_PACKAGE_TARGET) $(CUSTOM_TARGET_PACKAGE)
+	$(hide) $(MD5SUM) $(CUSTOM_TARGET_PACKAGE) | cut -d ' ' -f1 > $(CUSTOM_TARGET_PACKAGE).md5sum
+	@echo -e "Package complete: $(CUSTOM_TARGET_PACKAGE)"
 
 endif    # build_ota_package
 
@@ -2455,9 +2508,16 @@ name := $(name)-img-$(FILE_NAME_TAG)
 
 INTERNAL_UPDATE_PACKAGE_TARGET := $(PRODUCT_OUT)/$(name).zip
 
+ifeq ($(TARGET_RELEASETOOL_IMG_FROM_TARGET_SCRIPT),)
+    IMG_FROM_TARGET_SCRIPT := ./build/tools/releasetools/img_from_target_files
+else
+    IMG_FROM_TARGET_SCRIPT := $(TARGET_RELEASETOOL_IMG_FROM_TARGET_SCRIPT)
+endif
+
 $(INTERNAL_UPDATE_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(ZIP2ZIP)
 	@echo "Package: $@"
 	$(hide) $(ZIP2ZIP) -i $(BUILT_TARGET_FILES_PACKAGE) -o $@ \
+	   $(IMG_FROM_TARGET_SCRIPT) -v \
 	   OTA/android-info.txt:android-info.txt "IMAGES/*.img:."
 
 .PHONY: updatepackage
