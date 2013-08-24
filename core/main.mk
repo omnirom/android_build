@@ -272,6 +272,9 @@ endif
 # Bring in standard build system definitions.
 include $(BUILD_SYSTEM)/definitions.mk
 
+# Bring in Qualcomm helper macros
+include $(TOPDIR)vendor/omni/build/core/qcom_utils.mk
+
 # Bring in dex_preopt.mk
 include $(BUILD_SYSTEM)/dex_preopt.mk
 
@@ -550,7 +553,11 @@ subdir_makefiles := $(SOONG_ANDROID_MK) $(call first-makefiles-under,$(TOP))
 subdir_makefiles_total := $(words $(subdir_makefiles))
 .KATI_READONLY := subdir_makefiles_total
 
+ifneq ($(HIDE_MAKEFILE_INCLUDES),y)
 $(foreach mk,$(subdir_makefiles),$(info [$(call inc_and_print,subdir_makefiles_inc)/$(subdir_makefiles_total)] including $(mk) ...)$(eval include $(mk)))
+else
+$(foreach mk, $(subdir_makefiles), $(eval include $(mk)))
+endif
 
 ifdef PDK_FUSION_PLATFORM_ZIP
 # Bring in the PDK platform.zip modules.
@@ -1108,7 +1115,7 @@ findbugs: $(INTERNAL_FINDBUGS_HTML_TARGET) $(INTERNAL_FINDBUGS_XML_TARGET)
 
 .PHONY: clean
 clean:
-	@rm -rf $(OUT_DIR)/*
+	@rm -rf $(OUT_DIR)/* $(OUT_DIR)/..?* $(OUT_DIR)/.[!.]*
 	@echo "Entire build directory removed."
 
 .PHONY: clobber

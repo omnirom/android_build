@@ -571,7 +571,11 @@ NANOPB_SRCS := external/nanopb-c/generator/protoc-gen-nanopb \
                external/nanopb-c/generator/proto/*.py)
 VTSC := $(HOST_OUT_EXECUTABLES)/vtsc$(HOST_EXECUTABLE_SUFFIX)
 MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ifeq ($(BOARD_NEEDS_LZMA_MINIGZIP),true)
+MINIGZIP := /usr/bin/lzma
+else
 MINIGZIP := $(HOST_OUT_EXECUTABLES)/minigzip$(HOST_EXECUTABLE_SUFFIX)
+endif
 ifeq (,$(strip $(BOARD_CUSTOM_MKBOOTIMG)))
 MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
 else
@@ -703,6 +707,9 @@ endif
 FRAMEWORK_MANIFEST_FILE := system/libhidl/manifest.xml
 FRAMEWORK_COMPATIBILITY_MATRIX_FILE := hardware/interfaces/compatibility_matrix.xml
 
+# Rules for QCOM targets
+include $(TOPDIR)vendor/omni/build/core/qcom_target.mk
+
 # ###############################################################
 # Set up final options.
 # ###############################################################
@@ -819,6 +826,7 @@ endif
 RSCOMPAT_32BIT_ONLY_API_LEVELS := 8 9 10 11 12 13 14 15 16 17 18 19 20
 RSCOMPAT_NO_USAGEIO_API_LEVELS := 8 9 10 11 12 13
 
+
 ifeq ($(JAVA_NOT_REQUIRED),true)
 # Remove java and tools from our path so that we make sure nobody uses them.
 unexport ANDROID_JAVA_HOME
@@ -883,6 +891,12 @@ dont_bother_goals := clean clobber dataclean installclean \
 ifndef KATI
 include $(BUILD_SYSTEM)/ninja_config.mk
 include $(BUILD_SYSTEM)/soong_config.mk
+endif
+
+ifneq ($(CUSTOM_BUILD),)
+## We need to be sure the global selinux policies are included
+## last, to avoid accidental resetting by device configs
+$(eval include vendor/omni/sepolicy/sepolicy.mk)
 endif
 
 include $(BUILD_SYSTEM)/dumpvar.mk
