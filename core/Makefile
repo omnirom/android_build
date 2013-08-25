@@ -1856,7 +1856,7 @@ otapackage: $(INTERNAL_OTA_PACKAGE_TARGET)
 bacon: otapackage
 	$(hide) ln -f $(INTERNAL_OTA_PACKAGE_TARGET) $(CUSTOM_TARGET_PACKAGE)
 	$(hide) $(MD5SUM) $(CUSTOM_TARGET_PACKAGE) > $(CUSTOM_TARGET_PACKAGE).md5sum
-	@echo -e "Package complete: $(CM_TARGET_PACKAGE)"
+	@echo -e "Package complete: $(CUSTOM_TARGET_PACKAGE)"
 
 endif    # build_ota_package
 
