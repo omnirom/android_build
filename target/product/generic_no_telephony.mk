@@ -33,7 +33,6 @@ PRODUCT_PACKAGES := \
     InputDevices \
     LatinIME \
     Launcher2 \
-    MusicFX \
     OneTimeInitializer \
     Provision \
     Phone \
