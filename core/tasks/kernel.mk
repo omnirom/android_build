@@ -14,7 +14,7 @@
 
 # Android makefile to build kernel as a part of Android Build
 
--include vendor/custom/branding.mk
+-include vendor/custom/config/branding.mk
 
 TARGET_AUTO_KDIR := $(shell echo $(TARGET_DEVICE_DIR) | sed -e 's/^device/kernel/g')
 
@@ -60,7 +60,7 @@ ifeq "$(wildcard $(KERNEL_SRC) )" ""
         $(warning * THIS IS DEPRECATED, AND WILL BE DISCONTINUED                *)
         $(warning * Please configure your device to download the kernel         *)
         $(warning * source repository to $(KERNEL_SRC))
-        $(warning * See $(URL_INTEGRATED_KERNEL_BUILD)
+        $(warning * See $(URL_INTEGRATED_KERNEL_BUILD))
         $(warning * for more information                                        *)
         $(warning ***************************************************************)
         FULL_KERNEL_BUILD := false
