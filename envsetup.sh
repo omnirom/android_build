@@ -20,6 +20,7 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - sepgrep:   Greps on all local sepolicy files.
 - sgrep:     Greps on all local source files.
 - godir:     Go to the directory containing a file.
+- pushboot:Push a file from your OUT dir to your phone and reboots it, using absolute path.
 
 Environment options:
 - SANITIZE_HOST: Set to 'true' to use ASAN for all host modules. Note that
@@ -723,6 +724,21 @@ function tapas()
     set_stuff_for_environment
     printconfig
     destroy_build_var_cache
+}
+
+function pushboot() {
+    if [ ! -f $OUT/$* ]; then
+        echo "File not found: $OUT/$*"
+        return 1
+    fi
+
+    adb root
+    sleep 1
+    adb wait-for-device
+    adb remount
+
+    adb push $OUT/$* /$*
+    adb reboot
 }
 
 function gettop
