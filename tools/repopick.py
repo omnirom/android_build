@@ -214,6 +214,7 @@ for change in args.change_number:
         date_fluff       = '.000000000'
         project_name     = data['project']
         change_number    = data['_number']
+        status           = data['status']
         current_revision = data['revisions'][data['current_revision']]
         patch_number     = current_revision['_number']
         # Backwards compatibility
@@ -230,6 +231,14 @@ for change in args.change_number:
         committer_email  = current_revision['commit']['committer']['email']
         committer_date   = current_revision['commit']['committer']['date'].replace(date_fluff, '')
         subject          = current_revision['commit']['subject']
+
+    # Check if commit has already been merged and exit if it has, unless -f is specified
+    if status == "MERGED":
+        if args.force:
+            print("!! Force-picking a merged commit !!\n")
+        else:
+            print("Commit already merged. Skipping the cherry pick.\nUse -f to force this pick.")
+            continue;
 
         # Convert the project name to a project path
         #   - check that the project path exists
