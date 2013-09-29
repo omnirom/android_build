@@ -63,6 +63,7 @@ parser.add_argument('-a', '--abandon-first', action='store_true', help='before c
 parser.add_argument('-b', '--auto-branch', action='store_true', help='shortcut to "--start-branch auto --abandon-first --ignore-missing"')
 parser.add_argument('-q', '--quiet', action='store_true', help='print as little as possible')
 parser.add_argument('-v', '--verbose', action='store_true', help='print extra information to aid in debug')
+parser.add_argument('-f', '--force', action='store_true', help='force cherry pick even if commit has been merged')
 args = parser.parse_args()
 if args.start_branch == None and args.abandon_first:
     parser.error('if --abandon-first is set, you must also give the branch name with --start-branch')
