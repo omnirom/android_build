@@ -932,9 +932,7 @@ ifdef BOARD_KERNEL_PAGESIZE
 endif
 
 INTERNAL_RECOVERY_FILES := $(filter $(TARGET_RECOVERY_OUT)/%, \
-        $(ALL_PREBUILT) \
-        $(ALL_COPIED_HEADERS) \
-        $(ALL_GENERATED_SOURCES) \
+        $(foreach module, $(ALL_MODULES), $(ALL_MODULES.$(module).INSTALLED)) \
         $(ALL_DEFAULT_INSTALLED_MODULES)))
 
 # Keys authorized to sign OTA packages this build will accept.  The
