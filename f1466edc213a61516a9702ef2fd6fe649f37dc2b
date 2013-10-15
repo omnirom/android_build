@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "da141535_79ff8702",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 260,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T17:21:23Z",
+      "side": 1,
+      "message": "sys.stderr.write not print",
+      "revId": "f1466edc213a61516a9702ef2fd6fe649f37dc2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
