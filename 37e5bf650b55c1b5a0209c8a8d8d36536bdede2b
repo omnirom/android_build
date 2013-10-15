@@ -1,0 +1,89 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "fa0f191f_c061f2d4",
+        "filename": "tools/repopick.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 122,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T15:44:46Z",
+      "side": 1,
+      "message": "^^\n\n1) this isn\u0027t pointing to ~/bin/repo, it points to ~/bin\n\n2) it needs to be in $APTH anyway. this line is useless",
+      "revId": "37e5bf650b55c1b5a0209c8a8d8d36536bdede2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fa0f191f_a05efe10",
+        "filename": "tools/repopick.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 139,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T15:44:46Z",
+      "side": 1,
+      "message": "add an else to say ANDROID_BUILD_TOP isn\u0027t declared\n\nthough this is unlikely to happen, we should be explicit",
+      "revId": "37e5bf650b55c1b5a0209c8a8d8d36536bdede2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fa0f191f_809bfac8",
+        "filename": "tools/repopick.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 149,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T15:44:46Z",
+      "side": 1,
+      "message": "first run, this takes ages. there may be a more efficient way of doing it",
+      "revId": "37e5bf650b55c1b5a0209c8a8d8d36536bdede2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fa0f191f_e0abd6d4",
+        "filename": "tools/repopick.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 213,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T15:44:46Z",
+      "side": 1,
+      "message": "shouldn\u0027t say \"not\" here",
+      "revId": "37e5bf650b55c1b5a0209c8a8d8d36536bdede2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fa0f191f_c0b8d22c",
+        "filename": "tools/repopick.py",
+        "patchSetId": 3
+      },
+      "lineNbr": 260,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-10-15T15:44:46Z",
+      "side": 1,
+      "message": "......\n\nwhy is this in here? this is bad practice. a repo sync should be done to make sure patches work on the current state of the repo\n\nremove this block about fetching from github",
+      "revId": "37e5bf650b55c1b5a0209c8a8d8d36536bdede2b",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
