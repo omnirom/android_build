@@ -12,6 +12,8 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - cgrep:   Greps on all local C/C++ files.
 - jgrep:   Greps on all local Java files.
 - resgrep: Greps on all local res/*.xml files.
+- mka:      Builds using SCHED_BATCH on all processors.
+- mkap:     Builds using SCHED_BATCH on all processors and pushes them to the device.
 - godir:   Go to the directory containing a file.
 - pushboot:Push a file from your OUT dir to your phone and reboots it, using absolute path.
 
@@ -1311,6 +1313,13 @@ function mka() {
             schedtool -B -n 1 -e ionice -n 1 make -j `cat /proc/cpuinfo | grep "^processor" | wc -l` "$@"
             ;;
     esac
+}
+
+function mkap() {
+    mka bacon
+    if [ $? == 0 ]; then
+        adb push $OUT/*HOMEMADE*.zip /sdcard/
+    fi
 }
 
 function fixup_common_out_dir() {
