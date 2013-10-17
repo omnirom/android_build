@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ba092121_3b9fc305",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 3
+      },
+      "lineNbr": 420,
+      "author": {
+        "id": 1000001
+      },
+      "writtenOn": "2013-10-17T15:39:11Z",
+      "side": 1,
+      "message": "just omni, and smaller maybe",
+      "revId": "d16726ac3dfb507a2804634f126cefd0b0a0a597",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
