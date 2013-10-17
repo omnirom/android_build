@@ -13,7 +13,15 @@ else
 ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a7)
 	arch_variant_cflags := -mcpu=cortex-a7
 else
+ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a5)
+  arch_variant_cflags := -mcpu=cortex-a5
+else
+ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a9)
+  arch_variant_cflags := -mcpu=cortex-a9
+else
 	arch_variant_cflags := -march=armv7-a
+endif
+endif
 endif
 endif
 
@@ -23,3 +31,4 @@ arch_variant_cflags += \
 
 arch_variant_ldflags := \
 	-Wl,--fix-cortex-a8
+
