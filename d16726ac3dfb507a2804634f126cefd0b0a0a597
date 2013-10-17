@@ -16,6 +16,24 @@
       "revId": "d16726ac3dfb507a2804634f126cefd0b0a0a597",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ba092121_bb92b3f4",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 3
+      },
+      "lineNbr": 420,
+      "author": {
+        "id": 1000095
+      },
+      "writtenOn": "2013-10-17T15:44:07Z",
+      "side": 1,
+      "message": "Next Patchset regarding \"just omni\"\n\nAnd I can\u0027t make this any smaller. Tried many different fonts",
+      "parentUuid": "ba092121_3b9fc305",
+      "revId": "d16726ac3dfb507a2804634f126cefd0b0a0a597",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
     }
   ]
 }
