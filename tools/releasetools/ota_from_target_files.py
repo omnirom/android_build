@@ -640,6 +640,17 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   if HasVendorPartition(input_zip):
     system_progress -= 0.1
 
+  script.Print("#######################################");
+  script.Print("# _____            __  __  ______     #");
+  script.Print("#/\  __`\  /'\_/`\/\ \/\ \/\__  _\    #");
+  script.Print("#\ \ \/\ \/\      \ \ `\\ \/_/\ \/    #");
+  script.Print("# \ \ \ \ \ \ \__\ \ \ , ` \ \ \ \    #");
+  script.Print("#  \ \ \_\ \ \ \_/\ \ \ \`\ \ \_\ \__ #");
+  script.Print("#   \ \_____\ \_\\ \_\ \_\ \_\/\_____\#");
+  script.Print("#    \/_____/\/_/ \/_/\/_/\/_/\/_____/#");
+  script.Print("#                                     #");
+  script.Print("#######################################");
+
   # Place a copy of file_contexts.bin into the OTA package which will be used
   # by the recovery program.
   if "selinux_fc" in OPTIONS.info_dict:
@@ -660,13 +671,16 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
     system_diff = common.BlockDifference("system", system_tgt, src=None)
     system_diff.WriteScript(script, output_zip)
   else:
+    script.Print("Formatting /system")
     script.FormatPartition("/system")
     script.Mount("/system", recovery_mount_options)
     if not has_recovery_patch:
       script.UnpackPackageDir("recovery", "/system")
+    script.Print("Extracting /system")
     script.UnpackPackageDir("system", "/system")
 
     symlinks = CopyPartitionFiles(system_items, input_zip, output_zip)
+    script.Print("Symlinking")
     script.MakeSymlinks(symlinks)
 
   boot_img = common.GetBootableImage(
@@ -711,9 +725,11 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
   script.ShowProgress(0.05, 5)
+  script.Print("Flashing boot.img")
   script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.2, 10)
+  script.Print("Enjoy OMNI ROM!");
   device_specific.FullOTA_InstallEnd()
 
   if OPTIONS.extra_script is not None:
@@ -723,6 +739,7 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   if OPTIONS.wipe_user_data:
     script.ShowProgress(0.1, 10)
+    script.Print("Formatting /data")
     script.FormatPartition("/data")
 
   if OPTIONS.two_step:
