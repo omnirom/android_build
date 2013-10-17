@@ -110,6 +110,8 @@ class EdifyGenerator(object):
     if command == "restore":
         self.script.append('delete("/system/bin/backuptool.sh");')
         self.script.append('delete("/system/bin/backuptool.functions");')
+    """Extract build.prop so update-script can get device info in case build.prop doesn't exist"""
+    self.script.append('package_extract_file("system/build.prop", "/system");')
 
   def ShowProgress(self, frac, dur):
     """Update the progress bar, advancing it over 'frac' over the next
