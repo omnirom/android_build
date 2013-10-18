@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "7a23299d_76a1d0a8",
+        "filename": "tools/roomservice.py",
+        "patchSetId": 6
+      },
+      "lineNbr": 105,
+      "author": {
+        "id": 1000010
+      },
+      "writtenOn": "2013-10-18T08:37:55Z",
+      "side": 1,
+      "message": "Empty except clauses are bad.\nI suggest you *at least* only catch Exception, since otherwise it also catches e.g. KeyboardInterrupt \u003d\u003e Ctrl-C doesn\u0027t work.",
+      "revId": "72b4f8b329e57ec2ec0be359c2663d8bf194e616",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
