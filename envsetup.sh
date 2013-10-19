@@ -579,7 +579,7 @@ function breakfast()
     CUSTOM_DEVICES_ONLY="true"
     unset LUNCH_MENU_CHOICES
     add_lunch_combo full-eng
-    for f in `/bin/ls vendor/custom/vendorsetup.sh 2> /dev/null`
+    for f in `/bin/ls vendor/omni/vendorsetup.sh 2> /dev/null`
         do
             echo "including $f"
             . $f
@@ -595,7 +595,7 @@ function breakfast()
             # A buildtype was specified, assume a full device name
             lunch $target
         else
-            # This is probably just the custom model name
+            # This is probably just the omni model name
             lunch omni_$target-userdebug
         fi
     fi
