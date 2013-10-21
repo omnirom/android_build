@@ -321,7 +321,7 @@ built_dex := $(intermediates.COMMON)/$(built_dex_leaf)
 #   PRIVATE_ vars to be preserved.
 $(full_classes_stubs_jar): PRIVATE_SOURCE_FILE := $(full_classes_jar)
 $(full_classes_stubs_jar) : $(LOCAL_BUILT_MODULE) | $(ACP)
-	@echo Copying $(PRIVATE_SOURCE_FILE)
+	@echo -e ${PRT_TGT}"Copying"${CL_RST}" $(PRIVATE_SOURCE_FILE)"
 	$(hide) $(ACP) -fp $(PRIVATE_SOURCE_FILE) $@
 ALL_MODULES.$(LOCAL_MODULE).STUBS := $(full_classes_stubs_jar)
 
@@ -349,11 +349,11 @@ $(full_classes_compiled_jar): PRIVATE_JAVAC_DEBUG_FLAGS := -g
 ifneq ($(strip $(LOCAL_JARJAR_RULES)),)
 $(full_classes_jarjar_jar): PRIVATE_JARJAR_RULES := $(LOCAL_JARJAR_RULES)
 $(full_classes_jarjar_jar): $(full_classes_compiled_jar) | $(JARJAR)
-	@echo JarJar: $@
+	@echo -e ${PRT_TGT}"JarJar:"${CL_RST}" $@"
 	$(hide) java -jar $(JARJAR) process $(PRIVATE_JARJAR_RULES) $< $@
 else
 $(full_classes_jarjar_jar): $(full_classes_compiled_jar) | $(ACP)
-	@echo Copying: $@
+	@echo -e ${PRT_TGT}"Copying:"${CL_RST}" $@"
 	$(hide) $(ACP) -fp $< $@
 endif
 
@@ -376,13 +376,13 @@ $(full_classes_emma_jar): $(full_classes_jarjar_jar) | $(EMMA_JAR)
 
 else
 $(full_classes_emma_jar): $(full_classes_jarjar_jar) | $(ACP)
-	@echo Copying: $@
+	@echo -e ${PRT_TGT}"Copying:"${CL_RST}" $@"
 	$(copy-file-to-target)
 endif
 
 # Keep a copy of the jar just before proguard processing.
 $(full_classes_jar): $(full_classes_emma_jar) | $(ACP)
-	@echo Copying: $@
+	@echo -e ${PRT_TGT}"Copying:"${CL_RST}" $@"
 	$(hide) $(ACP) -fp $< $@
 
 # Run proguard if necessary, otherwise just copy the file.
@@ -439,7 +439,7 @@ endif
 $(built_dex_intermediate): $(full_classes_proguard_jar) $(DX)
 	$(transform-classes.jar-to-dex)
 $(built_dex): $(built_dex_intermediate) | $(ACP)
-	@echo Copying: $@
+	@echo -e ${PRT_TGT}"Copying:"${CL_RST}" $@"
 	$(hide) $(ACP) -fp $< $@
 ifneq ($(GENERATE_DEX_DEBUG),)
 	$(install-dex-debug)
