@@ -251,7 +251,15 @@ def fetch_dependencies(device):
     create_dependency_manifest(dependencies)
 
 
+def check_device_exists(device):
+    location = parse_device_from_folder(device)
+    return os.path.isdir(location)
+
+
 def fetch_device(device):
+    if check_device_exists(device):
+        print("WARNING: Trying to fetch a device that's already there")
+        return
     git_data = search_github_for_device(device)
     device_url = get_device_url(git_data)
     device_dir = parse_device_directory(device_url)
@@ -263,7 +271,6 @@ def fetch_device(device):
         write_to_manifest(manifest)
         print("syncing the device config")
         os.system('repo sync %s' % device_dir)
-    fetch_dependencies(device)
 
 
 if __name__ == '__main__':
@@ -281,7 +288,6 @@ if __name__ == '__main__':
     else:
         deps_only = False
 
-    if deps_only:
-        fetch_dependencies(device)
-    else:
+    if not deps_only:
         fetch_device(device)
+    fetch_dependencies(device)
