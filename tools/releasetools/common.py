@@ -187,7 +187,7 @@ def LoadRecoveryFSTab(zip, fstab_version):
       line = line.strip()
       if not line or line.startswith("#"): continue
       pieces = line.split()
-      if not (3 <= len(pieces) <= 4):
+      if not (3 <= len(pieces) <= 7):
         raise ValueError("malformed recovery.fstab line: \"%s\"" % (line,))
 
       p = Partition()
@@ -196,7 +196,7 @@ def LoadRecoveryFSTab(zip, fstab_version):
       p.device = pieces[2]
       p.length = 0
       options = None
-      if len(pieces) >= 4:
+      if len(pieces) >= 4 and pieces[3] != 'NULL':
         if pieces[3].startswith("/"):
           p.device2 = pieces[3]
           if len(pieces) >= 5:
@@ -951,8 +951,15 @@ def ComputeDifferences(diffs):
 
 
 # map recovery.fstab's fs_types to mount/format "partition types"
-PARTITION_TYPES = { "yaffs2": "MTD", "mtd": "MTD",
-                    "ext4": "EMMC", "emmc": "EMMC" }
+PARTITION_TYPES = { "bml": "BML",
+                    "ext2": "EMMC",
+                    "ext3": "EMMC",
+                    "ext4": "EMMC",
+                    "emmc": "EMMC",
+                    "mtd": "MTD",
+                    "f2fs": "EMMC",
+                    "yaffs2": "MTD",
+                    "vfat": "EMMC" }
 
 def GetTypeAndDevice(mount_point, info):
   fstab = info["fstab"]
