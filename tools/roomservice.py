@@ -57,8 +57,6 @@ def search_github_for_device(device):
     git_search_url = "https://api.github.com/search/repositories" \
                      "?q=%40{}+android_device+{}".format(android_team, device)
     git_req = urllib.request.Request(git_search_url)
-    # this api is a preview at the moment. accept the custom media type
-    git_req.add_header('Accept', 'application/vnd.github.preview')
     try:
         response = urllib.request.urlopen(git_req)
     except urllib.request.HTTPError:
