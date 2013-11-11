@@ -20,7 +20,7 @@ from __future__ import print_function
 import json
 import sys
 import os
-from xml.etree import ElementTree as ES
+from xml.etree import ElementTree as Es
 # Use the urllib importer from the Cyanogenmod roomservice
 try:
     # For python3
@@ -46,7 +46,7 @@ local_manifest_dir = ".repo/local_manifests"
 android_team = "omnirom"
 
 
-def check_repo_exists(git_data):
+def check_repo_exists(git_data, device):
     if not int(git_data.get('total_count', 0)):
         raise Exception("{} not found in {} Github, exiting "
                         "roomservice".format(device, android_team))
@@ -63,12 +63,12 @@ def search_github_for_device(device):
         raise Exception("There was an issue connecting to github."
                         " Please try again in a minute")
     git_data = json.load(response)
-    check_repo_exists(git_data)
+    check_repo_exists(git_data, device)
     print("found the {} device repo".format(device))
     return git_data
 
 
-def get_device_url(git_data):
+def get_device_url(git_data, device):
     device_url = ""
     for item in git_data['items']:
         temp_url = item.get('html_url')
@@ -97,16 +97,16 @@ def parse_device_directory(device_url):
 
 # Thank you RaYmAn
 def iterate_manifests():
-    files = []
-    for file in os.listdir(local_manifest_dir):
-        files.append(os.path.join(local_manifest_dir, file))
-    files.append('.repo/manifest.xml')
-    for file in files:
+    manifests = []
+    for man in os.listdir(local_manifest_dir):
+        manifests.append(os.path.join(local_manifest_dir, man))
+    manifests.append('.repo/manifest.xml')
+    for man in manifests:
         try:
-            man = ES.parse(file)
+            man = Es.parse(man)
             man = man.getroot()
-        except IOError, ES.ParseError:
-            print("WARNING: error while parsing %s" % file)
+        except IOError, Es.ParseError:
+            print("WARNING: error while parsing %s" % man)
         else:
             for project in man.findall("project"):
                 yield project
@@ -144,7 +144,7 @@ def create_manifest_project(url, directory,
     if project_exists:
         return None
 
-    project = ES.Element("project",
+    project = Es.Element("project",
                          attrib={
                              "path": directory,
                              "name": url,
@@ -156,24 +156,23 @@ def create_manifest_project(url, directory,
 
 def append_to_manifest(project):
     try:
-        lm = ES.parse('/'.join([local_manifest_dir, "roomservice.xml"]))
+        lm = Es.parse('/'.join([local_manifest_dir, "roomservice.xml"]))
         lm = lm.getroot()
-    except IOError, ES.ParseError:
-        lm = ES.Element("manifest")
+    except IOError, Es.ParseError:
+        lm = Es.Element("manifest")
     lm.append(project)
     return lm
 
 
 def write_to_manifest(manifest):
     indent(manifest)
-    raw_xml = ES.tostring(manifest).decode()
+    raw_xml = Es.tostring(manifest).decode()
     raw_xml = ''.join(['<?xml version="1.0" encoding="UTF-8"?>\n'
                        '<!--Please do not manually edit this file-->\n',
                        raw_xml])
 
     with open('/'.join([local_manifest_dir, "roomservice.xml"]), 'w') as f:
         f.write(raw_xml)
-    print("wrote the new roomservice manifest")
 
 
 def parse_device_from_manifest(device):
@@ -237,6 +236,7 @@ def create_dependency_manifest(dependencies):
             write_to_manifest(manifest)
             projects.append(target_path)
     if len(projects) > 0:
+        print("added the dependencies to roomservice")
         os.system("repo sync %s" % " ".join(projects))
 
 
@@ -261,7 +261,7 @@ def fetch_device(device):
         print("WARNING: Trying to fetch a device that's already there")
         return
     git_data = search_github_for_device(device)
-    device_url = get_device_url(git_data)
+    device_url = get_device_url(git_data, device)
     device_dir = parse_device_directory(device_url)
     project = create_manifest_project(device_url,
                                       device_dir,
@@ -269,6 +269,7 @@ def fetch_device(device):
     if not project is None:
         manifest = append_to_manifest(project)
         write_to_manifest(manifest)
+        print("added %s to roomservice" % device)
         print("syncing the device config")
         os.system('repo sync %s' % device_dir)
 
@@ -279,9 +280,9 @@ if __name__ == '__main__':
 
     product = sys.argv[1]
     try:
-        device = product[product.index("_") + 1:]
+        dev = product[product.index("_") + 1:]
     except ValueError:
-        device = product
+        dev = product
 
     if len(sys.argv) > 2:
         deps_only = sys.argv[2]
@@ -289,5 +290,5 @@ if __name__ == '__main__':
         deps_only = False
 
     if not deps_only:
-        fetch_device(device)
-    fetch_dependencies(device)
+        fetch_device(dev)
+    fetch_dependencies(dev)
