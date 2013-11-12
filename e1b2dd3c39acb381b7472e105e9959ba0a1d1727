@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ab89d9a9_e82da241",
+        "filename": "tools/roomservice.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 245,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2013-11-12T07:44:19Z",
+      "side": 1,
+      "message": "If overwrite.lower() \u003d\u003d \"true\": overwrite \u003d True\nelse: overwrite \u003d False",
+      "revId": "e1b2dd3c39acb381b7472e105e9959ba0a1d1727",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
