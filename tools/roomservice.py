@@ -96,7 +96,7 @@ def parse_device_directory(device_url):
 
 
 # Thank you RaYmAn
-def iterate_manifests():
+def iterate_manifests(to_find="project"):
     manifests = []
     for man in os.listdir(local_manifest_dir):
         manifests.append(os.path.join(local_manifest_dir, man))
@@ -108,13 +108,13 @@ def iterate_manifests():
         except IOError, Es.ParseError:
             print("WARNING: error while parsing %s" % man)
         else:
-            for project in man.findall("project"):
+            for project in man.findall(to_find):
                 yield project
 
 
-def check_project_exists(url):
+def check_project_exists(path):
     for project in iterate_manifests():
-        if project.get("name") == url:
+        if project.get("path") == path:
             return True
     return False
 
@@ -136,12 +136,33 @@ def indent(elem, level=0):
             elem.tail = i
 
 
+def remove_project(url, directory):
+    for project in iterate_manifests():
+        if project.get("path") == directory \
+                and not project.get("name") == url:
+            for removed in iterate_manifests(to_find="remove-project"):
+                if removed.get("name") == project.get("name"):
+                    return None
+            remove = Es.Element("remove-project",
+                                attrib={
+                                    "name": project.get("name")
+                                })
+            manifest = append_to_manifest(remove)
+            write_to_manifest(manifest)
+            return True
+    return None
+
+
 def create_manifest_project(url, directory,
                             remote=default_rem,
-                            revision=default_rev):
-    project_exists = check_project_exists(url)
+                            revision=default_rev,
+                            overwrite=False):
+    project_exists = check_project_exists(directory)
 
-    if project_exists:
+    if project_exists and overwrite:
+        if not remove_project(url, directory):
+            return None
+    elif project_exists:
         return None
 
     project = Es.Element("project",
@@ -221,6 +242,7 @@ def create_dependency_manifest(dependencies):
         target_path = dependency.get("target_path")
         revision = dependency.get("revision", default_rev)
         remote = dependency.get("remote", default_rem)
+        overwrite = dependency.get("overwrite", False)
 
         # not adding an organization should default to android_team
         # only apply this to github
@@ -230,7 +252,8 @@ def create_dependency_manifest(dependencies):
         project = create_manifest_project(repository,
                                           target_path,
                                           remote=remote,
-                                          revision=revision)
+                                          revision=revision,
+                                          overwrite=overwrite)
         if not project is None:
             manifest = append_to_manifest(project)
             write_to_manifest(manifest)
