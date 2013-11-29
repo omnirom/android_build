@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "8b8ed5af_3e0ede36",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 1
+      },
+      "lineNbr": 455,
+      "author": {
+        "id": 1000305
+      },
+      "writtenOn": "2013-11-29T17:15:50Z",
+      "side": 1,
+      "message": "Symlinking...",
+      "revId": "b2784caaf6ac36b94e7ec1ecf9ee185cd7f3e1d2",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b8ed5af_5e0baa25",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 1
+      },
+      "lineNbr": 463,
+      "author": {
+        "id": 1000305
+      },
+      "writtenOn": "2013-11-29T17:15:50Z",
+      "side": 1,
+      "message": "Setting Permissions...",
+      "revId": "b2784caaf6ac36b94e7ec1ecf9ee185cd7f3e1d2",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b8ed5af_1e09222f",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 1
+      },
+      "lineNbr": 481,
+      "author": {
+        "id": 1000305
+      },
+      "writtenOn": "2013-11-29T17:15:50Z",
+      "side": 1,
+      "message": "i think that above should go below \"Enjoy OMNI ROM!\"\n\ni read it out loud and it sounds better :D",
+      "revId": "b2784caaf6ac36b94e7ec1ecf9ee185cd7f3e1d2",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
