@@ -444,15 +444,15 @@ def WriteFullOTAPackage(input_zip, output_zip):
   if "selinux_fc" in OPTIONS.info_dict:
     WritePolicyConfig(OPTIONS.info_dict["selinux_fc"], output_zip)
 
-  script.Print("Formatting /system")
+script.Print("Formating and Mounting System...")
   script.FormatPartition("/system")
   script.Mount("/system")
   script.UnpackPackageDir("recovery", "/system")
-  script.Print("Extracting /system")
+  script.Print("Extracting OmniROM to your device...")
   script.UnpackPackageDir("system", "/system")
 
   symlinks = CopySystemFiles(input_zip, output_zip)
-  script.Print("Symlinking")
+  script.Print("Symlinking...")
   script.MakeSymlinks(symlinks)
 
   boot_img = common.GetBootableImage("boot.img", "boot.img",
@@ -461,6 +461,7 @@ def WriteFullOTAPackage(input_zip, output_zip):
 #                                         OPTIONS.input_tmp, "RECOVERY")
 #  MakeRecoveryPatch(OPTIONS.input_tmp, output_zip, recovery_img, boot_img)
 
+  script.Print("Setting Permissions...")
   Item.GetMetadata(input_zip)
   Item.Get("system").SetPermissions(script)
 
@@ -473,11 +474,13 @@ def WriteFullOTAPackage(input_zip, output_zip):
     script.RunBackup("restore")
 
   script.ShowProgress(0.2, 10)
-  script.Print("Flashing boot.img")
+  script.Print("Flashing Boot Image...")
   script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.1, 0)
   script.Print("Enjoy OMNI ROM!");
+  script.Print(" ");
+  script.Print("Have a nice day!");
   device_specific.FullOTA_InstallEnd()
 
   if OPTIONS.extra_script is not None:
