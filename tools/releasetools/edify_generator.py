@@ -108,6 +108,13 @@ class EdifyGenerator(object):
            ");")
     self.script.append(self._WordWrap(cmd))
 
+  def RunPersist(self, arg):
+    self.script.append('package_extract_file("system/bin/persist.sh", "/tmp/persist.sh");')
+    self.script.append('set_perm(0, 0, 0755, "/tmp/persist.sh");')
+    self.script.append('run_program("/tmp/install/bin/persist.sh", "%s");' % arg)
+    if arg == "restore":
+        self.script.append('delete("/system/bin/persist.sh");')
+
   def RunBackup(self, command):
     self.script.append('package_extract_file("system/bin/backuptool.sh", "/tmp/backuptool.sh");')
     self.script.append('package_extract_file("system/bin/backuptool.functions", "/tmp/backuptool.functions");')
