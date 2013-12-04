@@ -62,4 +62,7 @@ if [ -n "$BUILD_THUMBPRINT" ] ; then
 fi
 echo "ro.build.characteristics=$TARGET_AAPT_CHARACTERISTICS"
 
+# Omni properties
+echo "ro.omni.device=$OMNI_DEVICE"
+
 echo "# end build properties"
