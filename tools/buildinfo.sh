@@ -42,4 +42,7 @@ echo "ro.build.description=$PRIVATE_BUILD_DESC"
 echo "ro.build.fingerprint=$BUILD_FINGERPRINT"
 echo "ro.build.characteristics=$TARGET_AAPT_CHARACTERISTICS"
 
+# Omni properties
+echo "ro.omni.device=$OMNI_DEVICE"
+
 echo "# end build properties"
