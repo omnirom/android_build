@@ -10,6 +10,9 @@ ARCH_ARM_HAVE_NEON              := true
 ifeq ($(strip $(TARGET_CPU_VARIANT)), cortex-a15)
 	arch_variant_cflags := -mcpu=cortex-a15
 else
+ifeq ($(strip $(TARGET_CPU_VARIANT)), krait)
+	arch_variant_cflags := -mcpu=krait
+else
 ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a8)
 	arch_variant_cflags := -mcpu=cortex-a8
 else
