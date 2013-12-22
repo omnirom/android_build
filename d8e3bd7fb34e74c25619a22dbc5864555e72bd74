@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "6b8b61a3_c5b99c2a",
+        "filename": "tools/customsdkgen.sh",
+        "patchSetId": 4
+      },
+      "lineNbr": 59,
+      "author": {
+        "id": 1000305
+      },
+      "writtenOn": "2013-12-22T11:41:01Z",
+      "side": 1,
+      "message": "AOKP?",
+      "revId": "d8e3bd7fb34e74c25619a22dbc5864555e72bd74",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
