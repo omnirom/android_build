@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "6b8b61a3_e57058a7",
+        "filename": "envsetup.sh",
+        "patchSetId": 3
+      },
+      "lineNbr": 17,
+      "author": {
+        "id": 1000036
+      },
+      "writtenOn": "2013-12-22T09:32:30Z",
+      "side": 1,
+      "message": "O should be in capital in OmniROM.",
+      "revId": "dc60f97743831d48210e20d59ea9ab759fe49a1a",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
