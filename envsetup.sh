@@ -14,6 +14,7 @@ Invoke ". build/envsetup.sh" from your shell to add the following functions to y
 - resgrep: Greps on all local res/*.xml files.
 - godir:   Go to the directory containing a file.
 - pushboot:Push a file from your OUT dir to your phone and reboots it, using absolute path.
+- sdkgen:  Generate an android.jar and create a new custom SDK with OmniROM APIs
 
 Look at the source to view more functions. The complete list is:
 EOF
@@ -656,6 +657,10 @@ function pushboot() {
 
     adb push $OUT/$* /$*
     adb reboot
+}
+
+function sdkgen() {
+        build/tools/customsdkgen.sh
 }
 
 function gettop
