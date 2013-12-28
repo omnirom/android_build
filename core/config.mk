@@ -885,4 +885,7 @@ include $(BUILD_SYSTEM)/ninja_config.mk
 include $(BUILD_SYSTEM)/soong_config.mk
 endif
 
+# Rules for QCOM targets
+include $(TOPDIR)vendor/omni/build/core/qcom_target.mk
+
 include $(BUILD_SYSTEM)/dumpvar.mk
