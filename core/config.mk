@@ -571,7 +571,11 @@ NANOPB_SRCS := external/nanopb-c/generator/protoc-gen-nanopb \
                external/nanopb-c/generator/proto/*.py)
 VTSC := $(HOST_OUT_EXECUTABLES)/vtsc$(HOST_EXECUTABLE_SUFFIX)
 MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
+ifeq ($(BOARD_NEEDS_LZMA_MINIGZIP),true)
+MINIGZIP := /usr/bin/lzma
+else
 MINIGZIP := $(HOST_OUT_EXECUTABLES)/minigzip$(HOST_EXECUTABLE_SUFFIX)
+endif
 ifeq (,$(strip $(BOARD_CUSTOM_MKBOOTIMG)))
 MKBOOTIMG := $(HOST_OUT_EXECUTABLES)/mkbootimg$(HOST_EXECUTABLE_SUFFIX)
 else
