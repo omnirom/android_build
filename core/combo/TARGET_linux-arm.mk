@@ -40,6 +40,33 @@ else
 TARGET_GCC_VERSION := $(TARGET_GCC_VERSION_EXP)
 endif
 
+ifeq ($(strip $(DONT_WARN_STRICT_ALIASING)),)
+STRICT_ALIASING_WARNINGS := \
+                        -Wstrict-aliasing=2 \
+                        -Werror=strict-aliasing
+else
+STRICT_ALIASING_WARNINGS := \
+                        -Wno-strict-aliasing
+endif
+
+ifeq ($(strip $(BONE_STOCK)),)
+TARGET_ARM_O := 3
+ifeq ($(strip $(TARGET_IS_A_CHEAP_ASUS_TABLET)),true)
+TARGET_THUMB_O := s
+else
+TARGET_THUMB_O := 3
+endif
+TARGET_THUMB_STRICT := \
+    -fstrict-aliasing
+else
+TARGET_ARM_O := 2
+TARGET_THUMB_O := s
+TARGET_THUMB_STRICT := \
+    -fno-strict-aliasing
+endif
+
+include $(TARGET_ARCH_SPECIFIC_MAKEFILE)
+
 TARGET_ARCH_SPECIFIC_MAKEFILE := $(BUILD_COMBOS)/arch/$(TARGET_ARCH)/$(TARGET_ARCH_VARIANT).mk
 ifeq ($(strip $(wildcard $(TARGET_ARCH_SPECIFIC_MAKEFILE))),)
 $(error Unknown ARM architecture version: $(TARGET_ARCH_VARIANT))
