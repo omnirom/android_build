@@ -410,7 +410,10 @@ def AppendAssertions(script, info_dict, oem_dict = None):
   oem_props = info_dict.get("oem_fingerprint_properties")
   if oem_props is None or len(oem_props) == 0:
     if OPTIONS.override_device == "auto":
-      device = GetBuildProp("ro.product.device", info_dict)
+      if OPTIONS.override_prop:
+        device = GetBuildProp("ro.build.product", info_dict)
+      else:
+        device = GetBuildProp("ro.product.device", info_dict)
     else:
       device = OPTIONS.override_device
     script.AssertDevice(device)
@@ -1162,8 +1165,9 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
   else:
     vendor_diff = None
 
-  target_fp = CalculateFingerprint(oem_props, oem_dict, OPTIONS.target_info_dict)
-  source_fp = CalculateFingerprint(oem_props, oem_dict, OPTIONS.source_info_dict)
+  if not OPTIONS.override_prop:
+    target_fp = CalculateFingerprint(oem_props, oem_dict, OPTIONS.target_info_dict)
+    source_fp = CalculateFingerprint(oem_props, oem_dict, OPTIONS.source_info_dict)
 
   if oem_props is None:
     script.AssertSomeFingerprint(source_fp, target_fp)
