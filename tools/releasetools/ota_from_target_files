@@ -93,7 +93,6 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   -t  (--worker_threads) <int>
       Specifies the number of worker-threads that will be used when
       generating patches for incremental updates (defaults to 3).
-
 """
 
 import sys
@@ -400,7 +399,6 @@ def SignOutput(temp_zip_name, output_zip_name):
   common.SignFile(temp_zip_name, output_zip_name, OPTIONS.package_key, pw,
                   whole_file=True)
 
-
 def AppendAssertions(script, info_dict, oem_dict = None):
   oem_props = info_dict.get("oem_fingerprint_properties")
   if oem_props is None or len(oem_props) == 0:
@@ -411,7 +409,6 @@ def AppendAssertions(script, info_dict, oem_dict = None):
         device = GetBuildProp("ro.product.device", info_dict)
     else:
       device = OPTIONS.override_device
-    script.AssertDevice(device)
   else:
     if oem_dict is None:
       raise common.ExternalError("No OEM file provided to answer expected assertions")
@@ -500,13 +497,14 @@ def WriteFullOTAPackage(input_zip, output_zip):
     script.Mount("/oem", recovery_mount_options)
     oem_dict = common.LoadDictionaryFromLines(open(OPTIONS.oem_source).readlines())
 
-  metadata = {"post-build": CalculateFingerprint(
-                               oem_props, oem_dict, OPTIONS.info_dict),
-              "pre-device": GetOemProperty("ro.product.device", oem_props, oem_dict,
-                                         OPTIONS.info_dict),
-              "post-timestamp": GetBuildProp("ro.build.date.utc",
-                                             OPTIONS.info_dict),
-              }
+  metadata = {}
+  metadata["post-timestamp"] = GetBuildProp("ro.build.date.utc",
+                                            OPTIONS.info_dict)
+  if not OPTIONS.override_prop:
+    metadata["post-build"] = GetBuildProp("ro.build.fingerprint",
+                                          OPTIONS.info_dict)
+    metadata["pre-device"] = GetBuildProp("ro.product.device",
+                                          OPTIONS.info_dict)
 
   if not OPTIONS.override_prop:
     metadata["post-build"] = GetBuildProp("ro.build.fingerprint",
@@ -1120,6 +1118,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
   script = edify_generator.EdifyGenerator(source_version,
                                           OPTIONS.target_info_dict)
 
+
   oem_props = OPTIONS.info_dict.get("oem_fingerprint_properties")
   recovery_mount_options = OPTIONS.info_dict.get("recovery_mount_options")
   oem_dict = None
@@ -1129,11 +1128,12 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
     script.Mount("/oem", recovery_mount_options)
     oem_dict = common.LoadDictionaryFromLines(open(OPTIONS.oem_source).readlines())
 
-  metadata = {"pre-device": GetOemProperty("ro.product.device", oem_props, oem_dict,
-                                         OPTIONS.source_info_dict),
-              "post-timestamp": GetBuildProp("ro.build.date.utc",
-                                             OPTIONS.target_info_dict),
-              }
+  metadata = {}
+  metadata["post-timestamp"] = GetBuildProp("ro.build.date.utc",
+                                            OPTIONS.info_dict)
+  if not OPTIONS.override_prop:
+    metadata["pre-device"] = GetBuildProp("ro.product.device",
+                                          OPTIONS.info_dict)
 
   device_specific = common.DeviceSpecificParams(
       source_zip=source_zip,
@@ -1163,8 +1163,14 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
         GetBuildProp("ro.build.thumbprint", OPTIONS.target_info_dict),
         GetBuildProp("ro.build.thumbprint", OPTIONS.source_info_dict))
 
-  metadata["pre-build"] = source_fp
-  metadata["post-build"] = target_fp
+  if not OPTIONS.override_prop:
+    source_fp = GetBuildProp("ro.build.fingerprint", OPTIONS.source_info_dict)
+    target_fp = GetBuildProp("ro.build.fingerprint", OPTIONS.target_info_dict)
+    metadata["pre-build"] = source_fp
+    metadata["post-build"] = target_fp
+
+    script.Mount("/system")
+    script.AssertSomeFingerprint(source_fp, target_fp)
 
   source_boot = common.GetBootableImage(
       "/tmp/boot.img", "boot.img", OPTIONS.source_tmp, "BOOT",
@@ -1526,7 +1532,7 @@ def main(argv):
                                               "oem_settings=",
                                               "verify",
                                               "no_fallback_to_full",
-                                              ],
+                                              "override_prop="],
                              extra_option_handler=option_handler)
 
   if len(args) != 2:

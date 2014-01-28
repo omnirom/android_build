@@ -47,6 +47,7 @@ if [ "$TARGET_UNIFIED_DEVICE" == "" ] ; then
   echo "ro.product.model=$PRODUCT_MODEL"
   echo "ro.product.name=$PRODUCT_NAME"
   echo "ro.product.device=$TARGET_DEVICE"
+
   echo "# Do not try to parse description, fingerprint, or thumbprint"
   echo "ro.build.description=$PRIVATE_BUILD_DESC"
   echo "ro.build.fingerprint=$BUILD_FINGERPRINT"
