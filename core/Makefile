@@ -754,9 +754,18 @@ $(RECOVERY_INSTALL_OTA_KEYS): $(OTA_PUBLIC_KEYS) $(DUMPKEY_JAR) $(extra_keys)
 
 TARGET_RECOVERY_ROOT_TIMESTAMP := $(TARGET_RECOVERY_OUT)/root.ts
 
+# When the bootable image contains the recovery root, 
+# remove the dependency to prevent circular dependency
+
+ifeq ($(strip $(TARGET_BOOTIMAGE_CONTAINS_RECOVERY_ROOT)),true)
+  target_recovery_root_bootimage_dependency :=
+else
+  target_recovery_root_bootimage_dependency := $(INSTALLED_BOOTIMAGE_TARGET)
+endif
+
 $(TARGET_RECOVERY_ROOT_TIMESTAMP): $(INTERNAL_RECOVERY_FILES) \
 		$(INSTALLED_RAMDISK_TARGET) \
-		$(INSTALLED_BOOTIMAGE_TARGET) \
+		$(target_recovery_root_bootimage_dependency) \
 		$(recovery_binary) \
 		$(recovery_initrc) \
 		$(INSTALLED_2NDBOOTLOADER_TARGET) \
