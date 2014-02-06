@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ab62b9bd_eaa2eaf9",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 1
+      },
+      "lineNbr": 429,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2014-02-06T06:19:59Z",
+      "side": 1,
+      "message": "Boolean at it\u0027s root. Don\u0027t treat it as a string\n\nif OPTION.override_prop:",
+      "revId": "0ddc9ca7341e94feb0fd09d444707b91f1887fa5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
