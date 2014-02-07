@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "ab62b9bd_e5fe9dfe",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 2
+      },
+      "lineNbr": 440,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2014-02-07T19:56:33Z",
+      "side": 1,
+      "message": "DRY (Don\u0027t Repeat Yourself)\n\nmetadata \u003d {}\nmetadata[\"post-timestamp\"] \u003d GBP(\"date.utc\", info_dict)\nif not OPTIONS.override_prop:\n    metadata[\"post-build\"] \u003d GBP(fingerprint, info_dict)\n    etc....",
+      "revId": "7719c3faa740acdcc6ddefa53855e22ef40adf64",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "ab62b9bd_05047117",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 2
+      },
+      "lineNbr": 579,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2014-02-07T19:56:33Z",
+      "side": 1,
+      "message": "same again here. DRY",
+      "revId": "7719c3faa740acdcc6ddefa53855e22ef40adf64",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
