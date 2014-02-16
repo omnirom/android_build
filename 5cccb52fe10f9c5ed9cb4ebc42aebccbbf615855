@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "8b77b57d_d90997e1",
+        "filename": "core/Makefile",
+        "patchSetId": 3
+      },
+      "lineNbr": 776,
+      "author": {
+        "id": 1000725
+      },
+      "writtenOn": "2014-02-16T05:06:38Z",
+      "side": 1,
+      "message": "Might be better to use \"cp\" instead of \"mv\"?\nThat would leave the make target in place for rebuilds.",
+      "revId": "5cccb52fe10f9c5ed9cb4ebc42aebccbbf615855",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
