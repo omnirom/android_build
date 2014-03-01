@@ -685,6 +685,7 @@ recovery_binary := $(call intermediates-dir-for,EXECUTABLES,recovery)/recovery
 recovery_resources_common := $(call include-path-for, recovery)/res
 recovery_init_binary := init_recovery
 recovery_libc := libc_oldprops
+recovery_adbd := adbd_oldprops
 
 # Select the 18x32 font on high-density devices; and the 12x22 font on
 # other devices.  Note that the font selected here can be overridden
@@ -766,6 +767,7 @@ $(TARGET_RECOVERY_ROOT_TIMESTAMP): $(INTERNAL_RECOVERY_FILES) \
 		$(recovery_fstab) \
 		$(RECOVERY_INSTALL_OTA_KEYS) \
 		$(recovery_libc) \
+		$(recovery_adbd) \
 		$(recovery_init_binary)
 	@echo -e ${PRT_IMG}"----- Making recovery filesystem ------"${CL_RST}
 	$(hide) mkdir -p $(TARGET_RECOVERY_OUT)
@@ -775,6 +777,8 @@ $(TARGET_RECOVERY_ROOT_TIMESTAMP): $(INTERNAL_RECOVERY_FILES) \
 	@echo -e ${PRT_IMG}"Modifying ramdisk contents..."${CL_RST}
 	$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init
 	$(hide) mv $(TARGET_RECOVERY_ROOT_OUT)/init_recovery $(TARGET_RECOVERY_ROOT_OUT)/init
+	$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/sbin/adbd
+	$(hide) mv $(TARGET_RECOVERY_ROOT_OUT)/sbin/$(recovery_adbd) $(TARGET_RECOVERY_ROOT_OUT)/sbin/adbd
 	$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init*.rc
 	$(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/
 
