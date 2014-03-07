@@ -63,6 +63,10 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
       Override build.prop items with custom vendor init.
       Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
 
+  --mount_by_label <boolean>
+      Force the OTA package to mount and format System by label
+      Can be enabled by defining TARGET_SETS_FSTAB. Defaults to false.
+
 """
 
 import sys
@@ -102,6 +106,7 @@ OPTIONS.worker_threads = 3
 OPTIONS.backuptool = False
 OPTIONS.override_device = 'auto'
 OPTIONS.override_prop = False
+OPTIONS.mount_by_label = False
 
 def MostPopularKey(d, default):
   """Given a dict, return the key corresponding to the largest
@@ -454,15 +459,16 @@ def WriteFullOTAPackage(input_zip, output_zip):
   device_specific.FullOTA_InstallBegin()
 
   if OPTIONS.backuptool:
-    script.Mount("/system")
+    script.Mount("/system", OPTIONS.mount_by_label)
     script.RunBackup("backup")
-    script.Unmount("/system")
+    if not OPTIONS.mount_by_label:
+      script.Unmount("/system")
 
   script.ShowProgress(0.5, 0)
 
   if OPTIONS.wipe_user_data:
     script.Print("Formatting /data")
-    script.FormatPartition("/data")
+    script.FormatPartition("/data", OPTIONS.mount_by_label)
 
   script.Print("#######################################");
   script.Print("# _____            __  __  ______     #");
@@ -479,9 +485,11 @@ def WriteFullOTAPackage(input_zip, output_zip):
     WritePolicyConfig(OPTIONS.info_dict["selinux_fc"], output_zip)
 
   script.Print("Formatting /system")
-  script.FormatPartition("/system")
-  script.Mount("/system")
-  script.UnpackPackageDir("recovery", "/system")
+  script.FormatPartition("/system", OPTIONS.mount_by_label)
+  if not OPTIONS.mount_by_label:
+    script.Mount("/system")
+
+#  script.UnpackPackageDir("recovery", "/system")
   script.Print("Extracting /system")
   script.UnpackPackageDir("system", "/system")
 
@@ -643,7 +651,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
     metadata["pre-build"] = source_fp
     metadata["post-build"] = target_fp
 
-    script.Mount("/system")
+    script.Mount("/system", OPTIONS.mount_by_label)
     script.AssertSomeFingerprint(source_fp, target_fp)
 
   source_boot = common.GetBootableImage(
@@ -712,7 +720,7 @@ def WriteIncrementalOTAPackage(target_zip, source_zip, output_zip):
 
   if OPTIONS.wipe_user_data:
     script.Print("Erasing user data...")
-    script.FormatPartition("/data")
+    script.FormatPartition("/data", OPTIONS.mount_by_label)
 
   script.Print("Removing unneeded files...")
   script.DeleteFiles(["/"+i[0] for i in verbatim_targets] +
@@ -878,6 +886,8 @@ def main(argv):
       OPTIONS.override_device = a
     elif o in ("--override_prop"):
       OPTIONS.override_prop = bool(a.lower() == 'true')
+    elif o in ("--mount_by_label"):
+      OPTIONS.mount_by_label = bool(a.lower() == 'true')
     else:
       return False
     return True
@@ -894,7 +904,8 @@ def main(argv):
                                               "aslr_mode=",
                                               "backup=",
                                               "override_device=",
-                                              "override_prop="],
+                                              "override_prop=",
+                                              "mount_by_label="],
                              extra_option_handler=option_handler)
 
   if len(args) != 2:
