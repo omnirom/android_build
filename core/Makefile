@@ -424,6 +424,13 @@ INSTALLED_RAMDISK_TARGET := $(BUILT_RAMDISK_TARGET)
 $(INSTALLED_RAMDISK_TARGET): $(MKBOOTFS) $(INTERNAL_RAMDISK_FILES) | $(MINIGZIP)
 	$(call pretty,"Target ram disk: $@")
 	$(hide) $(MKBOOTFS) $(TARGET_ROOT_OUT) | $(MINIGZIP) > $@
+	#If target needs a header on ramdisk (mtk stuff)
+	ifneq ($(strip $(TARGET_MKIMAGE)),)
+		$(call pretty,"Appending MTK header to ramdisk")
+		$(hide) $(TARGET_MKIMAGE) $@ ROOTFS > $(PRODUCT_OUT)/ramdisk_tmp.img
+		$(hide) mv $@ $(PRODUCT_OUT)/ramdisk_without_header.img
+		$(hide) mv $(PRODUCT_OUT)/ramdisk_tmp.img $@
+	endif
 
 .PHONY: ramdisk-nodeps
 ramdisk-nodeps: $(MKBOOTFS) | $(MINIGZIP)
