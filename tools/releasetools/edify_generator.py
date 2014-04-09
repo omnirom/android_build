@@ -151,7 +151,12 @@ class EdifyGenerator(object):
   def RunBackup(self, command):
     self.script.append('package_extract_file("system/bin/backuptool.sh", "/system/bin/backuptool.sh");')
     self.script.append('package_extract_file("system/bin/backuptool.functions", "/tmp/backuptool.functions");')
-    self.SetPermissions("/system/bin/backuptool.sh", 0, 0, 0755, None, None)
+    if not self.info.get("use_set_metadata", False):
+      self.script.append('set_perm(0, 0, 0755, "/tmp/backuptool.sh");')
+      self.script.append('set_perm(0, 0, 0644, "/tmp/backuptool.functions");')
+    else:
+      self.script.append('set_metadata("/tmp/backuptool.sh", "uid", 0, "gid", 0, "mode", 0755);')
+      self.script.append('set_metadata("/tmp/backuptool.functions", "uid", 0, "gid", 0, "mode", 0644);')
     self.script.append(('run_program("/system/bin/backuptool.sh", "%s");' % command))
     if command == "restore":
       self.DeleteFiles(["/tmp/backuptool.functions"])
