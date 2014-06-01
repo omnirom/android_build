@@ -24,7 +24,7 @@ PRODUCT_PACKAGES := \
     Bluetooth \
     Calculator \
     Calendar \
-    Camera2 \
+    AOSPCamera2 \
     CertInstaller \
     Email \
     Exchange2 \
