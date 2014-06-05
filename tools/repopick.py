@@ -102,9 +102,9 @@ def which(program):
 def execute_cmd(cmd, exit_on_fail=True):
     if args.verbose:
         print('Executing: %s' % cmd)
-    if args.quiet:
-        cmd = cmd.replace(' && ', ' &> /dev/null && ')
-        cmd = cmd + " &> /dev/null"
+    #if args.quiet:
+    #    cmd = cmd.replace(' && ', ' &> /dev/null && ')
+    #    cmd = cmd + " &> /dev/null"
     ret = os.system(cmd)
     if ret and exit_on_fail:
         if not args.verbose:
