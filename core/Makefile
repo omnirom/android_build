@@ -805,6 +805,11 @@ $(recovery_ramdisk): $(MKBOOTFS) \
 	$(recovery_uncompressed_ramdisk)
 	@echo -e ${PRT_IMG}"----- Making recovery ramdisk ------"${CL_RST}
 	$(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
+ifneq ($(TARGET_MKIMAGE),)
+		$(call pretty,"Appending MTK header to ramdisk")
+		$(hide) mv $@ $(recovery_ramdisk).tmp
+		$(hide) $(TARGET_MKIMAGE) $(recovery_ramdisk).tmp RECOVERY > $@
+endif
 
 ifndef BOARD_CUSTOM_BOOTIMG_MK
 $(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTIMG) \
