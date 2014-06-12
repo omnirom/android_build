@@ -13,10 +13,14 @@ else
 ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a8)
 	arch_variant_cflags := -mcpu=cortex-a8
 else
+ifeq ($(strip $(TARGET_CPU_VARIANT)),scorpion)
+	arch_variant_cflags := -mcpu=cortex-a8
+else
 ifeq ($(strip $(TARGET_CPU_VARIANT)),cortex-a7)
 	arch_variant_cflags := -mcpu=cortex-a7
 else
 	arch_variant_cflags := -march=armv7-a
+endif
 endif
 endif
 endif
