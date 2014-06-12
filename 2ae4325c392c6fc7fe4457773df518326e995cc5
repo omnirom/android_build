@@ -2,6 +2,23 @@
   "comments": [
     {
       "key": {
+        "uuid": "8b77b57d_ddbeadcc",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 6,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2014-06-12T13:33:52Z",
+      "side": 1,
+      "message": "Both of these -D are already in the BoardConfig file for every qcom devices\nSo should we clean them up there then?",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "8b77b57d_cb6b4bb3",
         "filename": "core/qcom_target.mk",
         "patchSetId": 1
