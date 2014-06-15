@@ -19,6 +19,24 @@
     },
     {
       "key": {
+        "uuid": "8b77b57d_4f93c0a6",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 6,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-06-15T17:10:21Z",
+      "side": 1,
+      "message": "That\u0027s the intent.",
+      "parentUuid": "8b77b57d_ddbeadcc",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
         "uuid": "8b77b57d_cb6b4bb3",
         "filename": "core/qcom_target.mk",
         "patchSetId": 1
@@ -83,6 +101,42 @@
       "writtenOn": "2014-06-12T15:45:42Z",
       "side": 1,
       "message": "It\u0027s not applying the QCOM_DIRECTTRACK flag to jflte, which uses audio-caf. But when I add the QCOM_DIRECTTRACK flag to the device\u0027s BoardConfig.mk, it builds and everything works perfectly fine. I think there\u0027s a logical issue here; syntax is fine though, obviously.",
+      "parentUuid": "8b77b57d_5dcb7d73",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b77b57d_6fecfc25",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-06-15T17:10:21Z",
+      "side": 1,
+      "message": "Hmm, jflte does have BOARD_USES_LEGACY_ALSA_AUDIO set?",
+      "parentUuid": "8b77b57d_9da9958f",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b77b57d_8ff15802",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-06-15T17:10:21Z",
+      "side": 1,
+      "message": "In theory, at some point we might have a device that uses caf-bfam but legacy audio.",
       "parentUuid": "8b77b57d_5dcb7d73",
       "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
