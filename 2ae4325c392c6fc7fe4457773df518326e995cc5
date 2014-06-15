@@ -141,6 +141,24 @@
       "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b77b57d_2ff5a4b6",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2014-06-15T20:33:19Z",
+      "side": 1,
+      "message": "https://github.com/omnirom/android_device_samsung_qcom-common/blob/android-4.4/BoardConfigCommon.mk#L35",
+      "parentUuid": "8b77b57d_6fecfc25",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
     }
   ]
 }
