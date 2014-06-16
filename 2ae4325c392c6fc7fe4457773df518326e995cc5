@@ -177,6 +177,24 @@
       "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "8b77b57d_6fb31cea",
+        "filename": "core/qcom_target.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 15,
+      "author": {
+        "id": 1000313
+      },
+      "writtenOn": "2014-06-16T03:17:56Z",
+      "side": 1,
+      "message": "this should be \"caf caf-bfam\", not just \"caf-bfam\"",
+      "parentUuid": "8b77b57d_efeaccd5",
+      "revId": "2ae4325c392c6fc7fe4457773df518326e995cc5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
     }
   ]
 }
