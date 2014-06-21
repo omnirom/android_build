@@ -59,8 +59,8 @@ function check_product()
         return
     fi
 
-    if (echo -n $1 | grep -q -e "^omni_") ; then
-       CUSTOM_BUILD=$(echo -n $1 | sed -e 's/^omni_//g')
+    if (echo -n $1 | grep -q -e "^speed_") ; then
+       CUSTOM_BUILD=$(echo -n $1 | sed -e 's/^speed_//g')
     else
        CUSTOM_BUILD=
     fi
@@ -478,7 +478,7 @@ function breakfast()
     CUSTOM_DEVICES_ONLY="true"
     unset LUNCH_MENU_CHOICES
     add_lunch_combo full-eng
-    for f in `/bin/ls vendor/omni/vendorsetup.sh 2> /dev/null`
+    for f in `/bin/ls vendor/speed/vendorsetup.sh 2> /dev/null`
         do
             echo "including $f"
             . $f
@@ -494,11 +494,11 @@ function breakfast()
             # A buildtype was specified, assume a full device name
             lunch $target
         else
-            # This is probably just the omni model name
+            # This is probably just the speed model name
             if [ -z "$variant" ]; then
                 variant="userdebug"
             fi
-            lunch omni_$target-$variant
+            lunch speed_$target-$variant
         fi
     fi
     return $?
