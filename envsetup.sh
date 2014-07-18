@@ -589,10 +589,30 @@ function lunch()
 
     echo
 
+    if [ $PRODUCT_PREBUILT_WEBVIEWCHROMIUM == 'yes' ]; then
+        chromium_prebuilt $product
+    fi
+
     fixup_common_out_dir
 
     set_stuff_for_environment
     printconfig
+
+}
+
+function chromium_prebuilt() {
+    T=$(gettop)
+    product=$1
+    device=$(echo $product | cut -d'_' -f 2-)
+    hash=$T/prebuilts/chromium/$device/hash.txt
+
+    if [ -r $hash ] && [ $(git -C $T/external/chromium rev-parse --verify HEAD) == $(cat $hash) ]; then
+        export PRODUCT_PREBUILT_WEBVIEWCHROMIUM=yes
+        echo "** Prebuilt Chromium is up-to-date; Will be used for build **"
+    else
+        export PRODUCT_PREBUILT_WEBVIEWCHROMIUM=no
+        echo "** Prebuilt Chromium out-of-date/not found; Will build from source **"
+    fi
 }
 
 # Tab completion for lunch.
@@ -645,6 +665,7 @@ function tapas()
 
     set_stuff_for_environment
     printconfig
+
 }
 
 function pushboot() {
@@ -1445,6 +1466,7 @@ function pez {
     fi
     return $retval
 }
+
 
 if [ "x$SHELL" != "x/bin/bash" ]; then
     case `ps -o command -p $$` in
