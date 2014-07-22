@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "4b713d8b_0999f970",
+        "filename": "envsetup.sh",
+        "patchSetId": 12
+      },
+      "lineNbr": 1459,
+      "author": {
+        "id": 1000032
+      },
+      "writtenOn": "2014-07-22T19:37:37Z",
+      "side": 1,
+      "message": "@Max: See if adding an export in front of TARGET_DEVICE fixes it for you.",
+      "revId": "87339c60490c26bfe2308cebca26fb00caf42e1d",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
