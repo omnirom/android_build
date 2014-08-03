@@ -216,8 +216,13 @@ for change in args.change_number:
         change_number    = data['_number']
         current_revision = data['revisions'][data['current_revision']]
         patch_number     = current_revision['_number']
-        fetch_url        = current_revision['fetch']['http']['url']
-        fetch_ref        = current_revision['fetch']['http']['ref']
+        # Backwards compatibility
+        if 'http' in current_revision['fetch']:
+            fetch_url        = current_revision['fetch']['http']['url']
+            fetch_ref        = current_revision['fetch']['http']['ref']
+        else:
+            fetch_url        = current_revision['fetch']['anonymous http']['url']
+            fetch_ref        = current_revision['fetch']['anonymous http']['ref']
         author_name      = current_revision['commit']['author']['name']
         author_email     = current_revision['commit']['author']['email']
         author_date      = current_revision['commit']['author']['date'].replace(date_fluff, '')
