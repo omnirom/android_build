@@ -176,6 +176,19 @@ while(True):
     ppaths = re.split('\s*:\s*', pline.decode())
     project_name_to_path[ppaths[1]] = ppaths[0]
 
+# Check for range of commits and rebuild array
+changelist = []
+for change in args.change_number:
+    c=str(change)
+    if '-' in c:
+        templist = c.split('-')
+        for i in range(int(templist[0]), int(templist[1]) + 1):
+            changelist.append(str(i))
+    else:
+        changelist.append(c)
+
+args.change_number = changelist
+
 # Iterate through the requested change numbers
 for change in args.change_number:
     if not args.quiet:
