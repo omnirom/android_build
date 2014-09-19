@@ -1440,6 +1440,74 @@ function repopick() {
     $T/build/tools/repopick.py $@
 }
 
+# repopicks all commits in a list
+function pick() {
+    T=$(gettop)
+    file=$1
+    if [ -z $1 ]
+    then
+        file="$T/.picklist"
+    fi
+    if [ ! -f $file ]
+    then
+        echo Picklist does not exist, creating...
+        touch $file
+    fi
+    if [ ! -s $file ]
+    then
+        echo "Picklist is empty!"
+        return
+    fi
+    for x in $(cat $file)
+    do
+        repopick $x
+    done
+}
+
+# Adds commit to default picklist
+function picklist() {
+    T=$(gettop)
+    if [ -z $1 ]
+    then
+        echo "Usage: picklist <change #>"
+        echo "       picklist rm <change #>"
+        return
+    fi
+    if [ ! -f "$T/.picklist" ]
+    then
+        touch .picklist
+    fi
+    if [ $1 == "rm" ]
+    then
+        if [ -z $2 ]
+        then
+            echo "Usage: picklist <change #>"
+            echo "       picklist rm <change #>"
+            return
+        fi
+        if [ -z $(grep -x $2 $T/.picklist) ]
+        then
+            echo "Change #"$2" is not in picklist!"
+            return
+        fi
+        sed -i "/$2/d" $T/.picklist
+        if [ $? == "0" ]
+        then
+            echo "Removed change #"$2" from picklist."
+        else
+            echo "Something went wrong!"
+        fi
+        return
+    fi
+    if [ ! -z "$(grep -x $1 .picklist)" ]
+    then
+        echo "Commit already in list!"
+        return
+    fi
+    echo $1 >> $T/.picklist
+    echo "Added change #"$1" to picklist"
+}
+
 
 # Print colored exit condition
 function pez {
