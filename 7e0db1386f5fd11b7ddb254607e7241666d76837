@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "cb528df8_b35f82e6",
+        "filename": "envsetup.sh",
+        "patchSetId": 5
+      },
+      "lineNbr": 1478,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2014-09-20T23:07:12Z",
+      "side": 1,
+      "message": "shouldnt that be $T/.picklist here?",
+      "revId": "7e0db1386f5fd11b7ddb254607e7241666d76837",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
