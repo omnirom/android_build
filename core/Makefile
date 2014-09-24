@@ -976,12 +976,12 @@ $(recovery_uncompressed_ramdisk): $(MKBOOTFS) \
 		$(RECOVERY_INSTALL_OTA_KEYS)
 	$(call build-recoveryramdisk)
 	@echo -e ${PRT_IMG}"----- Making uncompressed recovery ramdisk ------"${CL_RST}
-	$(hide) $(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
+	$(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
 
 $(recovery_ramdisk): $(MINIGZIP) \
 		$(recovery_uncompressed_ramdisk)
 	@echo -e ${PRT_IMG}"----- Making compressed recovery ramdisk ------"${CL_RST}
-	$(hide) $(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
+	$(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
 
 ifndef BOARD_CUSTOM_BOOTIMG_MK
 $(INSTALLED_RECOVERYIMAGE_TARGET): $(recovery_ramdisk) $(MKBOOTIMG) $(recovery_kernel)
@@ -998,8 +998,8 @@ $(RECOVERY_RESOURCE_ZIP): $(INSTALLED_RECOVERYIMAGE_TARGET)
 recoveryimage-nodeps:
 	@echo "make $@: ignoring dependencies"
 	$(call build-recoveryramdisk)
-	$(hide) $(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
-	$(hide) $(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
+	$(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $(recovery_uncompressed_ramdisk)
+	$(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $(recovery_ramdisk)
 	$(call build-recoveryimage-target, $(INSTALLED_RECOVERYIMAGE_TARGET))
 
 else
