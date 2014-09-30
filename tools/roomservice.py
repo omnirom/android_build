@@ -20,6 +20,8 @@ from __future__ import print_function
 import json
 import sys
 import os
+import os.path
+import re
 from xml.etree import ElementTree as ES
 # Use the urllib importer from the Cyanogenmod roomservice
 try:
@@ -44,57 +46,50 @@ default_team_rem = "omnirom"
 local_manifest_dir = ".repo/local_manifests"
 # change this to your name on github (or equivalent hosting)
 android_team = "omnirom"
+# url to gerrit repository
+gerrit_url = "gerrit.omnirom.org"
 
 
-def check_repo_exists(git_data):
-    if not int(git_data.get('total_count', 0)):
-        raise Exception("{} not found in {} Github, exiting "
-                        "roomservice".format(device, android_team))
+def check_repo_exists(git_data, device):
+    re_match = "^android_device_.*_{device}$".format(device=device)
+    matches = filter(lambda x: re.match(re_match, x), git_data)
+    if len(matches) != 1:
+        raise Exception("{device} not found,"
+                        "exiting roomservice".format(device=device))
+
+    return git_data[matches[0]]
 
 
-# Note that this can only be done 5 times per minute
-def search_github_for_device(device):
-    git_search_url = "https://api.github.com/search/repositories" \
-                     "?q=%40{}+android_device+{}+fork:true".format(android_team, device)
+def search_gerrit_for_device(device):
+    # TODO: In next gerrit release regex search with r= should be supported!
+    git_search_url = "https://{gerrit_url}/projects/?m={device}".format(
+        gerrit_url=gerrit_url,
+        device=device
+    )
     git_req = urllib.request.Request(git_search_url)
     try:
         response = urllib.request.urlopen(git_req)
     except urllib.request.HTTPError:
-        raise Exception("There was an issue connecting to github."
+        raise Exception("There was an issue connecting to gerrit."
                         " Please try again in a minute")
+    # Skip silly gerrit "header"
+    response.readline()
     git_data = json.load(response)
-    check_repo_exists(git_data)
+    device_data = check_repo_exists(git_data, device)
     print("found the {} device repo".format(device))
-    return git_data
+    return device_data
 
 
-def get_device_url(git_data):
-    device_url = ""
-    for item in git_data['items']:
-        temp_url = item.get('html_url')
-        if "{}/android_device".format(android_team) in temp_url:
-            try:
-                temp_url = temp_url[temp_url.index("android_device"):]
-            except ValueError:
-                pass
-            else:
-                if temp_url.endswith(device):
-                    device_url = temp_url
-                    break
+def parse_device_directory(device_url, device):
+    pattern = "^android_device_(?P<vendor>.+)_{}$".format(device)
+    match = re.match(pattern, device_url)
 
-    if device_url:
-        return device_url
-    raise Exception("{} not found in {} Github, exiting "
-                    "roomservice".format(device, android_team))
-
-
-def parse_device_directory(device_url,device):
-    to_strip = "android_device"
-    repo_name = device_url[device_url.index(to_strip) + len(to_strip):]
-    repo_name = repo_name[:repo_name.index(device)]
-    repo_dir = repo_name.replace("_", "/")
-    repo_dir = repo_dir + device
-    return "device{}".format(repo_dir)
+    if match is None:
+        raise Exception("Invalid project name {}".format(device_url))
+    return "device/{vendor}/{device}".format(
+        vendor=match.group('vendor'),
+        device=device,
+    )
 
 
 # Thank you RaYmAn
@@ -119,6 +114,10 @@ def check_project_exists(url):
         if project.get("name") == url:
             return True
     return False
+
+
+def check_target_exists(directory):
+    return os.path.isdir(directory)
 
 
 # Use the indent function from http://stackoverflow.com/a/4590052
@@ -228,13 +227,13 @@ def create_dependency_manifest(dependencies):
         # not adding an organization should default to android_team
         # only apply this to github
         if remote == "github":
-            if not "/" in repository:
+            if "/" not in repository:
                 repository = '/'.join([android_team, repository])
         project = create_manifest_project(repository,
                                           target_path,
                                           remote=remote,
                                           revision=revision)
-        if not project is None:
+        if project is not None:
             manifest = append_to_manifest(project)
             write_to_manifest(manifest)
             projects.append(target_path)
@@ -262,15 +261,17 @@ def fetch_device(device):
     if check_device_exists(device):
         print("WARNING: Trying to fetch a device that's already there")
         return
-    git_data = search_github_for_device(device)
-    device_url = get_device_url(git_data)
-    device_dir = parse_device_directory(device_url,device)
+    git_data = search_gerrit_for_device(device)
+    device_url = git_data['id']
+    device_dir = parse_device_directory(device_url, device)
     project = create_manifest_project(device_url,
                                       device_dir,
                                       remote=default_team_rem)
-    if not project is None:
+    if project is not None:
         manifest = append_to_manifest(project)
         write_to_manifest(manifest)
+    # In case a project was written to manifest, but never synced
+    if project is not None or not check_target_exists(device_dir):
         print("syncing the device config")
         os.system('repo sync -f --no-clone-bundle %s' % device_dir)
 
