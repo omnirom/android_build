@@ -27,28 +27,34 @@ ifneq ($(findstring Linux,$(UNAME)),)
 ifneq ($(strip $(USE_MINGW)),)
 HOST_ACP_UNAVAILABLE := true
 TOOLS_EXE_SUFFIX :=
-HOST_GLOBAL_CFLAGS += -DUSE_MINGW
-ifneq ($(strip $(BUILD_HOST_64bit)),)
-TOOLS_PREFIX := /usr/bin/amd64-mingw32msvc-
-HOST_C_INCLUDES += /usr/lib/gcc/amd64-mingw32msvc/4.4.2/include
-HOST_GLOBAL_LD_DIRS += -L/usr/amd64-mingw32msvc/lib
-else
-TOOLS_PREFIX := /usr/bin/i586-mingw32msvc-
-HOST_C_INCLUDES += /usr/lib/gcc/i586-mingw32msvc/3.4.4/include
-HOST_GLOBAL_LD_DIRS += -L/usr/i586-mingw32msvc/lib
-endif # BUILD_HOST_64bit
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -DUSE_MINGW
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -Wno-unused-parameter
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += --sysroot=prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/x86_64-w64-mingw32
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -m32
+$(combo_2nd_arch_prefix)HOST_GLOBAL_LDFLAGS += -m32
+TOOLS_PREFIX := prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/bin/x86_64-w64-mingw32-
+$(combo_2nd_arch_prefix)HOST_C_INCLUDES += prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/x86_64-w64-mingw32/include
+$(combo_2nd_arch_prefix)HOST_C_INCLUDES += prebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/lib/gcc/x86_64-w64-mingw32/4.8.3/include
+$(combo_2nd_arch_prefix)HOST_GLOBAL_LD_DIRS += -Lprebuilts/gcc/linux-x86/host/x86_64-w64-mingw32-4.8/x86_64-w64-mingw32/lib32
 endif # USE_MINGW
 endif # Linux
 
-HOST_CC := $(TOOLS_PREFIX)gcc$(TOOLS_EXE_SUFFIX)
-HOST_CXX := $(TOOLS_PREFIX)g++$(TOOLS_EXE_SUFFIX)
-HOST_AR := $(TOOLS_PREFIX)ar$(TOOLS_EXE_SUFFIX)
+# Workaround differences in inttypes.h between host and target.
+# See bug 12708004.
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -D__STDC_FORMAT_MACROS -D__STDC_CONSTANT_MACROS -D__USE_MINGW_ANSI_STDIO
 
-HOST_GLOBAL_CFLAGS += -include $(call select-android-config-h,windows)
-HOST_GLOBAL_LDFLAGS += --enable-stdcall-fixup
+$(combo_2nd_arch_prefix)HOST_CC := $(TOOLS_PREFIX)gcc$(TOOLS_EXE_SUFFIX)
+$(combo_2nd_arch_prefix)HOST_CXX := $(TOOLS_PREFIX)g++$(TOOLS_EXE_SUFFIX)
+$(combo_2nd_arch_prefix)HOST_AR := $(TOOLS_PREFIX)ar$(TOOLS_EXE_SUFFIX)
+
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += \
+    -include $(call select-android-config-h,windows)
+$(combo_2nd_arch_prefix)HOST_GLOBAL_LDFLAGS += \
+    --enable-stdcall-fixup
+
 ifneq ($(strip $(BUILD_HOST_static)),)
 # Statically-linked binaries are desirable for sandboxed environment
-HOST_GLOBAL_LDFLAGS += -static
+$(combo_2nd_arch_prefix)HOST_GLOBAL_LDFLAGS += -static
 endif # BUILD_HOST_static
 
 # when building under Cygwin, ensure that we use Mingw compilation by default.
@@ -62,10 +68,13 @@ endif # BUILD_HOST_static
 #
 ifneq ($(findstring CYGWIN,$(UNAME)),)
 ifeq ($(strip $(USE_CYGWIN)),)
-HOST_GLOBAL_CFLAGS += -mno-cygwin
-HOST_GLOBAL_LDFLAGS += -mno-cygwin -mconsole
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -mno-cygwin
+$(combo_2nd_arch_prefix)HOST_GLOBAL_LDFLAGS += -mno-cygwin -mconsole
 endif
 endif
+
+############################################################
+## Macros after this line are shared by the 64-bit config.
 
 HOST_SHLIB_SUFFIX := .dll
 HOST_EXECUTABLE_SUFFIX := .exe

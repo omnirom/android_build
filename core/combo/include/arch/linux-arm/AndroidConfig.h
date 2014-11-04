@@ -55,25 +55,12 @@
 #define HAVE_FUTEX
 
 /*
- * Define if we already have the futex wrapper functions defined. Yes if
- * compiling against bionic.
- */
-#define HAVE_FUTEX_WRAPPERS 1
-
-/*
  * Process creation model.  Choose one:
  *
  * HAVE_FORKEXEC - use fork() and exec()
  * HAVE_WIN32_PROC - use CreateProcess()
  */
 #define HAVE_FORKEXEC
-
-/*
- * Process out-of-memory adjustment.  Set if running on Linux,
- * where we can write to /proc/<pid>/oom_adj to modify the out-of-memory
- * badness adjustment.
- */
-#define HAVE_OOM_ADJ
 
 /*
  * IPC model.  Choose one:
@@ -143,12 +130,6 @@
  * Define this if have clock_gettime() and friends
  */
 #define HAVE_POSIX_CLOCKS
-
-/*
- * Define this if we have pthread_cond_timedwait_monotonic() and
- * clock_gettime(CLOCK_MONOTONIC).
- */
-#define HAVE_TIMEDWAIT_MONOTONIC
 
 /*
  * Define this if we have linux style epoll()
@@ -270,19 +251,9 @@
 #define OS_SHARED_LIB_FORMAT_STR    "lib%s.so"
 
 /*
- * Do we have __memcmp16()?
- */
-#define HAVE__MEMCMP16  1
-
-/*
  * type for the third argument to mincore().
  */
 #define MINCORE_POINTER_TYPE unsigned char *
-
-/*
- * Do we have the sigaction flag SA_NOCLDWAIT?
- */
-#define HAVE_SA_NOCLDWAIT
 
 /*
  * The default path separator for the platform

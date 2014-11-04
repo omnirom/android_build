@@ -56,13 +56,6 @@
 #define HAVE_FORKEXEC
 
 /*
- * Process out-of-memory adjustment.  Set if running on Linux,
- * where we can write to /proc/<pid>/oom_adj to modify the out-of-memory
- * badness adjustment.
- */
-/* #define HAVE_OOM_ADJ */
-
-/*
  * IPC model.  Choose one:
  *
  * HAVE_SYSV_IPC - use the classic SysV IPC mechanisms (semget, shmget).
@@ -130,12 +123,6 @@
  * Define this if have clock_gettime() and friends
  */
 /* #define HAVE_POSIX_CLOCKS */
-
-/*
- * Define this if we have pthread_cond_timedwait_monotonic() and
- * clock_gettime(CLOCK_MONOTONIC).
- */
-/* #define HAVE_TIMEDWAIT_MONOTONIC */
 
 /*
  * Endianness of the target machine.  Choose one:

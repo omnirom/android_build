@@ -81,6 +81,28 @@ else
     $(info Clean step: $(INTERNAL_CLEAN_STEP.$(step))) \
     $(shell $(INTERNAL_CLEAN_STEP.$(step))) \
    )
+
+  # Rewrite the clean step for the second arch.
+  ifdef TARGET_2ND_ARCH
+  # $(1): the clean step cmd
+  # $(2): the prefix to search for
+  # $(3): the prefix to replace with
+  define -cs-rewrite-cleanstep
+  $(if $(filter $(2)/%,$(1)),\
+    $(eval _crs_new_cmd := $(patsubst $(2)/%,$(3)/%,$(1)))\
+    $(info Clean step: $(_crs_new_cmd))\
+    $(shell $(_crs_new_cmd)))
+  endef
+  $(foreach step,$(steps), \
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$(TARGET_OUT_INTERMEDIATES),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_INTERMEDIATES))\
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$(TARGET_OUT_SHARED_LIBRARIES),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_SHARED_LIBRARIES))\
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$(TARGET_OUT_VENDOR_SHARED_LIBRARIES),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_VENDOR_SHARED_LIBRARIES))\
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_INTERMEDIATES),$(TARGET_OUT_INTERMEDIATES))\
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_SHARED_LIBRARIES),$(TARGET_OUT_SHARED_LIBRARIES))\
+    $(call -cs-rewrite-cleanstep,$(INTERNAL_CLEAN_STEP.$(step)),$($(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_VENDOR_SHARED_LIBRARIES),$(TARGET_OUT_VENDOR_SHARED_LIBRARIES))\
+    )
+  endif
+  _crs_new_cmd :=
   steps :=
 endif
 CURRENT_CLEAN_BUILD_VERSION :=
@@ -179,25 +201,30 @@ installclean_files := \
 	$(HOST_OUT)/obj/NOTICE_FILES \
 	$(HOST_OUT)/sdk \
 	$(PRODUCT_OUT)/*.img \
+	$(PRODUCT_OUT)/*.ini \
 	$(PRODUCT_OUT)/*.txt \
 	$(PRODUCT_OUT)/*.xlb \
 	$(PRODUCT_OUT)/*.zip \
 	$(PRODUCT_OUT)/*.md5sum \
 	$(PRODUCT_OUT)/kernel \
 	$(PRODUCT_OUT)/data \
+	$(PRODUCT_OUT)/skin \
 	$(PRODUCT_OUT)/obj/APPS \
 	$(PRODUCT_OUT)/obj/NOTICE_FILES \
 	$(PRODUCT_OUT)/obj/PACKAGING \
 	$(PRODUCT_OUT)/recovery \
 	$(PRODUCT_OUT)/root \
 	$(PRODUCT_OUT)/system \
+	$(PRODUCT_OUT)/vendor \
+	$(PRODUCT_OUT)/oem \
 	$(PRODUCT_OUT)/dex_bootjars \
 	$(PRODUCT_OUT)/obj/JAVA_LIBRARIES \
 	$(PRODUCT_OUT)/obj/FAKE \
 	$(PRODUCT_OUT)/obj/EXECUTABLES/adbd_intermediates \
 	$(PRODUCT_OUT)/obj/EXECUTABLES/init_intermediates \
 	$(PRODUCT_OUT)/obj/ETC/mac_permissions.xml_intermediates \
-	$(PRODUCT_OUT)/obj/ETC/sepolicy_intermediates
+	$(PRODUCT_OUT)/obj/ETC/sepolicy_intermediates \
+	$(PRODUCT_OUT)/obj/ETC/init.environ.rc_intermediates
 
 # The files/dirs to delete during a dataclean, which removes any files
 # in the staging and emulator data partitions.

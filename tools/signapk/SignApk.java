@@ -20,6 +20,7 @@ import org.bouncycastle.asn1.ASN1InputStream;
 import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.DEROutputStream;
 import org.bouncycastle.asn1.cms.CMSObjectIdentifiers;
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo;
 import org.bouncycastle.cert.jcajce.JcaCertStore;
 import org.bouncycastle.cms.CMSException;
 import org.bouncycastle.cms.CMSProcessableByteArray;
@@ -35,7 +36,7 @@ import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder;
 import org.bouncycastle.util.encoders.Base64;
 
 import java.io.BufferedReader;
-import java.io.BufferedOutputStream;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.File;
@@ -47,6 +48,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.io.PrintStream;
+import java.lang.reflect.Constructor;
 import java.security.DigestOutputStream;
 import java.security.GeneralSecurityException;
 import java.security.Key;
@@ -59,11 +61,11 @@ import java.security.cert.CertificateEncodingException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
-import java.security.spec.KeySpec;
 import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Enumeration;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.jar.Attributes;
@@ -83,9 +85,9 @@ import javax.crypto.spec.PBEKeySpec;
  * Prior to the keylimepie release, SignApk ignored the signature
  * algorithm specified in the certificate and always used SHA1withRSA.
  *
- * Starting with keylimepie, we support SHA256withRSA, and use the
- * signature algorithm in the certificate to select which to use
- * (SHA256withRSA or SHA1withRSA).
+ * Starting with JB-MR2, the platform supports SHA256withRSA, so we use
+ * the signature algorithm in the certificate to select which to use
+ * (SHA256withRSA or SHA1withRSA). Also in JB-MR2, EC keys are supported.
  *
  * Because there are old keys still in use whose certificate actually
  * says "MD5withRSA", we treat these as though they say "SHA1withRSA"
@@ -95,15 +97,15 @@ import javax.crypto.spec.PBEKeySpec;
 
 
 /**
- * Command line tool to sign JAR files (including APKs and OTA
- * updates) in a way compatible with the mincrypt verifier, using RSA
- * keys and SHA1 or SHA-256.
+ * Command line tool to sign JAR files (including APKs and OTA updates) in a way
+ * compatible with the mincrypt verifier, using EC or RSA keys and SHA1 or
+ * SHA-256 (see historical note).
  */
 class SignApk {
     private static final String CERT_SF_NAME = "META-INF/CERT.SF";
-    private static final String CERT_RSA_NAME = "META-INF/CERT.RSA";
+    private static final String CERT_SIG_NAME = "META-INF/CERT.%s";
     private static final String CERT_SF_MULTI_NAME = "META-INF/CERT%d.SF";
-    private static final String CERT_RSA_MULTI_NAME = "META-INF/CERT%d.RSA";
+    private static final String CERT_SIG_MULTI_NAME = "META-INF/CERT%d.%s";
 
     private static final String OTACERT_NAME = "META-INF/com/android/otacert";
 
@@ -117,12 +119,12 @@ class SignApk {
      * Return one of USE_SHA1 or USE_SHA256 according to the signature
      * algorithm specified in the cert.
      */
-    private static int getAlgorithm(X509Certificate cert) {
-        String sigAlg = cert.getSigAlgName();
-        if ("SHA1withRSA".equals(sigAlg) ||
-            "MD5withRSA".equals(sigAlg)) {     // see "HISTORICAL NOTE" above.
+    private static int getDigestAlgorithm(X509Certificate cert) {
+        String sigAlg = cert.getSigAlgName().toUpperCase(Locale.US);
+        if ("SHA1WITHRSA".equals(sigAlg) ||
+            "MD5WITHRSA".equals(sigAlg)) {     // see "HISTORICAL NOTE" above.
             return USE_SHA1;
-        } else if ("SHA256withRSA".equals(sigAlg)) {
+        } else if (sigAlg.startsWith("SHA256WITH")) {
             return USE_SHA256;
         } else {
             throw new IllegalArgumentException("unsupported signature algorithm \"" + sigAlg +
@@ -130,9 +132,26 @@ class SignApk {
         }
     }
 
+    /** Returns the expected signature algorithm for this key type. */
+    private static String getSignatureAlgorithm(X509Certificate cert) {
+        String sigAlg = cert.getSigAlgName().toUpperCase(Locale.US);
+        String keyType = cert.getPublicKey().getAlgorithm().toUpperCase(Locale.US);
+        if ("RSA".equalsIgnoreCase(keyType)) {
+            if (getDigestAlgorithm(cert) == USE_SHA256) {
+                return "SHA256withRSA";
+            } else {
+                return "SHA1withRSA";
+            }
+        } else if ("EC".equalsIgnoreCase(keyType)) {
+            return "SHA256withECDSA";
+        } else {
+            throw new IllegalArgumentException("unsupported key type: " + keyType);
+        }
+    }
+
     // Files matching this pattern are not copied to the output.
     private static Pattern stripPattern =
-        Pattern.compile("^(META-INF/((.*)[.](SF|RSA|DSA)|com/android/otacert))|(" +
+        Pattern.compile("^(META-INF/((.*)[.](SF|RSA|DSA|EC)|com/android/otacert))|(" +
                         Pattern.quote(JarFile.MANIFEST_NAME) + ")$");
 
     private static X509Certificate readPublicKey(File file)
@@ -164,7 +183,7 @@ class SignApk {
     }
 
     /**
-     * Decrypt an encrypted PKCS 8 format private key.
+     * Decrypt an encrypted PKCS#8 format private key.
      *
      * Based on ghstark's post on Aug 6, 2006 at
      * http://forums.sun.com/thread.jspa?threadID=758133&messageID=4330949
@@ -172,7 +191,7 @@ class SignApk {
      * @param encryptedPrivateKey The raw data of the private key
      * @param keyFile The file containing the private key
      */
-    private static KeySpec decryptPrivateKey(byte[] encryptedPrivateKey, File keyFile)
+    private static PKCS8EncodedKeySpec decryptPrivateKey(byte[] encryptedPrivateKey, File keyFile)
         throws GeneralSecurityException {
         EncryptedPrivateKeyInfo epkInfo;
         try {
@@ -198,7 +217,7 @@ class SignApk {
         }
     }
 
-    /** Read a PKCS 8 format private key. */
+    /** Read a PKCS#8 format private key. */
     private static PrivateKey readPrivateKey(File file)
         throws IOException, GeneralSecurityException {
         DataInputStream input = new DataInputStream(new FileInputStream(file));
@@ -206,16 +225,21 @@ class SignApk {
             byte[] bytes = new byte[(int) file.length()];
             input.read(bytes);
 
-            KeySpec spec = decryptPrivateKey(bytes, file);
+            /* Check to see if this is in an EncryptedPrivateKeyInfo structure. */
+            PKCS8EncodedKeySpec spec = decryptPrivateKey(bytes, file);
             if (spec == null) {
                 spec = new PKCS8EncodedKeySpec(bytes);
             }
 
-            try {
-                return KeyFactory.getInstance("RSA").generatePrivate(spec);
-            } catch (InvalidKeySpecException ex) {
-                return KeyFactory.getInstance("DSA").generatePrivate(spec);
-            }
+            /*
+             * Now it's in a PKCS#8 PrivateKeyInfo structure. Read its Algorithm
+             * OID and use that to construct a KeyFactory.
+             */
+            ASN1InputStream bIn = new ASN1InputStream(new ByteArrayInputStream(spec.getEncoded()));
+            PrivateKeyInfo pki = PrivateKeyInfo.getInstance(bIn.readObject());
+            String algOid = pki.getPrivateKeyAlgorithm().getAlgorithm().getId();
+
+            return KeyFactory.getInstance(algOid).generatePrivate(spec);
         } finally {
             input.close();
         }
@@ -413,8 +437,7 @@ class SignApk {
         JcaCertStore certs = new JcaCertStore(certList);
 
         CMSSignedDataGenerator gen = new CMSSignedDataGenerator();
-        ContentSigner signer = new JcaContentSignerBuilder(
-            getAlgorithm(publicKey) == USE_SHA256 ? "SHA256withRSA" : "SHA1withRSA")
+        ContentSigner signer = new JcaContentSignerBuilder(getSignatureAlgorithm(publicKey))
             .setProvider(sBouncyCastleProvider)
             .build(privateKey);
         gen.addSignerInfoGenerator(
@@ -438,24 +461,75 @@ class SignApk {
      * reduce variation in the output file and make incremental OTAs
      * more efficient.
      */
-    private static void copyFiles(Manifest manifest,
-                                  JarFile in, JarOutputStream out, long timestamp) throws IOException {
+    private static void copyFiles(Manifest manifest, JarFile in, JarOutputStream out,
+                                  long timestamp, int alignment) throws IOException {
         byte[] buffer = new byte[4096];
         int num;
 
         Map<String, Attributes> entries = manifest.getEntries();
         ArrayList<String> names = new ArrayList<String>(entries.keySet());
         Collections.sort(names);
+
+        boolean firstEntry = true;
+        long offset = 0L;
+
+        // We do the copy in two passes -- first copying all the
+        // entries that are STORED, then copying all the entries that
+        // have any other compression flag (which in practice means
+        // DEFLATED).  This groups all the stored entries together at
+        // the start of the file and makes it easier to do alignment
+        // on them (since only stored entries are aligned).
+
         for (String name : names) {
             JarEntry inEntry = in.getJarEntry(name);
             JarEntry outEntry = null;
-            if (inEntry.getMethod() == JarEntry.STORED) {
-                // Preserve the STORED method of the input entry.
-                outEntry = new JarEntry(inEntry);
-            } else {
-                // Create a new entry so that the compressed len is recomputed.
-                outEntry = new JarEntry(name);
+            if (inEntry.getMethod() != JarEntry.STORED) continue;
+            // Preserve the STORED method of the input entry.
+            outEntry = new JarEntry(inEntry);
+            outEntry.setTime(timestamp);
+
+            // 'offset' is the offset into the file at which we expect
+            // the file data to begin.  This is the value we need to
+            // make a multiple of 'alignement'.
+            offset += JarFile.LOCHDR + outEntry.getName().length();
+            if (firstEntry) {
+                // The first entry in a jar file has an extra field of
+                // four bytes that you can't get rid of; any extra
+                // data you specify in the JarEntry is appended to
+                // these forced four bytes.  This is JAR_MAGIC in
+                // JarOutputStream; the bytes are 0xfeca0000.
+                offset += 4;
+                firstEntry = false;
             }
+            if (alignment > 0 && (offset % alignment != 0)) {
+                // Set the "extra data" of the entry to between 1 and
+                // alignment-1 bytes, to make the file data begin at
+                // an aligned offset.
+                int needed = alignment - (int)(offset % alignment);
+                outEntry.setExtra(new byte[needed]);
+                offset += needed;
+            }
+
+            out.putNextEntry(outEntry);
+
+            InputStream data = in.getInputStream(inEntry);
+            while ((num = data.read(buffer)) > 0) {
+                out.write(buffer, 0, num);
+                offset += num;
+            }
+            out.flush();
+        }
+
+        // Copy all the non-STORED entries.  We don't attempt to
+        // maintain the 'offset' variable past this point; we don't do
+        // alignment on these entries.
+
+        for (String name : names) {
+            JarEntry inEntry = in.getJarEntry(name);
+            JarEntry outEntry = null;
+            if (inEntry.getMethod() == JarEntry.STORED) continue;
+            // Create a new entry so that the compressed len is recomputed.
+            outEntry = new JarEntry(name);
             outEntry.setTime(timestamp);
             out.putNextEntry(outEntry);
 
@@ -560,13 +634,13 @@ class SignApk {
                 signer = new WholeFileSignerOutputStream(out, outputStream);
                 JarOutputStream outputJar = new JarOutputStream(signer);
 
-                int hash = getAlgorithm(publicKey);
+                int hash = getDigestAlgorithm(publicKey);
 
                 // Assume the certificate is valid for at least an hour.
                 long timestamp = publicKey.getNotBefore().getTime() + 3600L * 1000;
 
                 Manifest manifest = addDigestsToManifest(inputJar, hash);
-                copyFiles(manifest, inputJar, outputJar, timestamp);
+                copyFiles(manifest, inputJar, outputJar, timestamp, 0);
                 addOtacert(outputJar, publicKeyFile, timestamp, manifest, hash);
 
                 signFile(manifest, inputJar,
@@ -685,13 +759,15 @@ class SignApk {
             je.setTime(timestamp);
             outputJar.putNextEntry(je);
             ByteArrayOutputStream baos = new ByteArrayOutputStream();
-            writeSignatureFile(manifest, baos, getAlgorithm(publicKey[k]));
+            writeSignatureFile(manifest, baos, getDigestAlgorithm(publicKey[k]));
             byte[] signedData = baos.toByteArray();
             outputJar.write(signedData);
 
-            // CERT.RSA / CERT#.RSA
-            je = new JarEntry(numKeys == 1 ? CERT_RSA_NAME :
-                              (String.format(CERT_RSA_MULTI_NAME, k)));
+            // CERT.{EC,RSA} / CERT#.{EC,RSA}
+            final String keyType = publicKey[k].getPublicKey().getAlgorithm();
+            je = new JarEntry(numKeys == 1 ?
+                              (String.format(CERT_SIG_NAME, keyType)) :
+                              (String.format(CERT_SIG_MULTI_NAME, k, keyType)));
             je.setTime(timestamp);
             outputJar.putNextEntry(je);
             writeSignatureBlock(new CMSProcessableByteArray(signedData),
@@ -699,8 +775,62 @@ class SignApk {
         }
     }
 
+    /**
+     * Tries to load a JSE Provider by class name. This is for custom PrivateKey
+     * types that might be stored in PKCS#11-like storage.
+     */
+    private static void loadProviderIfNecessary(String providerClassName) {
+        if (providerClassName == null) {
+            return;
+        }
+
+        final Class<?> klass;
+        try {
+            final ClassLoader sysLoader = ClassLoader.getSystemClassLoader();
+            if (sysLoader != null) {
+                klass = sysLoader.loadClass(providerClassName);
+            } else {
+                klass = Class.forName(providerClassName);
+            }
+        } catch (ClassNotFoundException e) {
+            e.printStackTrace();
+            System.exit(1);
+            return;
+        }
+
+        Constructor<?> constructor = null;
+        for (Constructor<?> c : klass.getConstructors()) {
+            if (c.getParameterTypes().length == 0) {
+                constructor = c;
+                break;
+            }
+        }
+        if (constructor == null) {
+            System.err.println("No zero-arg constructor found for " + providerClassName);
+            System.exit(1);
+            return;
+        }
+
+        final Object o;
+        try {
+            o = constructor.newInstance();
+        } catch (Exception e) {
+            e.printStackTrace();
+            System.exit(1);
+            return;
+        }
+        if (!(o instanceof Provider)) {
+            System.err.println("Not a Provider class: " + providerClassName);
+            System.exit(1);
+        }
+
+        Security.insertProviderAt((Provider) o, 1);
+    }
+
     private static void usage() {
         System.err.println("Usage: signapk [-w] " +
+                           "[-a <alignment>] " +
+                           "[-providerClass <className>] " +
                            "publickey.x509[.pem] privatekey.pk8 " +
                            "[publickey2.x509[.pem] privatekey2.pk8 ...] " +
                            "input.jar output.jar");
@@ -714,10 +844,27 @@ class SignApk {
         Security.addProvider(sBouncyCastleProvider);
 
         boolean signWholeFile = false;
+        String providerClass = null;
+        String providerArg = null;
+        int alignment = 4;
+
         int argstart = 0;
-        if (args[0].equals("-w")) {
-            signWholeFile = true;
-            argstart = 1;
+        while (argstart < args.length && args[argstart].startsWith("-")) {
+            if ("-w".equals(args[argstart])) {
+                signWholeFile = true;
+                ++argstart;
+            } else if ("-providerClass".equals(args[argstart])) {
+                if (argstart + 1 >= args.length) {
+                    usage();
+                }
+                providerClass = args[++argstart];
+                ++argstart;
+            } else if ("-a".equals(args[argstart])) {
+                alignment = Integer.parseInt(args[++argstart]);
+                ++argstart;
+            } else {
+                usage();
+            }
         }
 
         if ((args.length - argstart) % 2 == 1) usage();
@@ -726,6 +873,8 @@ class SignApk {
             System.err.println("Only one key may be used with -w.");
             System.exit(2);
         }
+
+        loadProviderIfNecessary(providerClass);
 
         String inputFilename = args[args.length-2];
         String outputFilename = args[args.length-1];
@@ -742,7 +891,7 @@ class SignApk {
                 for (int i = 0; i < numKeys; ++i) {
                     int argNum = argstart + i*2;
                     publicKey[i] = readPublicKey(new File(args[argNum]));
-                    hashes |= getAlgorithm(publicKey[i]);
+                    hashes |= getDigestAlgorithm(publicKey[i]);
                 }
             } catch (IllegalArgumentException e) {
                 System.err.println(e);
@@ -779,7 +928,7 @@ class SignApk {
                 outputJar.setLevel(9);
 
                 Manifest manifest = addDigestsToManifest(inputJar, hashes);
-                copyFiles(manifest, inputJar, outputJar, timestamp);
+                copyFiles(manifest, inputJar, outputJar, timestamp, alignment);
                 signFile(manifest, inputJar, publicKey, privateKey, outputJar);
                 outputJar.close();
             }

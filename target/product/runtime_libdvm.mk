@@ -21,15 +21,4 @@ PRODUCT_PACKAGES += \
     libdvm \
     dexopt
 
-# host-only dependencies
-ifeq ($(WITH_HOST_DALVIK),true)
-    PRODUCT_PACKAGES += \
-        core-hostdex
-endif
-
-# If runtime_libart has disabled, do not override
-ifndef DEX_PREOPT_DEFAULT
-DEX_PREOPT_DEFAULT := true
-endif
-
 include $(SRC_TARGET_DIR)/product/runtime_common.mk

@@ -20,21 +20,7 @@
 
 # Host modules
 PRODUCT_PACKAGES += \
-    emulator \
-    emulator-x86 \
-    emulator-arm \
-    emulator-mips \
-    emulator64-x86 \
-    emulator64-arm \
-    emulator64-mips \
-    libOpenglRender \
-    libGLES_CM_translator \
-    libGLES_V2_translator \
-    libEGL_translator \
-    lib64OpenglRender \
-    lib64GLES_CM_translator \
-    lib64GLES_V2_translator \
-    lib64EGL_translator
+
 
 # Device modules
 PRODUCT_PACKAGES += \
@@ -43,6 +29,7 @@ PRODUCT_PACKAGES += \
     libGLESv1_CM_emulation \
     lib_renderControl_enc \
     libEGL_emulation \
+    libGLES_android \
     libGLESv2_enc \
     libOpenglSystemCommon \
     libGLESv2_emulation \
@@ -53,7 +40,8 @@ PRODUCT_PACKAGES += \
     camera.goldfish.jpeg \
     lights.goldfish \
     gps.goldfish \
-    sensors.goldfish
+    sensors.goldfish \
+    e2fsck
 
 
 PRODUCT_COPY_FILES += \

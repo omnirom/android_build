@@ -2,16 +2,19 @@ function hmm() {
 cat <<EOF
 Invoke ". build/envsetup.sh" from your shell to add the following functions to your environment:
 - lunch:   lunch <product_name>-<build_variant>
-- tapas:   tapas [<App1> <App2> ...] [arm|x86|mips|armv5] [eng|userdebug|user]
+- tapas:   tapas [<App1> <App2> ...] [arm|x86|mips|armv5|arm64|x86_64|mips64] [eng|userdebug|user]
 - croot:   Changes directory to the top of the tree.
 - m:       Makes from the top of the tree.
 - mm:      Builds all of the modules in the current directory, but not their dependencies.
 - mmm:     Builds all of the modules in the supplied directories, but not their dependencies.
+           To limit the modules being built use the syntax: mmm dir/:target1,target2.
 - mma:     Builds all of the modules in the current directory, and their dependencies.
 - mmma:    Builds all of the modules in the supplied directories, and their dependencies.
 - cgrep:   Greps on all local C/C++ files.
+- ggrep:   Greps on all local Gradle files.
 - jgrep:   Greps on all local Java files.
 - resgrep: Greps on all local res/*.xml files.
+- sgrep:   Greps on all local source files.
 - godir:   Go to the directory containing a file.
 - pushboot:Push a file from your OUT dir to your phone and reboots it, using absolute path.
 
@@ -20,7 +23,7 @@ EOF
     T=$(gettop)
     local A
     A=""
-    for i in `cat $T/build/envsetup.sh | sed -n "/^function /s/function \([a-z_]*\).*/\1/p" | sort`; do
+    for i in `cat $T/build/envsetup.sh | sed -n "/^[ \t]*function /s/function \([a-z_]*\).*/\1/p" | sort | uniq`; do
       A="$A $i"
     done
     echo $A
@@ -35,7 +38,7 @@ function get_abs_build_var()
         return
     fi
     (\cd $T; CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
-      make --no-print-directory -C "$T" -f build/core/config.mk dumpvar-abs-$1)
+      command make --no-print-directory -f build/core/config.mk dumpvar-abs-$1)
 }
 
 # Get the exact value of a build variable.
@@ -46,8 +49,8 @@ function get_build_var()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
-    CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
-      make --no-print-directory -C "$T" -f build/core/config.mk dumpvar-$1
+    (\cd $T; CALLED_FROM_SETUP=true BUILD_SYSTEM=build/core \
+      command make --no-print-directory -f build/core/config.mk dumpvar-$1)
 }
 
 # check to see if the supplied product is one we can build
@@ -123,23 +126,29 @@ function setpaths()
     fi
 
     # and in with the new
-    CODE_REVIEWS=
     prebuiltdir=$(getprebuilt)
     gccprebuiltdir=$(get_abs_build_var ANDROID_GCC_PREBUILTS)
 
     # defined in core/config.mk
     targetgccversion=$(get_build_var TARGET_GCC_VERSION)
+    targetgccversion2=$(get_build_var 2ND_TARGET_GCC_VERSION)
     export TARGET_GCC_VERSION=$targetgccversion
 
     # The gcc toolchain does not exists for windows/cygwin. In this case, do not reference it.
-    export ANDROID_EABI_TOOLCHAIN=
+    export ANDROID_TOOLCHAIN=
+    export ANDROID_TOOLCHAIN_2ND_ARCH=
     local ARCH=$(get_build_var TARGET_ARCH)
     case $ARCH in
-        x86) toolchaindir=x86/i686-linux-android-$targetgccversion/bin
+        x86) toolchaindir=x86/x86_64-linux-android-$targetgccversion/bin
+            ;;
+        x86_64) toolchaindir=x86/x86_64-linux-android-$targetgccversion/bin
             ;;
         arm) toolchaindir=arm/arm-linux-androideabi-$targetgccversion/bin
             ;;
-        mips) toolchaindir=mips/mipsel-linux-android-$targetgccversion/bin
+        arm64) toolchaindir=aarch64/aarch64-linux-android-$targetgccversion/bin;
+               toolchaindir2=arm/arm-linux-androideabi-$targetgccversion2/bin
+            ;;
+        mips|mips64) toolchaindir=mips/mips64el-linux-android-$targetgccversion/bin
             ;;
         *)
             echo "Can't find toolchain for unknown architecture: $ARCH"
@@ -147,29 +156,49 @@ function setpaths()
             ;;
     esac
     if [ -d "$gccprebuiltdir/$toolchaindir" ]; then
-        export ANDROID_EABI_TOOLCHAIN=$gccprebuiltdir/$toolchaindir
+        export ANDROID_TOOLCHAIN=$gccprebuiltdir/$toolchaindir
     fi
 
-    unset ARM_EABI_TOOLCHAIN ARM_EABI_TOOLCHAIN_PATH
+    if [ -d "$gccprebuiltdir/$toolchaindir2" ]; then
+        export ANDROID_TOOLCHAIN_2ND_ARCH=$gccprebuiltdir/$toolchaindir2
+    fi
+
+    unset ANDROID_KERNEL_TOOLCHAIN_PATH
     case $ARCH in
         arm)
+            # Legacy toolchain configuration used for ARM kernel compilation
             toolchaindir=arm/arm-eabi-$targetgccversion/bin
             if [ -d "$gccprebuiltdir/$toolchaindir" ]; then
                  export ARM_EABI_TOOLCHAIN="$gccprebuiltdir/$toolchaindir"
-                 ARM_EABI_TOOLCHAIN_PATH=":$gccprebuiltdir/$toolchaindir"
+                 ANDROID_KERNEL_TOOLCHAIN_PATH="$ARM_EABI_TOOLCHAIN":
             fi
-            ;;
-        mips) toolchaindir=mips/mips-eabi-4.4.3/bin
             ;;
         *)
             # No need to set ARM_EABI_TOOLCHAIN for other ARCHs
             ;;
     esac
 
-    export ANDROID_TOOLCHAIN=$ANDROID_EABI_TOOLCHAIN
-    export ANDROID_QTOOLS=$T/development/emulator/qtools
     export ANDROID_DEV_SCRIPTS=$T/development/scripts:$T/prebuilts/devtools/tools
-    export ANDROID_BUILD_PATHS=$(get_build_var ANDROID_BUILD_PATHS):$ANDROID_QTOOLS:$ANDROID_TOOLCHAIN$ARM_EABI_TOOLCHAIN_PATH$CODE_REVIEWS:$ANDROID_DEV_SCRIPTS:
+    export ANDROID_BUILD_PATHS=$(get_build_var ANDROID_BUILD_PATHS):$ANDROID_TOOLCHAIN:$ANDROID_TOOLCHAIN_2ND_ARCH:$ANDROID_KERNEL_TOOLCHAIN_PATH$ANDROID_DEV_SCRIPTS:
+
+    # If prebuilts/android-emulator/<system>/ exists, prepend it to our PATH
+    # to ensure that the corresponding 'emulator' binaries are used.
+    case $(uname -s) in
+        Darwin)
+            ANDROID_EMULATOR_PREBUILTS=$T/prebuilts/android-emulator/darwin-x86_64
+            ;;
+        Linux)
+            ANDROID_EMULATOR_PREBUILTS=$T/prebuilts/android-emulator/linux-x86_64
+            ;;
+        *)
+            ANDROID_EMULATOR_PREBUILTS=
+            ;;
+    esac
+    if [ -n "$ANDROID_EMULATOR_PREBUILTS" -a -d "$ANDROID_EMULATOR_PREBUILTS" ]; then
+        ANDROID_BUILD_PATHS=$ANDROID_BUILD_PATHS$ANDROID_EMULATOR_PREBUILTS:
+        export ANDROID_EMULATOR_PREBUILTS
+    fi
+
     export PATH=$ANDROID_BUILD_PATHS$PATH
 
     unset ANDROID_JAVA_TOOLCHAIN
@@ -186,10 +215,6 @@ function setpaths()
 
     unset ANDROID_HOST_OUT
     export ANDROID_HOST_OUT=$(get_abs_build_var HOST_OUT)
-
-    # needed for processing samples collected by perf counters
-    unset OPROFILE_EVENTS_DIR
-    export OPROFILE_EVENTS_DIR=$T/external/oprofile/events
 
     # needed for building linux on MacOS
     # TODO: fix the path
@@ -214,6 +239,8 @@ function set_stuff_for_environment()
     set_sequence_number
 
     export ANDROID_BUILD_TOP=$(gettop)
+    # With this environment variable new GCC can apply colors to warnings/errors
+    export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
 }
 
 function set_sequence_number()
@@ -436,9 +463,11 @@ function add_lunch_combo()
 
 # add the default one here
 add_lunch_combo aosp_arm-eng
-add_lunch_combo aosp_x86-eng
+add_lunch_combo aosp_arm64-eng
 add_lunch_combo aosp_mips-eng
-add_lunch_combo vbox_x86-eng
+add_lunch_combo aosp_mips64-eng
+add_lunch_combo aosp_x86-eng
+add_lunch_combo aosp_x86_64-eng
 
 function print_lunch_menu()
 {
@@ -617,12 +646,12 @@ function _lunch()
 complete -F _lunch lunch
 
 # Configures the build to build unbundled apps.
-# Run tapas with one ore more app names (from LOCAL_PACKAGE_NAME)
+# Run tapas with one or more app names (from LOCAL_PACKAGE_NAME)
 function tapas()
 {
-    local arch=$(echo -n $(echo $* | xargs -n 1 echo | \grep -E '^(arm|x86|mips|armv5)$'))
-    local variant=$(echo -n $(echo $* | xargs -n 1 echo | \grep -E '^(user|userdebug|eng)$'))
-    local apps=$(echo -n $(echo $* | xargs -n 1 echo | \grep -E -v '^(user|userdebug|eng|arm|x86|mips|armv5)$'))
+    local arch="$(echo $* | xargs -n 1 echo | \grep -E '^(arm|x86|mips|armv5|arm64|x86_64|mips64)$' | xargs)"
+    local variant="$(echo $* | xargs -n 1 echo | \grep -E '^(user|userdebug|eng)$' | xargs)"
+    local apps="$(echo $* | xargs -n 1 echo | \grep -E -v '^(user|userdebug|eng|arm|x86|mips|armv5|arm64|x86_64|mips64)$' | xargs)"
 
     if [ $(echo $arch | wc -w) -gt 1 ]; then
         echo "tapas: Error: Multiple build archs supplied: $arch"
@@ -635,9 +664,12 @@ function tapas()
 
     local product=full
     case $arch in
-      x86)   product=full_x86;;
-      mips)  product=full_mips;;
-      armv5) product=generic_armv5;;
+      x86)    product=full_x86;;
+      mips)   product=full_mips;;
+      armv5)  product=generic_armv5;;
+      arm64)  product=aosp_arm64;;
+      x86_64) product=aosp_x86_64;;
+      mips64)  product=aosp_mips64;;
     esac
     if [ -z "$variant" ]; then
         variant=eng
@@ -674,7 +706,8 @@ function gettop
 {
     local TOPFILE=build/core/envsetup.mk
     if [ -n "$TOP" -a -f "$TOP/$TOPFILE" ] ; then
-        echo $TOP
+        # The following circumlocution ensures we remove symlinks from TOP.
+        (cd $TOP; PWD= /bin/pwd)
     else
         if [ -f $TOPFILE ] ; then
             # The following circumlocution (repeated below as well) ensures
@@ -686,7 +719,7 @@ function gettop
             T=
             while [ \( ! \( -f $TOPFILE \) \) -a \( $PWD != "/" \) ]; do
                 \cd ..
-                T=`PWD= /bin/pwd`
+                T=`PWD= /bin/pwd -P`
             done
             \cd $HERE
             if [ -f "$T/$TOPFILE" ]; then
@@ -696,11 +729,26 @@ function gettop
     fi
 }
 
+# Return driver for "make", if any (eg. static analyzer)
+function getdriver()
+{
+    local T="$1"
+    test "$WITH_STATIC_ANALYZER" = "0" && unset WITH_STATIC_ANALYZER
+    if [ -n "$WITH_STATIC_ANALYZER" ]; then
+        echo "\
+$T/prebuilts/misc/linux-x86/analyzer/tools/scan-build/scan-build \
+--use-analyzer $T/prebuilts/misc/linux-x86/analyzer/bin/analyzer \
+--status-bugs \
+--top=$T"
+    fi
+}
+
 function m()
 {
-    T=$(gettop)
+    local T=$(gettop)
+    local DRV=$(getdriver $T)
     if [ "$T" ]; then
-        make -C $T -f build/core/main.mk $@
+        $DRV make -C $T -f build/core/main.mk $@
     else
         echo "Couldn't locate the top of the tree.  Try setting TOP."
     fi
@@ -725,13 +773,14 @@ function findmakefile()
 
 function mm()
 {
+    local T=$(gettop)
+    local DRV=$(getdriver $T)
     # If we're sitting in the root of the build tree, just do a
     # normal make.
     if [ -f build/core/envsetup.mk -a -f Makefile ]; then
-        make $@
+        $DRV make $@
     else
         # Find the closest Android.mk file.
-        T=$(gettop)
         local M=$(findmakefile)
         local MODULES=
         local GET_INSTALL_PATH=
@@ -755,14 +804,15 @@ function mm()
               MODULES=all_modules
               ARGS=$@
             fi
-            ONE_SHOT_MAKEFILE=$M make -C $T -f build/core/main.mk $MODULES $ARGS
+            ONE_SHOT_MAKEFILE=$M $DRV make -C $T -f build/core/main.mk $MODULES $ARGS
         fi
     fi
 }
 
 function mmm()
 {
-    T=$(gettop)
+    local T=$(gettop)
+    local DRV=$(getdriver $T)
     if [ "$T" ]; then
         local MAKEFILE=
         local MODULES=
@@ -800,7 +850,7 @@ function mmm()
           ARGS=$GET_INSTALL_PATH
           MODULES=
         fi
-        ONE_SHOT_MAKEFILE="$MAKEFILE" make -C $T -f build/core/main.mk $DASH_ARGS $MODULES $ARGS
+        ONE_SHOT_MAKEFILE="$MAKEFILE" $DRV make -C $T -f build/core/main.mk $DASH_ARGS $MODULES $ARGS
     else
         echo "Couldn't locate the top of the tree.  Try setting TOP."
     fi
@@ -808,21 +858,23 @@ function mmm()
 
 function mma()
 {
+  local T=$(gettop)
+  local DRV=$(getdriver $T)
   if [ -f build/core/envsetup.mk -a -f Makefile ]; then
-    make $@
+    $DRV make $@
   else
-    T=$(gettop)
     if [ ! "$T" ]; then
       echo "Couldn't locate the top of the tree.  Try setting TOP."
     fi
     local MY_PWD=`PWD= /bin/pwd|sed 's:'$T'/::'`
-    make -C $T -f build/core/main.mk $@ all_modules BUILD_MODULES_IN_PATHS="$MY_PWD"
+    $DRV make -C $T -f build/core/main.mk $@ all_modules BUILD_MODULES_IN_PATHS="$MY_PWD"
   fi
 }
 
 function mmma()
 {
-  T=$(gettop)
+  local T=$(gettop)
+  local DRV=$(getdriver $T)
   if [ "$T" ]; then
     local DASH_ARGS=$(echo "$@" | awk -v RS=" " -v ORS=" " '/^-.*$/')
     local DIRS=$(echo "$@" | awk -v RS=" " -v ORS=" " '/^[^-].*$/')
@@ -849,7 +901,7 @@ function mmma()
         esac
       fi
     done
-    make -C $T -f build/core/main.mk $DASH_ARGS $ARGS all_modules BUILD_MODULES_IN_PATHS="$MODULE_PATHS"
+    $DRV make -C $T -f build/core/main.mk $DASH_ARGS $ARGS all_modules BUILD_MODULES_IN_PATHS="$MODULE_PATHS"
   else
     echo "Couldn't locate the top of the tree.  Try setting TOP."
   fi
@@ -977,29 +1029,59 @@ function stacks()
             adb shell cat $TMP
         else
             # Dump stacks of native process
-            adb shell debuggerd -b $PID
+            local USE64BIT="$(is64bit $PID)"
+            adb shell debuggerd$USE64BIT -b $PID
         fi
     fi
 }
 
 function gdbwrapper()
 {
-    $ANDROID_TOOLCHAIN/$GDB -x "$@"
+    local GDB_CMD="$1"
+    shift 1
+    $GDB_CMD -x "$@"
 }
 
+function get_symbols_directory()
+{
+    echo $(get_abs_build_var TARGET_OUT_UNSTRIPPED)
+}
+
+# Read the ELF header from /proc/$PID/exe to determine if the process is
+# 64-bit.
+function is64bit()
+{
+    local PID="$1"
+    if [ "$PID" ] ; then
+        if [[ "$(adb shell cat /proc/$PID/exe | xxd -l 1 -s 4 -ps)" -eq "02" ]] ; then
+            echo "64"
+        else
+            echo ""
+        fi
+    else
+        echo ""
+    fi
+}
+
+# gdbclient now determines whether the user wants to debug a 32-bit or 64-bit
+# executable, set up the approriate gdbserver, then invokes the proper host
+# gdb.
 function gdbclient()
 {
    local OUT_ROOT=$(get_abs_build_var PRODUCT_OUT)
    local OUT_SYMBOLS=$(get_abs_build_var TARGET_OUT_UNSTRIPPED)
    local OUT_SO_SYMBOLS=$(get_abs_build_var TARGET_OUT_SHARED_LIBRARIES_UNSTRIPPED)
-   local OUT_EXE_SYMBOLS=$(get_abs_build_var TARGET_OUT_EXECUTABLES_UNSTRIPPED)
+   local OUT_VENDOR_SO_SYMBOLS=$(get_abs_build_var TARGET_OUT_VENDOR_SHARED_LIBRARIES_UNSTRIPPED)
+   local OUT_EXE_SYMBOLS=$(get_symbols_directory)
    local PREBUILTS=$(get_abs_build_var ANDROID_PREBUILTS)
    local ARCH=$(get_build_var TARGET_ARCH)
    local GDB
    case "$ARCH" in
-       x86) GDB=i686-linux-android-gdb;;
        arm) GDB=arm-linux-androideabi-gdb;;
-       mips) GDB=mipsel-linux-android-gdb;;
+       arm64) GDB=arm-linux-androideabi-gdb; GDB64=aarch64-linux-android-gdb;;
+       mips|mips64) GDB=mips64el-linux-android-gdb;;
+       x86) GDB=x86_64-linux-android-gdb;;
+       x86_64) GDB=x86_64-linux-android-gdb;;
        *) echo "Unknown arch $ARCH"; return 1;;
    esac
 
@@ -1007,6 +1089,9 @@ function gdbclient()
        local EXE="$1"
        if [ "$EXE" ] ; then
            EXE=$1
+           if [[ $EXE =~ ^[^/].* ]] ; then
+               EXE="system/bin/"$EXE
+           fi
        else
            EXE="app_process"
        fi
@@ -1038,7 +1123,8 @@ function gdbclient()
                fi
            fi
            adb forward "tcp$PORT" "tcp$PORT"
-           adb shell gdbserver $PORT --attach $PID &
+           local USE64BIT="$(is64bit $PID)"
+           adb shell gdbserver$USE64BIT $PORT --attach $PID &
            sleep 2
        else
                echo ""
@@ -1049,13 +1135,32 @@ function gdbclient()
                echo ""
        fi
 
+       OUT_SO_SYMBOLS=$OUT_SO_SYMBOLS$USE64BIT
+       OUT_VENDOR_SO_SYMBOLS=$OUT_VENDOR_SO_SYMBOLS$USE64BIT
+
        echo >|"$OUT_ROOT/gdbclient.cmds" "set solib-absolute-prefix $OUT_SYMBOLS"
-       echo >>"$OUT_ROOT/gdbclient.cmds" "set solib-search-path $OUT_SO_SYMBOLS:$OUT_SO_SYMBOLS/hw:$OUT_SO_SYMBOLS/ssl/engines:$OUT_SO_SYMBOLS/drm:$OUT_SO_SYMBOLS/egl:$OUT_SO_SYMBOLS/soundfx"
+       echo >>"$OUT_ROOT/gdbclient.cmds" "set solib-search-path $OUT_SO_SYMBOLS:$OUT_SO_SYMBOLS/hw:$OUT_SO_SYMBOLS/ssl/engines:$OUT_SO_SYMBOLS/drm:$OUT_SO_SYMBOLS/egl:$OUT_SO_SYMBOLS/soundfx:$OUT_VENDOR_SO_SYMBOLS:$OUT_VENDOR_SO_SYMBOLS/hw:$OUT_VENDOR_SO_SYMBOLS/egl"
        echo >>"$OUT_ROOT/gdbclient.cmds" "source $ANDROID_BUILD_TOP/development/scripts/gdb/dalvik.gdb"
        echo >>"$OUT_ROOT/gdbclient.cmds" "target remote $PORT"
+       # Enable special debugging for ART processes.
+       if [[ $EXE =~ (^|/)(app_process|dalvikvm)(|32|64)$ ]]; then
+          echo >> "$OUT_ROOT/gdbclient.cmds" "art-on"
+       fi
        echo >>"$OUT_ROOT/gdbclient.cmds" ""
 
-       gdbwrapper "$OUT_ROOT/gdbclient.cmds" "$OUT_EXE_SYMBOLS/$EXE"
+       local WHICH_GDB=
+       # 64-bit exe found
+       if [ "$USE64BIT" != "" ] ; then
+           WHICH_GDB=$ANDROID_TOOLCHAIN/$GDB64
+       # 32-bit exe / 32-bit platform
+       elif [ "$(get_build_var TARGET_2ND_ARCH)" = "" ]; then
+           WHICH_GDB=$ANDROID_TOOLCHAIN/$GDB
+       # 32-bit exe / 64-bit platform
+       else
+           WHICH_GDB=$ANDROID_TOOLCHAIN_2ND_ARCH/$GDB
+       fi
+
+       gdbwrapper $WHICH_GDB "$OUT_ROOT/gdbclient.cmds" "$OUT_EXE_SYMBOLS/$EXE"
   else
        echo "Unable to determine build system output dir."
    fi
@@ -1066,14 +1171,14 @@ case `uname -s` in
     Darwin)
         function sgrep()
         {
-            find -E . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.(c|h|cpp|S|java|xml|sh|mk)' -print0 | xargs -0 grep --color -n "$@"
+            find -E . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.(c|h|cc|cpp|S|java|xml|sh|mk|aidl)' -print0 | xargs -0 grep --color -n "$@"
         }
 
         ;;
     *)
         function sgrep()
         {
-            find . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.\(c\|h\|cpp\|S\|java\|xml\|sh\|mk\)' -print0 | xargs -0 grep --color -n "$@"
+            find . -name .repo -prune -o -name .git -prune -o  -type f -iregex '.*\.\(c\|h\|cc\|cpp\|S\|java\|xml\|sh\|mk\|aidl\)' -print0 | xargs -0 grep --color -n "$@"
         }
         ;;
 esac
@@ -1083,19 +1188,24 @@ function gettargetarch
     get_build_var TARGET_ARCH
 }
 
+function ggrep()
+{
+    find . -name .repo -prune -o -name .git -prune -o -name out -prune -o -type f -name "*\.gradle" -print0 | xargs -0 grep --color -n "$@"
+}
+
 function jgrep()
 {
-    find . -name .repo -prune -o -name .git -prune -o  -type f -name "*\.java" -print0 | xargs -0 grep --color -n "$@"
+    find . -name .repo -prune -o -name .git -prune -o -name out -prune -o -type f -name "*\.java" -print0 | xargs -0 grep --color -n "$@"
 }
 
 function cgrep()
 {
-    find . -name .repo -prune -o -name .git -prune -o -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 grep --color -n "$@"
+    find . -name .repo -prune -o -name .git -prune -o -name out -prune -o -type f \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.h' \) -print0 | xargs -0 grep --color -n "$@"
 }
 
 function resgrep()
 {
-    for dir in `find . -name .repo -prune -o -name .git -prune -o -name res -type d`; do find $dir -type f -name '*\.xml' -print0 | xargs -0 grep --color -n "$@"; done;
+    for dir in `find . -name .repo -prune -o -name .git -prune -o -name out -prune -o -name res -type d`; do find $dir -type f -name '*\.xml' -print0 | xargs -0 grep --color -n "$@"; done;
 }
 
 function mangrep()
@@ -1218,9 +1328,7 @@ function runhat()
     fi
 
     # issue "am" command to cause the hprof dump
-    local sdcard=$(adb ${adbOptions} shell echo -n '$EXTERNAL_STORAGE')
-    local devFile=$sdcard/hprof-$targetPid
-    #local devFile=/data/local/hprof-$targetPid
+    local devFile=/data/local/tmp/hprof-$targetPid
     echo "Poking $targetPid and waiting for data..."
     echo "Storing data at $devFile"
     adb ${adbOptions} shell am dumpheap $targetPid $devFile
@@ -1390,39 +1498,24 @@ function godir () {
     \cd $T/$pathname
 }
 
-# Make using all available CPUs
-function mka() {
-    case `uname -s` in
-        Darwin)
-            make -j `sysctl hw.ncpu|cut -d" " -f2` "$@"
-            ;;
-        *)
-            schedtool -B -n 1 -e ionice -n 1 make -j `cat /proc/cpuinfo | grep "^processor" | wc -l` "$@"
-            ;;
-    esac
-}
-
-function fixup_common_out_dir() {
-    common_out_dir=$(get_build_var OUT_DIR)/target/common
-    target_device=$(get_build_var TARGET_DEVICE)
-    if [ ! -z $ANDROID_FIXUP_COMMON_OUT ]; then
-        if [ -d ${common_out_dir} ] && [ ! -L ${common_out_dir} ]; then
-            mv ${common_out_dir} ${common_out_dir}-${target_device}
-            ln -s ${common_out_dir}-${target_device} ${common_out_dir}
-        else
-            [ -L ${common_out_dir} ] && rm ${common_out_dir}
-            mkdir -p ${common_out_dir}-${target_device}
-            ln -s ${common_out_dir}-${target_device} ${common_out_dir}
-        fi
-    else
-        [ -L ${common_out_dir} ] && rm ${common_out_dir}
-        mkdir -p ${common_out_dir}
-    fi
-}
-
-# Force JAVA_HOME to point to java 1.6 if it isn't already set
+# Force JAVA_HOME to point to java 1.7 or java 1.6  if it isn't already set.
+#
+# Note that the MacOS path for java 1.7 includes a minor revision number (sigh).
+# For some reason, installing the JDK doesn't make it show up in the
+# JavaVM.framework/Versions/1.7/ folder.
 function set_java_home() {
+    # Clear the existing JAVA_HOME value if we set it ourselves, so that
+    # we can reset it later, depending on the version of java the build
+    # system needs.
+    #
+    # If we don't do this, the JAVA_HOME value set by the first call to
+    # build/envsetup.sh will persist forever.
+    if [ -n "$ANDROID_SET_JAVA_HOME" ]; then
+      export JAVA_HOME=""
+    fi
+
     if [ ! "$JAVA_HOME" ]; then
+      if [ -n "$LEGACY_USE_JAVA6" ]; then
         case `uname -s` in
             Darwin)
                 export JAVA_HOME=/System/Library/Frameworks/JavaVM.framework/Versions/1.6/Home
@@ -1431,6 +1524,20 @@ function set_java_home() {
                 export JAVA_HOME=/usr/lib/jvm/java-6-sun
                 ;;
         esac
+      else
+        case `uname -s` in
+            Darwin)
+                export JAVA_HOME=$(/usr/libexec/java_home -v 1.7)
+                ;;
+            *)
+                export JAVA_HOME=/usr/lib/jvm/java-7-openjdk-amd64
+                ;;
+        esac
+      fi
+
+      # Keep track of the fact that we set JAVA_HOME ourselves, so that
+      # we can change it on the next envsetup.sh, if required.
+      export ANDROID_SET_JAVA_HOME=true
     fi
 }
 
@@ -1468,6 +1575,70 @@ function chromium_prebuilt() {
     fi
 }
 
+function get_make_command()
+{
+  echo command make
+}
+
+function make()
+{
+    local start_time=$(date +"%s")
+    $(get_make_command) "$@"
+    local ret=$?
+    local end_time=$(date +"%s")
+    local tdiff=$(($end_time-$start_time))
+    local hours=$(($tdiff / 3600 ))
+    local mins=$((($tdiff % 3600) / 60))
+    local secs=$(($tdiff % 60))
+    echo
+    if [ $ret -eq 0 ] ; then
+        echo -n -e "#### make completed successfully "
+    else
+        echo -n -e "#### make failed to build some targets "
+    fi
+    if [ $hours -gt 0 ] ; then
+        printf "(%02g:%02g:%02g (hh:mm:ss))" $hours $mins $secs
+    elif [ $mins -gt 0 ] ; then
+        printf "(%02g:%02g (mm:ss))" $mins $secs
+    elif [ $secs -gt 0 ] ; then
+        printf "(%s seconds)" $secs
+    fi
+    echo -e " ####"
+    echo
+    return $ret
+}
+
+# Make using all available CPUs
+function mka() {
+    case `uname -s` in
+        Darwin)
+            make -j `sysctl hw.ncpu|cut -d" " -f2` "$@"
+            ;;
+        *)
+            schedtool -B -n 1 -e ionice -n 1 make -j `cat /proc/cpuinfo | grep "^processor" | wc -l` "$@"
+            ;;
+    esac
+}
+
+function fixup_common_out_dir() {
+    common_out_dir=$(get_build_var OUT_DIR)/target/common
+    target_device=$(get_build_var TARGET_DEVICE)
+    if [ ! -z $ANDROID_FIXUP_COMMON_OUT ]; then
+        if [ -d ${common_out_dir} ] && [ ! -L ${common_out_dir} ]; then
+            mv ${common_out_dir} ${common_out_dir}-${target_device}
+            ln -s ${common_out_dir}-${target_device} ${common_out_dir}
+        else
+            [ -L ${common_out_dir} ] && rm ${common_out_dir}
+            mkdir -p ${common_out_dir}-${target_device}
+            ln -s ${common_out_dir}-${target_device} ${common_out_dir}
+        fi
+    else
+        [ -L ${common_out_dir} ] && rm ${common_out_dir}
+        mkdir -p ${common_out_dir}
+    fi
+}
+
+
 if [ "x$SHELL" != "x/bin/bash" ]; then
     case `ps -o command -p $$` in
         *bash*)
@@ -1479,8 +1650,8 @@ if [ "x$SHELL" != "x/bin/bash" ]; then
 fi
 
 # Execute the contents of any vendorsetup.sh files we can find.
-for f in `test -d device && find device -maxdepth 4 -name 'vendorsetup.sh' 2> /dev/null` \
-         `test -d vendor && find vendor -maxdepth 4 -name 'vendorsetup.sh' 2> /dev/null`
+for f in `test -d device && find -L device -maxdepth 4 -name 'vendorsetup.sh' 2> /dev/null` \
+         `test -d vendor && find -L vendor -maxdepth 4 -name 'vendorsetup.sh' 2> /dev/null`
 do
     echo "including $f"
     . $f

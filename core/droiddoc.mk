@@ -51,32 +51,35 @@ ifeq ($(LOCAL_DROIDDOC_CUSTOM_ASSET_DIR),)
 LOCAL_DROIDDOC_CUSTOM_ASSET_DIR := assets
 endif
 
-
+ifeq ($(LOCAL_IS_HOST_MODULE),true)
 $(full_target): PRIVATE_BOOTCLASSPATH :=
-ifeq ($(BUILD_OS),linux)
-# You have to set bootclasspath for javadoc manually on linux since Java 6.
-host_jdk_rt_jar := $(dir $(HOST_JDK_TOOLS_JAR))../jre/lib/rt.jar
-$(full_target): PRIVATE_BOOTCLASSPATH := $(host_jdk_rt_jar)
-endif
+full_java_libs := $(addprefix $(HOST_OUT_JAVA_LIBRARIES)/,\
+  $(addsuffix $(COMMON_JAVA_PACKAGE_SUFFIX),$(LOCAL_JAVA_LIBRARIES)))
+full_java_lib_deps := $(full_java_libs)
 
-ifneq ($(LOCAL_IS_HOST_MODULE),true)
+else
 
 ifneq ($(LOCAL_SDK_VERSION),)
   ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),current)
     # Use android_stubs_current if LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS.
     LOCAL_JAVA_LIBRARIES := android_stubs_current $(LOCAL_JAVA_LIBRARIES)
+    $(full_target): PRIVATE_BOOTCLASSPATH := $(call java-lib-files, android_stubs_current)
+  else ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),system_current)
+    LOCAL_JAVA_LIBRARIES := android_system_stubs_current $(LOCAL_JAVA_LIBRARIES)
+    $(full_target): PRIVATE_BOOTCLASSPATH := $(call java-lib-files, android_system_stubs_current)
   else
     LOCAL_JAVA_LIBRARIES := sdk_v$(LOCAL_SDK_VERSION) $(LOCAL_JAVA_LIBRARIES)
+    $(full_target): PRIVATE_BOOTCLASSPATH := $(call java-lib-files, sdk_v$(LOCAL_SDK_VERSION))
   endif
 else
-  LOCAL_JAVA_LIBRARIES := core ext framework framework2 $(LOCAL_JAVA_LIBRARIES)
+  LOCAL_JAVA_LIBRARIES := core-libart ext framework $(LOCAL_JAVA_LIBRARIES)
+  $(full_target): PRIVATE_BOOTCLASSPATH := $(call java-lib-files, core-libart)
 endif  # LOCAL_SDK_VERSION
 LOCAL_JAVA_LIBRARIES := $(sort $(LOCAL_JAVA_LIBRARIES))
 
+full_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES)) $(LOCAL_CLASSPATH)
+full_java_lib_deps := $(call java-lib-deps,$(LOCAL_JAVA_LIBRARIES)) $(LOCAL_CLASSPATH)
 endif # !LOCAL_IS_HOST_MODULE
-
-full_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE)) $(LOCAL_CLASSPATH)
-full_java_lib_deps := $(call java-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE)) $(LOCAL_CLASSPATH)
 
 $(full_target): PRIVATE_CLASSPATH := $(subst $(space),:,$(full_java_libs))
 
@@ -134,15 +137,13 @@ $(full_target): PRIVATE_CUSTOM_TEMPLATE_DIR := $(LOCAL_DROIDDOC_CUSTOM_TEMPLATE_
 $(full_target): PRIVATE_IN_CUSTOM_ASSET_DIR := $(LOCAL_DROIDDOC_CUSTOM_TEMPLATE_DIR)/$(LOCAL_DROIDDOC_CUSTOM_ASSET_DIR)
 $(full_target): PRIVATE_OUT_ASSET_DIR := $(out_dir)/$(LOCAL_DROIDDOC_ASSET_DIR)
 $(full_target): PRIVATE_OUT_CUSTOM_ASSET_DIR := $(out_dir)/$(LOCAL_DROIDDOC_CUSTOM_ASSET_DIR)
+
+html_dir_files :=
 ifneq ($(strip $(LOCAL_DROIDDOC_HTML_DIR)),)
 $(full_target): PRIVATE_DROIDDOC_HTML_DIR := -htmldir $(LOCAL_PATH)/$(LOCAL_DROIDDOC_HTML_DIR)
+html_dir_files := $(shell find $(LOCAL_PATH)/$(LOCAL_DROIDDOC_HTML_DIR) -type f)
 else
-$(full_target): PRIVATE_DROIDDOC_HTML_DIR := 
-endif
-ifneq ($(strip $(LOCAL_ADDITIONAL_HTML_DIR)),)
-$(full_target): PRIVATE_ADDITIONAL_HTML_DIR := -htmldir2 $(LOCAL_PATH)/$(LOCAL_ADDITIONAL_HTML_DIR)
-else
-$(full_target): PRIVATE_ADDITIONAL_HTML_DIR :=
+$(full_target): PRIVATE_DROIDDOC_HTML_DIR :=
 endif
 ifneq ($(strip $(LOCAL_ADDITIONAL_HTML_DIR)),)
 $(full_target): PRIVATE_ADDITIONAL_HTML_DIR := -htmldir2 $(LOCAL_PATH)/$(LOCAL_ADDITIONAL_HTML_DIR)
@@ -152,8 +153,6 @@ endif
 
 # TODO: not clear if this is used any more
 $(full_target): PRIVATE_LOCAL_PATH := $(LOCAL_PATH)
-
-html_dir_files := $(shell find $(LOCAL_PATH)/$(LOCAL_DROIDDOC_HTML_DIR) -type f)
 
 $(full_target): $(full_src_files) $(droiddoc_templates) $(droiddoc) $(html_dir_files) $(full_java_lib_deps) $(LOCAL_ADDITIONAL_DEPENDENCIES)
 	@echo -e ${PRT_HST}"Docs droiddoc:"${CL_RST}" $(PRIVATE_OUT_DIR)"
@@ -165,8 +164,10 @@ $(full_target): $(full_src_files) $(droiddoc_templates) $(droiddoc) $(html_dir_f
 		cat $(PRIVATE_SRC_LIST_FILE) | sed '1 d' >> $(PRIVATE_SRC_LIST_FILE)_temp; \
 		mv $(PRIVATE_SRC_LIST_FILE)_temp $(PRIVATE_SRC_LIST_FILE); \
 		javadoc \
+                -encoding UTF-8 \
                 \@$(PRIVATE_SRC_LIST_FILE) \
                 -J-Xmx1280m \
+                -XDignore.symbol.file \
                 $(PRIVATE_PROFILING_OPTIONS) \
                 -quiet \
                 -doclet com.google.doclava.Doclava \
@@ -201,11 +202,14 @@ $(full_target): $(full_src_files) $(full_java_lib_deps)
 		cat $(PRIVATE_SRC_LIST_FILE) | sed '1 d' >> $(PRIVATE_SRC_LIST_FILE)_temp; \
 		mv $(PRIVATE_SRC_LIST_FILE)_temp $(PRIVATE_SRC_LIST_FILE); \
 		javadoc \
+                -encoding UTF-8 \
                 $(PRIVATE_DROIDDOC_OPTIONS) \
                 \@$(PRIVATE_SRC_LIST_FILE) \
                 -J-Xmx1024m \
+                -XDignore.symbol.file \
                 $(PRIVATE_PROFILING_OPTIONS) \
                 $(addprefix -classpath ,$(PRIVATE_CLASSPATH)) \
+                $(addprefix -bootclasspath ,$(PRIVATE_BOOTCLASSPATH)) \
                 -sourcepath $(PRIVATE_SOURCE_PATH)$(addprefix :,$(PRIVATE_CLASSPATH)) \
                 -d $(PRIVATE_OUT_DIR) \
                 -quiet \
@@ -236,6 +240,8 @@ $(out_zip): $(full_target)
 	@rm -f $@
 	@mkdir -p $(dir $@)
 	$(hide) ( F=$$(pwd)/$@ ; cd $(PRIVATE_DOCS_DIR) && zip -rq $$F * )
+
+$(LOCAL_MODULE)-docs.zip : $(out_zip)
 
 $(call dist-for-goals,docs,$(out_zip))
 
