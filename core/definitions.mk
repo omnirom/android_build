@@ -1202,7 +1202,7 @@ define transform-o-to-static-lib
 @rm -f $@
 $(extract-and-include-target-whole-static-libs)
 @echo -e ${PRT_TGT}"target StaticLib:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
-$(call split-long-arguments,$(TARGET_AR) $(TARGET_GLOBAL_ARFLAGS) $(PRIVATE_ARFLAGS) $@,$(filter %.o, $^))
+$(call split-long-arguments,$($(PRIVATE_2ND_ARCH_VAR_PREFIX)TARGET_AR) \
     $($(PRIVATE_2ND_ARCH_VAR_PREFIX)TARGET_GLOBAL_ARFLAGS) \
     $(PRIVATE_ARFLAGS) $@,$(filter %.o, $^))
 endef
