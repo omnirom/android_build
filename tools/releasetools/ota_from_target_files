@@ -1519,7 +1519,7 @@ def main(argv):
                                               "override_device=",
                                               "override_prop=",
                                               "two_step",
-                                              "mount_by_label="],
+                                              "mount_by_label=",
                                               "no_signing",
                                               "block",
                                               "binary=",
