@@ -80,10 +80,11 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
       first, so that any changes made to the system partition are done
       using the new recovery (new kernel, etc.).
 
-  --block
+  --block <boolean>
       Generate a block-based OTA if possible.  Will fall back to a
       file-based OTA if the target_files is older and doesn't support
       block-based OTAs.
+      Disabled by default
 
   -b  (--binary)  <file>
       Use the given binary as the update-binary in the output package,
@@ -1495,8 +1496,8 @@ def main(argv):
       OPTIONS.no_signing = True
     elif o in ("--verify"):
       OPTIONS.verify = True
-    elif o == "--block":
-      OPTIONS.block_based = True
+    elif o in ("--block"):
+      OPTIONS.block_based = bool(a.lower() == 'true')
     elif o in ("-b", "--binary"):
       OPTIONS.updater_binary = a
     elif o in ("--no_fallback_to_full",):
