@@ -1776,7 +1776,7 @@ endif
 	$(call generate-userimage-prop-dictionary, $(zip_root)/META/misc_info.txt)
 ifneq ($(INSTALLED_RECOVERYIMAGE_TARGET),)
 	$(hide) PATH=$(foreach p,$(INTERNAL_USERIMAGES_BINARY_PATHS),$(p):)$$PATH MKBOOTIMG=$(MKBOOTIMG) \
-	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
+#	    ./build/tools/releasetools/make_recovery_patch $(zip_root) $(zip_root)
 endif
 ifeq ($(AB_OTA_UPDATER),true)
 	@# When using the A/B updater, include the updater config files in the zip.
