@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "4b469d43_f521ea9c",
+        "filename": "core/Makefile",
+        "patchSetId": 3
+      },
+      "lineNbr": 1558,
+      "author": {
+        "id": 1000032
+      },
+      "writtenOn": "2014-11-09T00:36:58Z",
+      "side": 1,
+      "message": "Any reason to not just throw the new lines in this if statement? :-)",
+      "revId": "e69821ef2dc5df219c33b0084b3151b273ad2ba7",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
