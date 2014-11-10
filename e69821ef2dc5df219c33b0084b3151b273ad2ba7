@@ -16,6 +16,24 @@
       "revId": "e69821ef2dc5df219c33b0084b3151b273ad2ba7",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "4b469d43_15467627",
+        "filename": "core/Makefile",
+        "patchSetId": 3
+      },
+      "lineNbr": 1558,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-11-10T19:02:59Z",
+      "side": 1,
+      "message": "In the event that we\u0027d want to change the logic in the future to be different from that for backuptool.",
+      "parentUuid": "4b469d43_f521ea9c",
+      "revId": "e69821ef2dc5df219c33b0084b3151b273ad2ba7",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
     }
   ]
 }
