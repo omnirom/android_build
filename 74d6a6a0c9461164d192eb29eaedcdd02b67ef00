@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "2b432935_4e531370",
+        "filename": "tools/buildinfo.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 50,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-11-24T18:44:08Z",
+      "side": 1,
+      "message": "Seems like pointless whitespace here?  Makes me concerned there might be a mismerge, I\u0027ll try to look at the original 4.4 version of this tonight.",
+      "revId": "74d6a6a0c9461164d192eb29eaedcdd02b67ef00",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "2b432935_6e50cf62",
+        "filename": "tools/releasetools/ota_from_target_files",
+        "patchSetId": 1
+      },
+      "lineNbr": 1121,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2014-11-24T18:44:08Z",
+      "side": 1,
+      "message": "Similarly, odd whitespace issues that worry me here too...",
+      "revId": "74d6a6a0c9461164d192eb29eaedcdd02b67ef00",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
