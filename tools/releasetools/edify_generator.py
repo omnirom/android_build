@@ -149,14 +149,12 @@ class EdifyGenerator(object):
     self.script.append(self.WordWrap(cmd))
 
   def RunBackup(self, command):
-    self.UnpackPackageDir("system/addon.d", "/system/addon.d")
     self.script.append('package_extract_file("system/bin/backuptool.sh", "/system/bin/backuptool.sh");')
-    self.script.append('package_extract_file("system/bin/backuptool.functions", "/system/bin/backuptool.functions");')
+    self.script.append('package_extract_file("system/bin/backuptool.functions", "/tmp/backuptool.functions");')
     self.SetPermissions("/system/bin/backuptool.sh", 0, 0, 0755, None, None)
-    self.SetPermissions("/system/bin/backuptool.functions", 0, 0, 0644, None, None)
     self.script.append(('run_program("/system/bin/backuptool.sh", "%s");' % command))
     if command == "restore":
-      self.DeleteFiles(["/system/bin/backuptool.sh", "/system/bin/backuptool.functions"])
+      self.DeleteFiles(["/tmp/backuptool.functions"])
 
   def ShowProgress(self, frac, dur):
     """Update the progress bar, advancing it over 'frac' over the next
