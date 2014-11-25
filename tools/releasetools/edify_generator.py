@@ -133,7 +133,6 @@ class EdifyGenerator(object):
     self.script.append(self._WordWrap(cmd))
 
   def RunBackup(self, command):
-    self.UnpackPackageDir("system/addon.d", "/system/addon.d")
     self.script.append('package_extract_file("system/bin/backuptool.sh", "/system/bin/backuptool.sh");')
     self.script.append('package_extract_file("system/bin/backuptool.functions", "/system/bin/backuptool.functions");')
     self.SetPermissions("/system/bin/backuptool.sh", 0, 0, 0755, None, None)
