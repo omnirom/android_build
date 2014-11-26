@@ -1,0 +1,44 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "2b432935_31438818",
+        "filename": "tools/releasetools/edify_generator.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 137,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2014-11-26T12:51:07Z",
+      "side": 1,
+      "message": "might be enough to extract this to /tmp\nwill make the scripts happy and no exec perms are needed for this file",
+      "revId": "d2387990a4601fddf4b07e60ca651f9744b3d013",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "2b432935_515014db",
+        "filename": "tools/releasetools/edify_generator.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 142,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2014-11-26T12:51:07Z",
+      "side": 1,
+      "message": "we should not delete just flashed files :)",
+      "range": {
+        "startLine": 142,
+        "startChar": 11,
+        "endLine": 142,
+        "endChar": 22
+      },
+      "revId": "d2387990a4601fddf4b07e60ca651f9744b3d013",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
