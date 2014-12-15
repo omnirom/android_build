@@ -71,6 +71,10 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
       Override build.prop items with custom vendor init.
       Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
 
+  --override_boot_partition <string>
+      Override the partition where the boot image is installed.
+      Used for devices with a staging partition (Asus Transformer).
+
   --mount_by_label <boolean>
       Force the OTA package to mount and format System by label
       Can be enabled by defining TARGET_SETS_FSTAB. Defaults to false.
@@ -137,6 +141,7 @@ if OPTIONS.worker_threads == 0:
 OPTIONS.backuptool = False
 OPTIONS.override_device = 'auto'
 OPTIONS.override_prop = False
+OPTIONS.override_boot_partition = ''
 OPTIONS.mount_by_label = False
 OPTIONS.two_step = False
 OPTIONS.no_signing = False
@@ -679,7 +684,8 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   script.ShowProgress(0.2, 10)
   script.Print("Flashing boot.img")
-  script.WriteRawImage("/boot", "boot.img")
+  bootpartition = "/boot" if OPTIONS.override_boot_partition == "" else OPTIONS.override_boot_partition
+  script.WriteRawImage(bootpartition, "boot.img")
 
   script.ShowProgress(0.1, 0)
   script.Print("Enjoy OMNI ROM!");
@@ -1487,6 +1493,8 @@ def main(argv):
       OPTIONS.override_device = a
     elif o in ("--override_prop"):
       OPTIONS.override_prop = bool(a.lower() == 'true')
+    elif o in ("--override_boot_partition"):
+      OPTIONS.override_boot_partition = a
     elif o in ("--mount_by_label"):
       OPTIONS.mount_by_label = bool(a.lower() == 'true')
     elif o in ("-2", "--two_step"):
@@ -1518,6 +1526,7 @@ def main(argv):
                                               "backup=",
                                               "override_device=",
                                               "override_prop=",
+                                              "override_boot_partition=",
                                               "two_step",
                                               "mount_by_label=",
                                               "no_signing",
