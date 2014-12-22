@@ -1565,10 +1565,8 @@ else
     OTA_FROM_TARGET_SCRIPT := $(TARGET_RELEASETOOL_OTA_FROM_TARGET_SCRIPT)
 endif
 
-ifeq ($(TARGET_UNIFIED_DEVICE),)
-    $(INTERNAL_OTA_PACKAGE_TARGET): override_prop := false
-else
-    $(INTERNAL_OTA_PACKAGE_TARGET): override_prop := true
+ifneq ($(TARGET_UNIFIED_DEVICE),)
+    $(INTERNAL_OTA_PACKAGE_TARGET): override_prop := --override_prop=true
 endif
 
 ifneq ($(TARGET_SETS_FSTAB),)
@@ -1585,8 +1583,7 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) $(DISTTOOLS)
 	   -p $(HOST_OUT) \
 	   -k $(KEY_CERT_PAIR) \
 	   --backup=$(backuptool) \
-	   --override_device=$(override_device) \
-	   --override_prop=$(override_prop) \
+           --override_device=$(override_device) $(override_prop) \
 	   --mount_by_label=$(mount_by_label) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \
 	   $(TARGET_RELEASETOOL_OTA_FROM_TARGET_ADDITIONAL_ARGS) \
