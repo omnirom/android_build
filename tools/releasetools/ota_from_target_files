@@ -410,10 +410,7 @@ def AppendAssertions(script, info_dict, oem_dict = None):
   oem_props = info_dict.get("oem_fingerprint_properties")
   if oem_props is None or len(oem_props) == 0:
     if OPTIONS.override_device == "auto":
-      if OPTIONS.override_prop:
-        device = GetBuildProp("ro.build.product", info_dict)
-      else:
-        device = GetBuildProp("ro.product.device", info_dict)
+      device = GetBuildProp("ro.product.device", info_dict)
     else:
       device = OPTIONS.override_device
     script.AssertDevice(device)
@@ -505,19 +502,18 @@ def WriteFullOTAPackage(input_zip, output_zip):
     script.Mount("/oem", recovery_mount_options)
     oem_dict = common.LoadDictionaryFromLines(open(OPTIONS.oem_source).readlines())
 
-  metadata = {"post-build": CalculateFingerprint(
-                               oem_props, oem_dict, OPTIONS.info_dict),
-              "pre-device": GetOemProperty("ro.product.device", oem_props, oem_dict,
-                                         OPTIONS.info_dict),
-              "post-timestamp": GetBuildProp("ro.build.date.utc",
+  if OPTIONS.override_prop:
+    metadata = {"post-timestamp": GetBuildProp("ro.build.date.utc",
+                                               OPTIONS.info_dict),
+                }
+  else:
+    metadata = {"post-build": CalculateFingerprint(
+                                 oem_props, oem_dict, OPTIONS.info_dict),
+                "pre-device": GetOemProperty("ro.product.device", oem_props, oem_dict,
+                                           OPTIONS.info_dict),
+                "post-timestamp": GetBuildProp("ro.build.date.utc",
                                              OPTIONS.info_dict),
-              }
-
-  if not OPTIONS.override_prop:
-    metadata["post-build"] = GetBuildProp("ro.build.fingerprint",
-                                          OPTIONS.info_dict)
-    metadata["pre-device"] = GetBuildProp("ro.product.device",
-                                          OPTIONS.info_dict)
+                }
 
   device_specific = common.DeviceSpecificParams(
       input_zip=input_zip,
