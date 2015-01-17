@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "8b25f591_e01cbe6b",
+        "filename": "core/config.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 423,
+      "author": {
+        "id": 1000515
+      },
+      "writtenOn": "2015-01-17T13:28:50Z",
+      "side": 1,
+      "message": "LZMA :\u003d $(shell which lzma)\n\nshould be better",
+      "revId": "f21a9813e3c60ca8f9ef071c0cc4e69156e62a8a",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
