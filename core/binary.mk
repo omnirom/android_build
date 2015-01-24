@@ -97,6 +97,39 @@ else
   endif
 endif
 
+# Copyright (C) 2014-2015 The SaberMod Project
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# Include custom gcc flags.  Seperate them so they can be easily managed.
+
+# O3
+ifeq ($(strip $(O3_OPTIMIZATIONS)),true)
+  include $(BUILD_SYSTEM)/O3.mk
+endif
+
+# Do not use graphite on host modules or the clang compiler.
+ifneq ($(strip $(LOCAL_IS_HOST_MODULE)),true)
+  ifneq ($(strip $(LOCAL_CLANG)),true)
+
+    # If it gets this far enable graphite by default from here on out.
+    include $(BUILD_SYSTEM)/graphite.mk
+  endif
+endif
+
+#end SaberMod
+
 # The following LOCAL_ variables will be modified in this file.
 # Because the same LOCAL_ variables may be used to define modules for both 1st arch and 2nd arch,
 # we can't modify them in place.
