@@ -21,11 +21,6 @@
 
 PRODUCT_PACKAGES := \
     libfwdlockengine \
-    VideoEditor \
-    OpenWnn \
-    libWnnEngDic \
-    libWnnJpnDic \
-    libwnndict \
     WAPPushManager
 
 PRODUCT_PACKAGES += \
