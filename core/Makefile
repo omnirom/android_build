@@ -1372,6 +1372,14 @@ ifeq ($(TARGET_BUILD_TYPE),debug)
 endif
 name := $(name)-target_files-$(FILE_NAME_TAG)
 
+ifeq ($(USE_PREBUILT_CHROMIUM),1)
+ifneq ($(PRODUCT_PREBUILT_WEBVIEWCHROMIUM),yes)
+	@echo "Running Chromium prebuilt setup script..."
+	$(hide) . $(TOPDIR)vendor/omni/utils/chromium_prebuilt.sh $(TOP)
+        @echo "Chromium prebuilt copied."
+endif
+endif
+
 intermediates := $(call intermediates-dir-for,PACKAGING,target_files)
 BUILT_TARGET_FILES_PACKAGE := $(intermediates)/$(name).zip
 $(BUILT_TARGET_FILES_PACKAGE): intermediates := $(intermediates)
@@ -1611,12 +1619,7 @@ otapackage: $(INTERNAL_OTA_PACKAGE_TARGET)
 bacon: otapackage
 	$(hide) ln -f $(INTERNAL_OTA_PACKAGE_TARGET) $(CUSTOM_TARGET_PACKAGE)
 	$(hide) $(MD5SUM) $(CUSTOM_TARGET_PACKAGE) > $(CUSTOM_TARGET_PACKAGE).md5sum
-ifeq ($(USE_PREBUILT_CHROMIUM),1)
-ifneq ($(PRODUCT_PREBUILT_WEBVIEWCHROMIUM),yes)
-	@echo "Running Chromium prebuilt setup script..."
-	$(hide) . $(TOPDIR)vendor/omni/utils/chromium_prebuilt.sh $(TOP)
-endif
-endif
+
 	@echo -e ${PRT_CPL}"Package complete: $(CUSTOM_TARGET_PACKAGE)"${CL_RST}
 
 endif    # recovery_fstab is defined
