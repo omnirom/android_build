@@ -108,6 +108,29 @@ else
     endif
 endif
 
+ifeq ($(TARGET_ARCH),arm)
+    KERNEL_ARCH := arm
+    KERNEL_TOOLCHAIN := $(ARM_EABI_TOOLCHAIN)
+    KERNEL_TOOLCHAIN_PREFIX := arm-eabi-
+else ifeq ($(TARGET_ARCH),arm64)
+    KERNEL_ARCH := aarch64
+    KERNEL_TOOLCHAIN := aarch64-linux-android-4.9
+    KERNEL_TOOLCHAIN_PREFIX := aarch64-linux-android-
+else ifeq ($(TARGET_ARCH),x86)
+    KERNEL_ARCH := x86-64
+    KERNEL_TOOLCHAIN := x86_64-linux-android-4.9
+    KERNEL_TOOLCHAIN_PREFIX := x86_64-linux-android-
+endif
+
+ifeq ($(KERNEL_ARCH),)
+    FULL_KERNEL_BUILD := false
+    $(warning **********************************************************)
+    $(warning * Kernel source and configuration was defined, but your  *)
+    $(warning * TARGET_ARCH is not available for kernel builds. Please *)
+    $(warning * add arch support to build/core/tasks/kernel.mk         *)
+    $(warning **********************************************************)
+endif
+
 ifeq ($(FULL_KERNEL_BUILD),true)
 
 KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
@@ -119,8 +142,8 @@ define mv-modules
     if [ "$$mdpath" != "" ];then\
         mpath=`dirname $$mdpath`;\
         ko=`find $$mpath/kernel -type f -name *.ko`;\
-        for i in $$ko; do $(ARM_EABI_TOOLCHAIN)/arm-eabi-strip --strip-unneeded $$i;\
-        mv $$i $(KERNEL_MODULES_OUT)/; done;\
+        for i in $$ko; do $(KERNEL_TOOLCHAIN)/$(KERNEL_TOOLCHAIN_PREFIX)strip --strip-unneeded $$i;\
+            mv $$i $(KERNEL_MODULES_OUT)/; done;\
     fi
 endef
 
@@ -131,29 +154,29 @@ define clean-module-folder
     fi
 endef
 
-ifeq ($(TARGET_ARCH),arm)
-    ifneq ($(USE_CCACHE),)
-     # search executable
-      ccache =
-      ifneq ($(strip $(wildcard $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_EXTRA_TAG)/ccache/ccache)),)
+ifneq ($(USE_CCACHE),)
+    # search executable
+    ccache =
+    ifneq ($(strip $(wildcard $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_EXTRA_TAG)/ccache/ccache)),)
         ccache := $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_EXTRA_TAG)/ccache/ccache
-      else
-        ifneq ($(strip $(wildcard $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_TAG)/ccache/ccache)),)
-          ccache := $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_TAG)/ccache/ccache
-        endif
-      endif
-    endif
-    ifneq ($(TARGET_KERNEL_CUSTOM_TOOLCHAIN),)
-        ifeq ($(HOST_OS),darwin)
-            ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/darwin-x86/arm/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/arm-eabi-"
-        else
-            ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/linux-x86/arm/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/arm-eabi-"
-        endif
     else
-        ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ARM_EABI_TOOLCHAIN)/arm-eabi-"
+        ifneq ($(strip $(wildcard $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_TAG)/ccache/ccache)),)
+            ccache := $(ANDROID_BUILD_TOP)/prebuilts/misc/$(HOST_PREBUILT_TAG)/ccache/ccache
+        endif
     endif
-    ccache = 
 endif
+
+ifneq ($(TARGET_ARCH),$(HOST_ARCH))
+    ifneq ($(TARGET_KERNEL_CUSTOM_TOOLCHAIN),)
+        ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/$(HOST_OS)-x86/$(KERNEL_ARCH)/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN)/bin/$(TARGET_KERNEL_CUSTOM_TOOLCHAIN_PREFIX)"
+    else
+        ARM_CROSS_COMPILE:=CROSS_COMPILE="$(ccache) $(ANDROID_BUILD_TOP)/prebuilts/gcc/$(HOST_OS)-x86/$(KERNEL_ARCH)/$(KERNEL_TOOLCHAIN)/bin/$(KERNEL_TOOLCHAIN_PREFIX)"
+    endif
+else
+    ARM_CROSS_COMPILE =
+endif
+
+ccache = 
 
 ifeq ($(HOST_OS),darwin)
   MAKE_FLAGS := C_INCLUDE_PATH=$(ANDROID_BUILD_TOP)/external/elfutils/libelf
