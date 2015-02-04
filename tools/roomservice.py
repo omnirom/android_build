@@ -202,7 +202,6 @@ def parse_device_from_folder(device):
         location = parse_device_from_manifest(device)
     return location
 
-
 def parse_dependency_file(location):
     dep_file = "omni.dependencies"
     dep_location = '/'.join([location, dep_file])
@@ -238,9 +237,8 @@ def create_dependency_manifest(dependencies):
             manifest = append_to_manifest(project)
             write_to_manifest(manifest)
             projects.append(target_path)
-    if len(projects) > 0:
-        os.system("repo sync -f --no-clone-bundle %s" % " ".join(projects))
-
+            os.system("repo sync -f --no-clone-bundle %s" % target_path)
+            fetch_dependencies(target_path)
 
 def fetch_dependencies(device):
     location = parse_device_from_folder(device)
@@ -248,8 +246,8 @@ def fetch_dependencies(device):
         raise Exception("ERROR: could not find your device "
                         "folder location, bailing out")
     dependencies = parse_dependency_file(location)
-    create_dependency_manifest(dependencies)
-
+    if dependencies is not None:
+        create_dependency_manifest(dependencies)
 
 def check_device_exists(device):
     location = parse_device_from_folder(device)
