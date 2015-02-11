@@ -23,6 +23,7 @@ PRODUCT_PACKAGES := \
     libfwdlockengine \
     WAPPushManager
 
+ifneq ($(TARGET_EXCLUDE_LIVEWALLPAPERS), true)
 PRODUCT_PACKAGES += \
     Galaxy4 \
     HoloSpiralWallpaper \
@@ -33,6 +34,7 @@ PRODUCT_PACKAGES += \
     PhaseBeam \
     VisualizationWallpapers \
     PhotoTable
+endif
 
 # Additional settings used in all AOSP builds
 PRODUCT_PROPERTY_OVERRIDES := \
