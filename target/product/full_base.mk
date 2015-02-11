@@ -23,6 +23,7 @@ PRODUCT_PACKAGES := \
     libfwdlockengine \
     WAPPushManager
 
+ifeq ($(TARGET_LOW_MEMORY_DEVICE),)
 PRODUCT_PACKAGES += \
     Galaxy4 \
     HoloSpiralWallpaper \
@@ -33,6 +34,7 @@ PRODUCT_PACKAGES += \
     PhaseBeam \
     VisualizationWallpapers \
     PhotoTable
+endif
 
 # Additional settings used in all AOSP builds
 PRODUCT_PROPERTY_OVERRIDES := \
