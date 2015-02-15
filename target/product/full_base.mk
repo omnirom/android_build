@@ -23,6 +23,10 @@ PRODUCT_PACKAGES := \
     libfwdlockengine \
     WAPPushManager
 
+ifeq ($(TARGET_LOW_RAM_DEVICE), true)
+    TARGET_EXCLUDE_LIVEWALLPAPERS := true
+endif
+
 ifneq ($(TARGET_EXCLUDE_LIVEWALLPAPERS), true)
 PRODUCT_PACKAGES += \
     Galaxy4 \
@@ -35,9 +39,11 @@ PRODUCT_PACKAGES += \
     VisualizationWallpapers \
     PhotoTable
 else
-PRODUCT_PACKAGES += \
-    LiveWallpapersPicker \
-    PhotoTable
+    ifneq ($(TARGET_LOW_RAM_DEVICE), true)
+        PRODUCT_PACKAGES += \
+            LiveWallpapersPicker \
+            PhotoTable
+    endif
 endif
 
 # Additional settings used in all AOSP builds
