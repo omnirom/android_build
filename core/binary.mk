@@ -123,8 +123,10 @@ ifeq ($(strip $(O3_OPTIMIZATIONS)),true)
   include $(BUILD_SYSTEM)/O3.mk
 endif
 
-# Add pthread support
-include $(BUILD_SYSTEM)/pthread.mk
+# posix thread (pthread) support
+ifeq ($(strip $(ENABLE_PTHREAD)),true)
+  include $(BUILD_SYSTEM)/pthread.mk
+endif
 
 # Do not use graphite on host modules or the clang compiler.
 ifneq ($(strip $(LOCAL_IS_HOST_MODULE)),true)
