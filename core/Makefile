@@ -966,6 +966,62 @@ INSTALLED_RECOVERYIMAGE_TARGET :=
 RECOVERY_RESOURCE_ZIP :=
 endif
 
+.PHONY: bootloader
+ifneq ($(strip $(TARGET_BOOTLOADER_CONFIG)),)
+BOOTLOADER_CROSS_TOOLCHAIN := `pwd`/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin/arm-eabi-
+BOOTLOADER_ENV := ARCH=arm CROSS_COMPILE=$(BOOTLOADER_CROSS_TOOLCHAIN)
+HOST_PROCESSOR := $(shell cat /proc/cpuinfo | grep processor | wc -l)
+TARGET_BOOTLOADER_IMAGE := $(PRODUCT_OUT)/u-boot.bin
+
+BOOTLOADER_PATH := bootable/bootloader/uboot-imx/
+BOOTLOADER_CONFIG_FILE := $(BOOTLOADER_PATH)/include/config.h
+
+bootloader: $(TARGET_BOOTLOADER_IMAGE)
+
+$(TARGET_BOOTLOADER_IMAGE):
+	@for ubootplat in $(TARGET_BOOTLOADER_CONFIG); do \
+		UBOOT_PLATFORM=`echo $$ubootplat | cut -d':' -f1`; \
+		UBOOT_CONFIG=`echo $$ubootplat | cut -d':' -f2`; \
+		$(MAKE) -C bootable/bootloader/uboot-imx/ distclean; \
+		$(MAKE) -C bootable/bootloader/uboot-imx/ $$UBOOT_CONFIG $(BOOTLOADER_ENV); \
+		$(MAKE) -C bootable/bootloader/uboot-imx/ $(BOOTLOADER_ENV); \
+		install -D bootable/bootloader/uboot-imx/u-boot.bin $(PRODUCT_OUT)/u-boot-$$UBOOT_PLATFORM.bin; \
+		install -D bootable/bootloader/uboot-imx/u-boot.bin $@; \
+	done
+else
+bootloader:
+endif
+
+.PHONY: kernelimage
+ifneq ($(strip $(TARGET_NO_KERNEL)),true)
+KERNEL_CROSS_TOOLCHAIN := `pwd`/prebuilts/gcc/linux-x86/arm/arm-eabi-4.6/bin/arm-eabi-
+KERNEL_ENV := ARCH=arm CROSS_COMPILE=$(KERNEL_CROSS_TOOLCHAIN)
+HOST_PROCESSOR := $(shell cat /proc/cpuinfo | grep processor | wc -l)
+INSTALLED_KERNEL_TARGET := $(PRODUCT_OUT)/kernel
+TARGET_PREBUILT_KERNEL := $(PRODUCT_OUT)/kernel
+KERNEL_CONFIGURE := kernel_imx/.config
+KERNEL_OUT := $(TARGET_OUT_INTERMEDIATES)/KERNEL_OBJ
+KERNEL_HEADERS_INSTALL := $(KERNEL_OUT)/usr
+
+.PHONY: $(TARGET_PREBUILT_KERNEL)
+kernelimage: $(TARGET_PREBUILT_KERNEL)
+
+$(KERNEL_CONFIGURE): kernel_imx/arch/arm/configs/$(TARGET_KERNEL_DEFCONF)
+	$(MAKE) -C kernel_imx $(TARGET_KERNEL_DEFCONF) $(KERNEL_ENV)
+
+$(KERNEL_HEADERS_INSTALL): $(KERNEL_CONFIGURE)
+	install -d $(KERNEL_OUT)
+	$(MAKE) -C kernel_imx -j$(HOST_PROCESSOR) O=../$(KERNEL_OUT) $(KERNEL_ENV) headers_install
+
+$(TARGET_PREBUILT_KERNEL): $(KERNEL_CONFIGURE)
+	$(MAKE) -C kernel_imx -j$(HOST_PROCESSOR) uImage $(KERNEL_ENV)
+	install -D kernel_imx/arch/arm/boot/uImage $(PRODUCT_OUT)/uImage
+	install -D kernel_imx/arch/arm/boot/zImage $(PRODUCT_OUT)/kernel
+
+else
+kernelimage:
+endif
+
 .PHONY: recoveryimage
 recoveryimage: $(INSTALLED_RECOVERYIMAGE_TARGET) $(RECOVERY_RESOURCE_ZIP)
 
