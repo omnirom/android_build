@@ -711,6 +711,11 @@ else
 ifeq ($(TARGET_USERIMAGES_USE_EXT4),true)
 INTERNAL_USERIMAGES_USE_EXT := true
 INTERNAL_USERIMAGES_EXT_VARIANT := ext4
+else
+ifeq ($(TARGET_USERIMAGES_USE_UBIFS),true)
+# FIXME: this borrow ext's var to generate it.
+INTERNAL_USERIMAGES_EXT_VARIANT := ubifs
+endif
 endif
 endif
 endif
@@ -733,7 +738,11 @@ ifeq ($(TARGET_USERIMAGES_USE_F2FS),true)
 INTERNAL_USERIMAGES_DEPS += $(MKF2FSUSERIMG) $(MAKE_F2FS)
 endif
 else
+ifeq ($(TARGET_USERIMAGES_USE_UBIFS),true)
+INTERNAL_USERIMAGES_DEPS := $(MKUBIFS)
+else
 INTERNAL_USERIMAGES_DEPS := $(MKYAFFS2)
+endif
 endif
 
 INTERNAL_USERIMAGES_BINARY_PATHS := $(sort $(dir $(INTERNAL_USERIMAGES_DEPS)))
@@ -766,6 +775,7 @@ $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY),$(hide) echo "verit
 $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_VERITY_PARTITION),$(hide) echo "system_verity_block_device=$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_VERITY_PARTITION)" >> $(1))
 $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VENDOR_VERITY_PARTITION),$(hide) echo "vendor_verity_block_device=$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VENDOR_VERITY_PARTITION)" >> $(1))
 $(if $(2),$(hide) $(foreach kv,$(2),echo "$(kv)" >> $(1);))
+$(if $(TARGET_MKUBIFS_ARGS),$(hide) echo "mkfsubifs_flags=$(TARGET_MKUBIFS_ARGS)" >> $(1))
 endef
 
 # -----------------------------------------------------------------
@@ -985,7 +995,23 @@ endif
 ifdef BOARD_CUSTOM_BOOTIMG_MK
 include $(BOARD_CUSTOM_BOOTIMG_MK)
 endif
+# ----------------------------------------------------------------
+# support ubifs rules:
+#
+.PHONY: ubiimagesgenerate
 
+UBI_RAW_IMAGE := $(PRODUCT_OUT)/android_root.img
+ifeq ($(TARGET_USERIMAGES_USE_UBIFS),true)
+.PHONY: $(UBI_RAW_IMAGE)
+
+ubiimagesgenerate: $(UBI_RAW_IMAGE)
+
+$(UBI_RAW_IMAGE) : $(INSTALLED_USERDATAIMAGE_TARGET) systemimage
+	$(call pretty,"Generating UBI raw image:" "$(UBI_RAW_IMAGE)" "$(UBI_RAW_RECO_IMAGE)")
+	$(MKUBIRAW) -o $(UBI_RAW_IMAGE) $(TARGET_UBIRAW_ARGS)
+else
+ubiimagesgenerate:
+endif
 # -----------------------------------------------------------------
 # system image
 #

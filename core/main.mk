@@ -910,7 +910,8 @@ droidcore: files \
 	$(INSTALLED_USERDATAIMAGE_TARGET) \
 	$(INSTALLED_CACHEIMAGE_TARGET) \
 	$(INSTALLED_VENDORIMAGE_TARGET) \
-	$(INSTALLED_FILES_FILE)
+	$(INSTALLED_FILES_FILE) \
+	ubiimagesgenerate
 
 # dist_files only for putting your library into the dist directory with a full build.
 .PHONY: dist_files
