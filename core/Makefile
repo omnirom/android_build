@@ -1075,18 +1075,18 @@ SYSTEMIMAGE_SOURCE_DIR := $(TARGET_OUT)
 # image size check calculation.
 ifneq ($(INSTALLED_RECOVERYIMAGE_TARGET),)
 intermediates := $(call intermediates-dir-for,PACKAGING,recovery_patch)
-ifndef BOARD_CUSTOM_BOOTIMG_MK
 RECOVERY_FROM_BOOT_PATCH := $(intermediates)/recovery_from_boot.p
-else
-RECOVERY_FROM_BOOT_PATCH :=
-endif
 $(RECOVERY_FROM_BOOT_PATCH): $(INSTALLED_RECOVERYIMAGE_TARGET) \
                              $(INSTALLED_BOOTIMAGE_TARGET) \
 			     $(HOST_OUT_EXECUTABLES)/imgdiff \
 	                     $(HOST_OUT_EXECUTABLES)/bsdiff
 	@echo -e ${PRT_IMG}"Construct recovery from boot"${CL_RST}
 	mkdir -p $(dir $@)
+ifeq ($(TARGET_NOT_USE_GZIP_RECOVERY_RAMDISK),true)
+	PATH=$(HOST_OUT_EXECUTABLES):$$PATH $(HOST_OUT_EXECUTABLES)/bsdiff $(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_RECOVERYIMAGE_TARGET) $@
+else
 	PATH=$(HOST_OUT_EXECUTABLES):$$PATH $(HOST_OUT_EXECUTABLES)/imgdiff $(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_RECOVERYIMAGE_TARGET) $@
+endif
 endif
 
 
