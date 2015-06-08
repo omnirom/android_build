@@ -44,8 +44,8 @@ SRC_HEADERS := \
 	$(TOPDIR)libnativehelper/include \
 	$(TOPDIR)frameworks/native/include \
 	$(TOPDIR)frameworks/native/opengl/include \
-	$(TOPDIR)frameworks/av/include \
 	$(TOPDIR)frameworks/base/include
+
 SRC_HOST_HEADERS:=$(TOPDIR)tools/include
 SRC_LIBRARIES:= $(TOPDIR)libs
 SRC_SERVERS:= $(TOPDIR)servers
@@ -516,9 +516,19 @@ HOST_GLOBAL_LD_DIRS += -L$(HOST_OUT_INTERMEDIATE_LIBRARIES)
 TARGET_GLOBAL_LD_DIRS += -L$(TARGET_OUT_INTERMEDIATE_LIBRARIES)
 
 HOST_PROJECT_INCLUDES:= $(SRC_HEADERS) $(SRC_HOST_HEADERS) $(HOST_OUT_HEADERS)
+
+ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
+TARGET_AV_HEADERS := \
+        frameworks/av-caf/include
+else
+TARGET_AV_HEADERS := \
+        frameworks/av/include
+endif
+
 TARGET_PROJECT_INCLUDES:= $(SRC_HEADERS) $(TARGET_OUT_HEADERS) \
 		$(TARGET_DEVICE_KERNEL_HEADERS) $(TARGET_BOARD_KERNEL_HEADERS) \
-		$(TARGET_PRODUCT_KERNEL_HEADERS)
+		$(TARGET_PRODUCT_KERNEL_HEADERS) $(TARGET_AV_HEADERS)
+
 
 # Many host compilers don't support these flags, so we have to make
 # sure to only specify them for the target compilers checked in to
