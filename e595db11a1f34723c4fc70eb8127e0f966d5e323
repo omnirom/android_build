@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "18e79d95_7c50990c",
+        "filename": "core/config.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 520,
+      "author": {
+        "id": 1000008
+      },
+      "writtenOn": "2015-06-09T12:10:21Z",
+      "side": 1,
+      "message": "See my other comment about BOARD_USES_QCOM_HARDWARE on the Oppo repo\n\nAlso, you can probably just use SRC_HEADERS +\u003d blahblah up above",
+      "revId": "e595db11a1f34723c4fc70eb8127e0f966d5e323",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
