@@ -16,6 +16,24 @@
       "revId": "e595db11a1f34723c4fc70eb8127e0f966d5e323",
       "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
       "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "18e79d95_bc5ce11c",
+        "filename": "core/config.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 520,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2015-06-09T12:56:09Z",
+      "side": 1,
+      "message": "No you cant change it above - tried that\nthe values from the board config where not set up there",
+      "parentUuid": "18e79d95_7c50990c",
+      "revId": "e595db11a1f34723c4fc70eb8127e0f966d5e323",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
     }
   ]
 }
