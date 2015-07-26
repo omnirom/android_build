@@ -518,9 +518,13 @@ TARGET_GLOBAL_LD_DIRS += -L$(TARGET_OUT_INTERMEDIATE_LIBRARIES)
 HOST_PROJECT_INCLUDES:= $(SRC_HEADERS) $(SRC_HOST_HEADERS) $(HOST_OUT_HEADERS)
 
 ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
+ifeq ($(BOARD_NO_USES_AV-CAF),true)
+TARGET_AV_HEADERS := \
+        frameworks/av/include
+else
 TARGET_AV_HEADERS := \
         frameworks/av-caf/include
-else
+endif
 TARGET_AV_HEADERS := \
         frameworks/av/include
 endif
