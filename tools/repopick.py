@@ -232,9 +232,9 @@ for change in args.change_number:
         committer_date   = current_revision['commit']['committer']['date'].replace(date_fluff, '')
         subject          = current_revision['commit']['subject']
 
-        # Check if commit has already been merged and skip it
-        if status == "MERGED":
-            print("Commit already merged. Skipping the cherry pick.")
+        # Check if commit is not open, skip it.
+        if (status != 'OPEN' and status != 'NEW'): 
+            print("Change is not open. Skipping the cherry pick.")
             continue;
 
         # Convert the project name to a project path
