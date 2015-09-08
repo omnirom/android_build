@@ -943,11 +943,11 @@ define build-recoveryramdisk
   $(hide) rm -rf $(TARGET_RECOVERY_ROOT_OUT)/res/*
   $(hide) cp -rf $(recovery_resources_common)/* $(TARGET_RECOVERY_ROOT_OUT)/res
   $(hide) $(foreach item,$(recovery_root_private), \
-    cp -rf $(item) $(TARGET_RECOVERY_OUT)/)
+    cp -rf $(item) $(TARGET_RECOVERY_OUT)/;)
   $(hide) $(foreach item,$(recovery_resources_private), \
-    cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/)
+    cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/;)
   $(hide) $(foreach item,$(recovery_fstab), \
-    cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.fstab)
+    cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.fstab;)
   $(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/res/keys
   $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
           > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
