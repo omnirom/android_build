@@ -20,6 +20,7 @@
 # They will be compiled against libcore and not the host JRE.
 #
 
+ifeq ($(HOST_OS),linux)
 USE_CORE_LIB_BOOTCLASSPATH := true
 
 #######################################
@@ -33,11 +34,13 @@ endif
 full_classes_compiled_jar := $(intermediates.COMMON)/classes-full-debug.jar
 full_classes_jarjar_jar := $(intermediates.COMMON)/classes-jarjar.jar
 full_classes_jar := $(intermediates.COMMON)/classes.jar
+full_classes_jack := $(intermediates.COMMON)/classes.jack
 built_dex := $(intermediates.COMMON)/classes.dex
 
 LOCAL_INTERMEDIATE_TARGETS += \
     $(full_classes_compiled_jar) \
     $(full_classes_jarjar_jar) \
+    $(full_classes_jack) \
     $(full_classes_jar) \
     $(built_dex)
 
@@ -60,6 +63,7 @@ $(LOCAL_INTERMEDIATE_TARGETS): \
 	PRIVATE_CLASS_INTERMEDIATES_DIR := $(intermediates.COMMON)/classes
 $(LOCAL_INTERMEDIATE_TARGETS): \
 	PRIVATE_SOURCE_INTERMEDIATES_DIR := $(LOCAL_INTERMEDIATE_SOURCE_DIR)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_RMTYPEDEFS :=
 
 $(cleantarget): PRIVATE_CLEAN_FILES += $(intermediates.COMMON)
 
@@ -68,9 +72,14 @@ $(full_classes_compiled_jar): PRIVATE_JAVACFLAGS := $(LOCAL_JAVACFLAGS)
 $(full_classes_compiled_jar): PRIVATE_JAR_EXCLUDE_FILES :=
 $(full_classes_compiled_jar): PRIVATE_JAR_PACKAGES :=
 $(full_classes_compiled_jar): PRIVATE_JAR_EXCLUDE_PACKAGES :=
-$(full_classes_compiled_jar): PRIVATE_RMTYPEDEFS :=
-$(full_classes_compiled_jar): $(java_sources) $(java_resource_sources) $(full_java_lib_deps) \
-        $(jar_manifest_file) $(proto_java_sources_file_stamp) $(LOCAL_ADDITIONAL_DEPENDENCIES)
+$(full_classes_compiled_jar): \
+        $(java_sources) \
+        $(java_resource_sources) \
+        $(full_java_lib_deps) \
+        $(jar_manifest_file) \
+        $(proto_java_sources_file_stamp) \
+        $(LOCAL_MODULE_MAKEFILE) \
+        $(LOCAL_ADDITIONAL_DEPENDENCIES)
 	$(transform-host-java-to-package)
 
 # Run jarjar if necessary, otherwise just copy the file.
@@ -89,19 +98,56 @@ $(full_classes_jar): $(full_classes_jarjar_jar) | $(ACP)
 	@echo Copying: $@
 	$(hide) $(ACP) -fp $< $@
 
+ifndef LOCAL_JACK_ENABLED
 $(built_dex): PRIVATE_INTERMEDIATES_DIR := $(intermediates.COMMON)
 $(built_dex): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
 $(built_dex): $(full_classes_jar) $(DX)
 	$(transform-classes.jar-to-dex)
 
 $(LOCAL_BUILT_MODULE): PRIVATE_DEX_FILE := $(built_dex)
+$(LOCAL_BUILT_MODULE): PRIVATE_SOURCE_ARCHIVE := $(full_classes_jarjar_jar)
+$(LOCAL_BUILT_MODULE): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
+$(LOCAL_BUILT_MODULE): $(built_dex) $(java_resource_sources)
+	@echo "Host Jar: $(PRIVATE_MODULE) ($@)"
+	$(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@)
+	$(add-dex-to-package)
+
+else # LOCAL_JACK_ENABLED
+$(LOCAL_INTERMEDIATE_TARGETS): \
+	PRIVATE_JACK_INTERMEDIATES_DIR := $(intermediates.COMMON)/jack-rsc
+
+ifeq ($(LOCAL_JACK_ENABLED),incremental)
+$(LOCAL_INTERMEDIATE_TARGETS): \
+	PRIVATE_JACK_INCREMENTAL_DIR := $(intermediates.COMMON)/jack-incremental
+else
+$(LOCAL_INTERMEDIATE_TARGETS): \
+	PRIVATE_JACK_INCREMENTAL_DIR :=
+endif
+$(LOCAL_INTERMEDIATE_TARGETS):  PRIVATE_JACK_DEBUG_FLAGS := -g
+
+$(built_dex): PRIVATE_CLASSES_JACK := $(full_classes_jack)
+$(built_dex): PRIVATE_JACK_FLAGS := $(LOCAL_JACK_FLAGS)
+$(built_dex): $(java_sources) $(java_resource_sources) $(full_jack_lib_deps) \
+        $(jar_manifest_file) $(proto_java_sources_file_stamp) $(LOCAL_MODULE_MAKEFILE) \
+        $(LOCAL_MODULE_MAKEFILE) $(LOCAL_ADDITIONAL_DEPENDENCIES) $(JACK_JAR) $(JACK_LAUNCHER_JAR)
+	@echo Building with Jack: $@
+	$(jack-java-to-dex)
+
+# $(full_classes_jack) is just by-product of $(built_dex).
+# The dummy command was added because, without it, make misses the fact the $(built_dex) also
+# change $(full_classes_jack).
+$(full_classes_jack): $(built_dex)
+	$(hide) touch $@
+
+$(LOCAL_BUILT_MODULE): PRIVATE_DEX_FILE := $(built_dex)
 $(LOCAL_BUILT_MODULE): $(built_dex) $(java_resource_sources)
 	@echo "Host Jar: $(PRIVATE_MODULE) ($@)"
 	$(create-empty-package)
 	$(add-dex-to-package)
-	$(add-carried-java-resources)
-ifneq ($(extra_jar_args),)
-	$(add-java-resources-to-package)
-endif
+	$(add-carried-jack-resources)
+
+endif # LOCAL_JACK_ENABLED
 
 USE_CORE_LIB_BOOTCLASSPATH :=
+
+endif

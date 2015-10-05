@@ -35,7 +35,13 @@ endif
 
 # Define PRIVATE_ variables from global vars
 my_target_global_ld_dirs := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_GLOBAL_LD_DIRS)
+my_target_libprofile_rt := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBPROFILE_RT)
+my_target_libgcov := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBGCOV)
+ifeq ($(LOCAL_NO_LIBGCC),true)
+my_target_libgcc :=
+else
 my_target_libgcc := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBGCC)
+endif
 my_target_libatomic := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBATOMIC)
 my_target_crtbegin_dynamic_o := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_CRTBEGIN_DYNAMIC_O)
 my_target_crtbegin_static_o := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_CRTBEGIN_STATIC_O)
@@ -54,6 +60,8 @@ my_target_crtend_o := $(wildcard $(my_ndk_sysroot_lib)/crtend_android.o)
 endif
 $(linked_module): PRIVATE_TARGET_GLOBAL_LD_DIRS := $(my_target_global_ld_dirs)
 $(linked_module): PRIVATE_TARGET_GLOBAL_LDFLAGS := $(my_target_global_ldflags)
+$(linked_module): PRIVATE_TARGET_LIBPROFILE_RT := $(my_target_libprofile_rt)
+$(linked_module): PRIVATE_TARGET_LIBGCOV := $(my_target_libgcov)
 $(linked_module): PRIVATE_TARGET_LIBGCC := $(my_target_libgcc)
 $(linked_module): PRIVATE_TARGET_LIBATOMIC := $(my_target_libatomic)
 $(linked_module): PRIVATE_TARGET_CRTBEGIN_DYNAMIC_O := $(my_target_crtbegin_dynamic_o)
@@ -62,8 +70,10 @@ $(linked_module): PRIVATE_TARGET_CRTEND_O := $(my_target_crtend_o)
 $(linked_module): PRIVATE_TARGET_OUT_INTERMEDIATE_LIBRARIES := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_OUT_INTERMEDIATE_LIBRARIES)
 
 ifeq ($(LOCAL_FORCE_STATIC_EXECUTABLE),true)
+$(linked_module): PRIVATE_POST_LINK_CMD := $(LOCAL_POST_LINK_CMD)
 $(linked_module): $(my_target_crtbegin_static_o) $(all_objects) $(all_libraries) $(my_target_crtend_o)
 	$(transform-o-to-static-executable)
+	$(PRIVATE_POST_LINK_CMD)
 else
 $(linked_module): $(my_target_crtbegin_dynamic_o) $(all_objects) $(all_libraries) $(my_target_crtend_o)
 	$(transform-o-to-executable)

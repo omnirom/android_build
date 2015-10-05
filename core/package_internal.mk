@@ -57,6 +57,10 @@ $(error $(LOCAL_PATH): Package modules may not set LOCAL_MODULE_CLASS)
 endif
 LOCAL_MODULE_CLASS := APPS
 
+#################################
+include $(BUILD_SYSTEM)/configure_local_jack.mk
+#################################
+
 # Package LOCAL_MODULE_TAGS default to optional
 LOCAL_MODULE_TAGS := $(strip $(LOCAL_MODULE_TAGS))
 ifeq ($(LOCAL_MODULE_TAGS),)
@@ -161,6 +165,13 @@ ifeq ($(need_compile_res),true)
 endif # need_compile_res
 endif # !custom
 LOCAL_PROGUARD_FLAGS := $(addprefix -include ,$(proguard_options_file)) $(LOCAL_PROGUARD_FLAGS)
+
+ifdef LOCAL_JACK_ENABLED
+ifndef LOCAL_JACK_PROGUARD_FLAGS
+    LOCAL_JACK_PROGUARD_FLAGS := $(LOCAL_PROGUARD_FLAGS)
+endif
+LOCAL_JACK_PROGUARD_FLAGS := $(addprefix -include ,$(proguard_options_file)) $(LOCAL_JACK_PROGUARD_FLAGS)
+endif # LOCAL_JACK_ENABLED
 
 ifeq (true,$(EMMA_INSTRUMENT))
 ifndef LOCAL_EMMA_INSTRUMENT
@@ -271,6 +282,18 @@ endif
 # they want to use this module's R.java file.
 $(LOCAL_BUILT_MODULE): $(R_file_stamp)
 
+ifdef LOCAL_JACK_ENABLED
+ifneq ($(built_dex_intermediate),)
+$(built_dex_intermediate): $(R_file_stamp)
+endif
+ifneq ($(noshrob_classes_jack),)
+$(noshrob_classes_jack): $(R_file_stamp)
+endif
+ifneq ($(full_classes_jack),)
+$(full_classes_jack): $(R_file_stamp)
+endif
+endif # LOCAL_JACK_ENABLED
+
 ifneq ($(full_classes_jar),)
 # If full_classes_jar is non-empty, we're building sources.
 # If we're building sources, the initial javac step (which
@@ -320,7 +343,12 @@ endif # LOCAL_NO_STANDARD_LIBRARIES
 
 ifneq ($(full_classes_jar),)
 $(LOCAL_BUILT_MODULE): PRIVATE_DEX_FILE := $(built_dex)
+# Use the jarjar processed arhive as the initial package file.
+$(LOCAL_BUILT_MODULE): PRIVATE_SOURCE_ARCHIVE := $(full_classes_jarjar_jar)
 $(LOCAL_BUILT_MODULE): $(built_dex)
+else
+$(LOCAL_BUILT_MODULE): PRIVATE_DEX_FILE :=
+$(LOCAL_BUILT_MODULE): PRIVATE_SOURCE_ARCHIVE :=
 endif # full_classes_jar
 
 include $(BUILD_SYSTEM)/install_jni_libs.mk
@@ -379,26 +407,35 @@ else
     $(LOCAL_BUILT_MODULE): PRIVATE_PRODUCT_AAPT_PREF_CONFIG := $(PRODUCT_AAPT_PREF_CONFIG)
 endif
 endif
+$(LOCAL_BUILT_MODULE): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
 $(LOCAL_BUILT_MODULE): $(all_res_assets) $(jni_shared_libraries) $(full_android_manifest)
 	@echo "target Package: $(PRIVATE_MODULE) ($@)"
+ifdef LOCAL_JACK_ENABLED
 	$(create-empty-package)
+else
+	$(if $(PRIVATE_SOURCE_ARCHIVE),\
+	  $(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@),\
+	  $(create-empty-package))
+endif
 	$(add-assets-to-package)
 ifneq ($(jni_shared_libraries),)
 	$(add-jni-shared-libs-to-package)
 endif
-ifneq ($(full_classes_jar),)
+ifeq ($(full_classes_jar),)
+# We don't build jar, need to add the Java resources here.
+	$(if $(PRIVATE_EXTRA_JAR_ARGS),$(call add-java-resources-to,$@))
+else
 	$(add-dex-to-package)
 endif
-	$(add-carried-java-resources)
-ifneq ($(extra_jar_args),)
-	$(add-java-resources-to-package)
+ifdef LOCAL_JACK_ENABLED
+	$(add-carried-jack-resources)
 endif
-	$(sign-package)
 ifdef LOCAL_DEX_PREOPT
 ifneq (nostripping,$(LOCAL_DEX_PREOPT))
 	$(call dexpreopt-remove-classes.dex,$@)
 endif
 endif
+	$(sign-package)
 	@# Alignment must happen after all other zip operations.
 	$(align-package)
 
@@ -487,7 +524,7 @@ $(apk_jni_stripped) : $(LOCAL_BUILT_MODULE) | $(ZIPALIGN)
 	@rm -rf $(dir $@) && mkdir -p $(dir $@)
 	$(hide) cp $< $@
 	$(hide) zip -d $@ $(foreach f,$(PRIVATE_JNI_SHARED_LIBRARIES),\*/$(f))
-	$(call align-package)
+	$(align-package)
 
 $(call dist-for-goals, apps_only, $(apk_jni_stripped):$(dist_subdir)/$(LOCAL_PACKAGE_NAME).apk)
 

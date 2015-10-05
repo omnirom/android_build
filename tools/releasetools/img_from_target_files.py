@@ -32,17 +32,9 @@ if sys.hexversion < 0x02070000:
   print >> sys.stderr, "Python 2.7 or newer is required."
   sys.exit(1)
 
-import errno
 import os
-import re
 import shutil
-import subprocess
-import tempfile
 import zipfile
-
-# missing in Python 2.4 and before
-if not hasattr(os, "SEEK_SET"):
-  os.SEEK_SET = 0
 
 import common
 
@@ -51,14 +43,15 @@ OPTIONS = common.OPTIONS
 
 def CopyInfo(output_zip):
   """Copy the android-info.txt file from the input to the output."""
-  output_zip.write(os.path.join(OPTIONS.input_tmp, "OTA", "android-info.txt"),
-                   "android-info.txt")
+  common.ZipWrite(
+      output_zip, os.path.join(OPTIONS.input_tmp, "OTA", "android-info.txt"),
+      "android-info.txt")
 
 
 def main(argv):
   bootable_only = [False]
 
-  def option_handler(o, a):
+  def option_handler(o, _):
     if o in ("-z", "--bootable_zip"):
       bootable_only[0] = True
     else:
@@ -88,11 +81,13 @@ def main(argv):
       # and all we have to do is copy them to the output zip.
       images = os.listdir(images_path)
       if images:
-        for i in images:
-          if bootable_only and i not in ("boot.img", "recovery.img"): continue
-          if not i.endswith(".img"): continue
-          with open(os.path.join(images_path, i), "r") as f:
-            common.ZipWriteStr(output_zip, i, f.read())
+        for image in images:
+          if bootable_only and image not in ("boot.img", "recovery.img"):
+            continue
+          if not image.endswith(".img"):
+            continue
+          common.ZipWrite(
+              output_zip, os.path.join(images_path, image), image)
         done = True
 
     if not done:
@@ -114,7 +109,7 @@ def main(argv):
       boot_image = common.GetBootableImage(
           "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
       if boot_image:
-          boot_image.AddToZip(output_zip)
+        boot_image.AddToZip(output_zip)
       recovery_image = common.GetBootableImage(
           "recovery.img", "recovery.img", OPTIONS.input_tmp, "RECOVERY")
       if recovery_image:
@@ -139,7 +134,7 @@ def main(argv):
 
   finally:
     print "cleaning up..."
-    output_zip.close()
+    common.ZipClose(output_zip)
     shutil.rmtree(OPTIONS.input_tmp)
 
   print "done."
@@ -149,7 +144,7 @@ if __name__ == '__main__':
   try:
     common.CloseInheritedPipes()
     main(sys.argv[1:])
-  except common.ExternalError, e:
+  except common.ExternalError as e:
     print
     print "   ERROR: %s" % (e,)
     print

@@ -24,6 +24,7 @@ class RangeSet(object):
   lots of runs."""
 
   def __init__(self, data=None):
+    self.monotonic = False
     if isinstance(data, str):
       self._parse_internal(data)
     elif data:
@@ -185,7 +186,7 @@ class RangeSet(object):
     # This is like intersect, but we can stop as soon as we discover the
     # output is going to be nonempty.
     z = 0
-    for p, d in heapq.merge(zip(self.data, itertools.cycle((+1, -1))),
+    for _, d in heapq.merge(zip(self.data, itertools.cycle((+1, -1))),
                             zip(other.data, itertools.cycle((+1, -1)))):
       if (z == 1 and d == 1) or (z == 2 and d == -1):
         return True
@@ -236,6 +237,28 @@ class RangeSet(object):
       else:
         out.append(offset + p - start)
     return RangeSet(data=out)
+
+  def extend(self, n):
+    """Extend the RangeSet by 'n' blocks.
+
+    The lower bound is guaranteed to be non-negative.
+
+    >>> RangeSet("0-9").extend(1)
+    <RangeSet("0-10")>
+    >>> RangeSet("10-19").extend(15)
+    <RangeSet("0-34")>
+    >>> RangeSet("10-19 30-39").extend(4)
+    <RangeSet("6-23 26-43")>
+    >>> RangeSet("10-19 30-39").extend(10)
+    <RangeSet("0-49")>
+    """
+    out = self
+    for i in range(0, len(self.data), 2):
+      s, e = self.data[i:i+2]
+      s1 = max(0, s - n)
+      e1 = e + n
+      out = out.union(RangeSet(str(s1) + "-" + str(e1-1)))
+    return out
 
 
 if __name__ == "__main__":

@@ -28,6 +28,9 @@ TARGET_ARCH_VARIANT := mips32r2-fp
 endif
 TARGET_CPU_ABI  := mips
 
+# Make TARGET_CPU_VARIANT the same as TARGET_ARCH_VARIANT
+TARGET_CPU_VARIANT := $(TARGET_ARCH_VARIANT)
+
 HAVE_HTC_AUDIO_DRIVER := true
 BOARD_USES_GENERIC_AUDIO := true
 
@@ -50,22 +53,11 @@ BUILD_EMULATOR_OPENGL := true
 USE_OPENGL_RENDERER := true
 
 TARGET_USERIMAGES_USE_EXT4 := true
-BOARD_SYSTEMIMAGE_PARTITION_SIZE := 838860800
-BOARD_USERDATAIMAGE_PARTITION_SIZE := 576716800
+BOARD_SYSTEMIMAGE_PARTITION_SIZE := 1342177280
+BOARD_USERDATAIMAGE_PARTITION_SIZE := 734003200
 BOARD_CACHEIMAGE_PARTITION_SIZE := 69206016
 BOARD_CACHEIMAGE_FILE_SYSTEM_TYPE := ext4
 BOARD_FLASH_BLOCK_SIZE := 512
 TARGET_USERIMAGES_SPARSE_EXT_DISABLED := true
 
 BOARD_SEPOLICY_DIRS += build/target/board/generic/sepolicy
-BOARD_SEPOLICY_UNION += \
-        bootanim.te \
-        device.te \
-        domain.te \
-        file.te \
-        file_contexts \
-        qemud.te \
-        rild.te \
-        shell.te \
-        surfaceflinger.te \
-        system_server.te

@@ -24,10 +24,20 @@ endif
 
 LOCAL_BUILT_MODULE_STEM := javalib.jar
 
+#################################
+include $(BUILD_SYSTEM)/configure_local_jack.mk
+#################################
+
+ifdef LOCAL_JACK_ENABLED
+ifdef LOCAL_IS_STATIC_JAVA_LIBRARY
+LOCAL_BUILT_MODULE_STEM := classes.jack
+endif
+endif
+
 intermediates.COMMON := $(call local-intermediates-dir,COMMON)
 
 # This file will be the one that other modules should depend on.
-common_javalib.jar := $(intermediates.COMMON)/$(LOCAL_BUILT_MODULE_STEM)
+common_javalib.jar := $(intermediates.COMMON)/javalib.jar
 LOCAL_INTERMEDIATE_TARGETS += $(common_javalib.jar)
 
 ifeq ($(LOCAL_PROGUARD_ENABLED),disabled)
@@ -58,23 +68,29 @@ $(common_javalib.jar) : $(full_classes_jar)
 endif
 	@echo -e ${PRT_TGT}"target Static Jar:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
 	$(copy-file-to-target)
-ifneq ($(extra_jar_args),)
-	$(add-java-resources-to-package)
-endif
 
-$(LOCAL_BUILT_MODULE): $(common_javalib.jar)
+ifdef LOCAL_JACK_ENABLED
+$(LOCAL_BUILT_MODULE) : $(full_classes_jack)
+else
+$(LOCAL_BUILT_MODULE) : $(common_javalib.jar)
+endif
 	$(copy-file-to-target)
 
 else # !LOCAL_IS_STATIC_JAVA_LIBRARY
 
 $(common_javalib.jar): PRIVATE_DEX_FILE := $(built_dex)
+$(common_javalib.jar): PRIVATE_SOURCE_ARCHIVE := $(full_classes_jarjar_jar)
+$(common_javalib.jar): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
 $(common_javalib.jar) : $(built_dex) $(java_resource_sources)
 	@echo -e ${PRT_TGT}"target Jar:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
+ifdef LOCAL_JACK_ENABLED
 	$(create-empty-package)
+else
+	$(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@)
+endif
 	$(add-dex-to-package)
-	$(add-carried-java-resources)
-ifneq ($(extra_jar_args),)
-	$(add-java-resources-to-package)
+ifdef LOCAL_JACK_ENABLED
+	$(add-carried-jack-resources)
 endif
 
 ifdef LOCAL_DEX_PREOPT
@@ -85,12 +101,6 @@ $(LOCAL_BUILT_MODULE) : $(dexpreopted_boot_jar) | $(ACP)
 	$(call copy-file-to-target)
 
 # For libart boot jars, we don't have .odex files.
-ifeq ($(DALVIK_VM_LIB),libdvm.so)
-dexpreopted_boot_odex := $(DEXPREOPT_BOOT_JAR_DIR_FULL_PATH)/$(dexpreopt_boot_jar_module).odex
-$(built_odex) : $(dexpreopted_boot_odex) | $(ACP)
-	$(call copy-file-to-target)
-endif
-
 else # ! boot jar
 $(built_odex): PRIVATE_MODULE := $(LOCAL_MODULE)
 # Use pattern rule - we may have multiple built odex files.

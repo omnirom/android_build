@@ -39,6 +39,15 @@ ifeq (SHARED_LIBRARIES,$(LOCAL_MODULE_CLASS))
   # Put the built targets of all shared libraries in a common directory
   # to simplify the link line.
   OVERRIDE_BUILT_MODULE_PATH := $($(LOCAL_2ND_ARCH_VAR_PREFIX)$(my_prefix)OUT_INTERMEDIATE_LIBRARIES)
+  ifeq ($(LOCAL_IS_HOST_MODULE)$(LOCAL_STRIP_MODULE),)
+    # Strip but not try to add debuglink
+    LOCAL_STRIP_MODULE := no_debuglink
+  endif
+
+  ifeq ($(LOCAL_IS_HOST_MODULE)$(LOCAL_PACK_MODULE_RELOCATIONS),)
+    # Do not pack relocations by default
+    LOCAL_PACK_MODULE_RELOCATIONS := false
+  endif
 endif
 
 ifneq ($(filter STATIC_LIBRARIES SHARED_LIBRARIES,$(LOCAL_MODULE_CLASS)),)
@@ -59,19 +68,20 @@ LOCAL_BUILT_MODULE_STEM := package.apk
 LOCAL_INSTALLED_MODULE_STEM := $(LOCAL_MODULE).apk
 endif
 
-ifeq ($(LOCAL_STRIP_MODULE),true)
+ifneq ($(filter true no_debuglink,$(LOCAL_STRIP_MODULE) $(LOCAL_PACK_MODULE_RELOCATIONS)),)
   ifdef LOCAL_IS_HOST_MODULE
-    $(error Cannot strip host module LOCAL_PATH=$(LOCAL_PATH))
+    $(error Cannot strip/pack host module LOCAL_PATH=$(LOCAL_PATH))
   endif
   ifeq ($(filter SHARED_LIBRARIES EXECUTABLES,$(LOCAL_MODULE_CLASS)),)
-    $(error Can strip only shared libraries or executables LOCAL_PATH=$(LOCAL_PATH))
+    $(error Can strip/pack only shared libraries or executables LOCAL_PATH=$(LOCAL_PATH))
   endif
   ifneq ($(LOCAL_PREBUILT_STRIP_COMMENTS),)
-    $(error Cannot strip scripts LOCAL_PATH=$(LOCAL_PATH))
+    $(error Cannot strip/pack scripts LOCAL_PATH=$(LOCAL_PATH))
   endif
   include $(BUILD_SYSTEM)/dynamic_binary.mk
   built_module := $(linked_module)
-else  # LOCAL_STRIP_MODULE not true
+
+else  # LOCAL_STRIP_MODULE and LOCAL_PACK_MODULE_RELOCATIONS not true
   include $(BUILD_SYSTEM)/base_rules.mk
   built_module := $(LOCAL_BUILT_MODULE)
 
@@ -96,19 +106,24 @@ endif  # prebuilt_module_is_a_library
 # of the shared libraries are determined.
 ifdef LOCAL_INSTALLED_MODULE
 ifdef LOCAL_SHARED_LIBRARIES
+my_shared_libraries := $(LOCAL_SHARED_LIBRARIES)
+# Extra shared libraries introduced by LOCAL_CXX_STL.
+include $(BUILD_SYSTEM)/cxx_stl_setup.mk
 $(LOCAL_2ND_ARCH_VAR_PREFIX)$(my_prefix)DEPENDENCIES_ON_SHARED_LIBRARIES += \
-  $(my_register_name):$(LOCAL_INSTALLED_MODULE):$(subst $(space),$(comma),$(LOCAL_SHARED_LIBRARIES))
+  $(my_register_name):$(LOCAL_INSTALLED_MODULE):$(subst $(space),$(comma),$(my_shared_libraries))
 
 # We also need the LOCAL_BUILT_MODULE dependency,
 # since we use -rpath-link which points to the built module's path.
-built_shared_libraries := \
+my_built_shared_libraries := \
     $(addprefix $($(LOCAL_2ND_ARCH_VAR_PREFIX)$(my_prefix)OUT_INTERMEDIATE_LIBRARIES)/, \
     $(addsuffix $($(my_prefix)SHLIB_SUFFIX), \
-        $(LOCAL_SHARED_LIBRARIES)))
-$(LOCAL_BUILT_MODULE) : $(built_shared_libraries)
+        $(my_shared_libraries)))
+$(LOCAL_BUILT_MODULE) : $(my_built_shared_libraries)
 endif
 endif
 
+# We need to enclose the above export_includes and my_built_shared_libraries in
+# "LOCAL_STRIP_MODULE not true" because otherwise the rules are defined in dynamic_binary.mk.
 endif  # LOCAL_STRIP_MODULE not true
 
 ifeq ($(LOCAL_MODULE_CLASS),APPS)
@@ -180,18 +195,31 @@ endif
 include $(BUILD_SYSTEM)/dex_preopt_odex_install.mk
 #######################################
 # Sign and align non-presigned .apks.
+
+# The embedded prebuilt jni to uncompress.
+ifeq ($(LOCAL_CERTIFICATE),PRESIGNED)
+# For PRESIGNED apks we must uncompress every .so file:
+# even if the .so file isn't for the current TARGET_ARCH,
+# we can't strip the file.
+embedded_prebuilt_jni_libs := 'lib/*.so'
+endif
+ifndef embedded_prebuilt_jni_libs
+# No LOCAL_PREBUILT_JNI_LIBS, uncompress all.
+embedded_prebuilt_jni_libs := 'lib/*.so'
+endif
+$(built_module): PRIVATE_EMBEDDED_JNI_LIBS := $(embedded_prebuilt_jni_libs)
+
 $(built_module) : $(my_prebuilt_src_file) | $(ACP) $(ZIPALIGN) $(SIGNAPK_JAR)
 	$(transform-prebuilt-to-target)
-ifdef extracted_jni_libs
-	$(hide) zip -d $@ 'lib/*.so'  # strip embedded JNI libraries.
-endif
+	$(uncompress-shared-libs)
 ifneq ($(LOCAL_CERTIFICATE),PRESIGNED)
-	$(sign-package)
-endif
+	@# Only strip out files if we can re-sign the package.
 ifdef LOCAL_DEX_PREOPT
 ifneq (nostripping,$(LOCAL_DEX_PREOPT))
 	$(call dexpreopt-remove-classes.dex,$@)
 endif
+endif
+	$(sign-package)
 endif
 	$(align-package)
 
@@ -245,13 +273,6 @@ $(built_module) : $(my_prebuilt_src_file)
 else
 $(built_module) : $(my_prebuilt_src_file) | $(ACP)
 	$(transform-prebuilt-to-target)
-ifneq ($(prebuilt_module_is_a_library),)
-  ifneq ($(LOCAL_IS_HOST_MODULE),)
-	$(transform-host-ranlib-copy-hack)
-  else
-	$(transform-ranlib-copy-hack)
-  endif
-endif
 endif
 endif # LOCAL_MODULE_CLASS != APPS
 
@@ -289,6 +310,14 @@ $(common_javalib_jar) : $(common_classes_jar) | $(ACP)
 $(built_module) : $(common_javalib_jar)
 endif # TARGET JAVA_LIBRARIES
 
-$(built_module) : $(LOCAL_ADDITIONAL_DEPENDENCIES)
+ifeq ($(LOCAL_MODULE_CLASS),JAVA_LIBRARIES)
+$(intermediates.COMMON)/classes.jack : PRIVATE_JILL_FLAGS:=$(LOCAL_JILL_FLAGS)
+$(intermediates.COMMON)/classes.jack : $(my_src_jar) $(LOCAL_MODULE_MAKEFILE) \
+        $(LOCAL_ADDITIONAL_DEPENDENCIES) $(JILL_JAR) $(JACK_JAR) $(JACK_LAUNCHER_JAR)
+	$(transform-jar-to-jack)
+
+endif # JAVA_LIBRARIES
+
+$(built_module) : $(LOCAL_MODULE_MAKEFILE) $(LOCAL_ADDITIONAL_DEPENDENCIES)
 
 my_prebuilt_src_file :=

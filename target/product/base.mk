@@ -18,6 +18,7 @@
 PRODUCT_PACKAGES += \
     20-dns.conf \
     95-configured \
+    org.apache.http.legacy.boot \
     appwidget \
     appops \
     am \
@@ -35,6 +36,7 @@ PRODUCT_PACKAGES += \
     dpm \
     framework \
     fsck_msdos \
+    hid \
     ime \
     input \
     javax.obex \
@@ -65,12 +67,16 @@ PRODUCT_PACKAGES += \
     libnetlink \
     libnetutils \
     libpdfium \
+    libradio \
+    libradioservice \
+    libradio_metadata \
     libreference-ril \
     libreverbwrapper \
     libril \
     librtp_jni \
     libsensorservice \
     libskia \
+    libsonic \
     libsonivox \
     libsoundpool \
     libsoundtrigger \
@@ -95,7 +101,6 @@ PRODUCT_PACKAGES += \
     monkey \
     mtpd \
     ndc \
-    netcfg \
     netd \
     ping \
     ping6 \
@@ -108,8 +113,11 @@ PRODUCT_PACKAGES += \
     sdcard \
     services \
     settings \
+    sgdisk \
+    sm \
     svc \
     tc \
+    telecom \
     vdc \
     vold \
     wm

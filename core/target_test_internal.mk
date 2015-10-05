@@ -5,18 +5,11 @@
 LOCAL_CFLAGS += -DGTEST_OS_LINUX_ANDROID -DGTEST_HAS_STD_STRING
 
 LOCAL_C_INCLUDES += external/gtest/include
-ifneq ($(filter libc++,$(LOCAL_SHARED_LIBRARIES)),)
-LOCAL_STATIC_LIBRARIES += libgtest_libc++ libgtest_main_libc++
-else
-LOCAL_STATIC_LIBRARIES += libgtest libgtest_main
 
 ifndef LOCAL_SDK_VERSION
-LOCAL_C_INCLUDES += bionic \
-                    bionic/libstdc++/include \
-                    external/stlport/stlport
-LOCAL_SHARED_LIBRARIES += libstlport
-LOCAL_STATIC_LIBRARIES += libstdc++
-endif
+LOCAL_STATIC_LIBRARIES += libgtest libgtest_main
+else
+LOCAL_STATIC_LIBRARIES += libgtest_ndk libgtest_main_ndk
 endif
 
 ifdef LOCAL_MODULE_PATH

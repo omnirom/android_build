@@ -9,11 +9,12 @@
 #   COMMON_JAVAC -- Java compiler command with common arguments
 #
 
-ifneq ($(LEGACY_USE_JAVA6),)
-common_jdk_flags := -target 1.5 -Xmaxerrs 9999999
-else
-common_jdk_flags := -source 1.7 -target 1.7 -Xmaxerrs 9999999
+ifndef ANDROID_COMPILE_WITH_JACK
+# Defines if compilation with jack is enabled by default.
+ANDROID_COMPILE_WITH_JACK := true
 endif
+
+common_jdk_flags := -source 1.7 -target 1.7 -Xmaxerrs 9999999
 
 # Use the indexer wrapper to index the codebase instead of the javac compiler
 ifeq ($(ALTERNATE_JAVAC),)

@@ -23,24 +23,41 @@ LOCAL_MODULE_SUFFIX := $(COMMON_JAVA_PACKAGE_SUFFIX)
 LOCAL_IS_HOST_MODULE := true
 LOCAL_BUILT_MODULE_STEM := javalib.jar
 
+intermediates := $(call local-intermediates-dir)
+intermediates.COMMON := $(call local-intermediates-dir,COMMON)
+
+built_javalib_jar := $(intermediates)/javalib.jar
+
+#################################
+include $(BUILD_SYSTEM)/configure_local_jack.mk
+#################################
+
+ifdef LOCAL_JACK_ENABLED
+ifdef LOCAL_IS_STATIC_JAVA_LIBRARY
+LOCAL_BUILT_MODULE_STEM := classes.jack
+LOCAL_INTERMEDIATE_TARGETS += $(built_javalib_jar)
+endif
+endif
+
 # base_rules.mk looks at this
 all_res_assets :=
 
 proto_sources := $(filter %.proto,$(LOCAL_SRC_FILES))
 ifneq ($(proto_sources),)
 ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),micro)
-    LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-2.3.0-micro
+    LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-micro
 else
   ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),nano)
-    LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-2.3.0-nano
+    LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-nano
   else
-    LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-2.3.0-lite
+    ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),full)
+      LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-full
+    else
+      LOCAL_JAVA_LIBRARIES += host-libprotobuf-java-lite
+    endif
   endif
 endif
 endif
-
-intermediates := $(call local-intermediates-dir)
-intermediates.COMMON := $(call local-intermediates-dir,COMMON)
 
 LOCAL_INTERMEDIATE_SOURCE_DIR := $(intermediates.COMMON)/src
 LOCAL_JAVA_LIBRARIES := $(sort $(LOCAL_JAVA_LIBRARIES))

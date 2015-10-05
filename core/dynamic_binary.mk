@@ -39,27 +39,37 @@ include $(BUILD_SYSTEM)/binary.mk
 ###################################
 
 ###########################################################
-## Compress
+## Pack relocation tables
 ###########################################################
-compress_input := $(linked_module)
+relocation_packer_input := $(linked_module)
+relocation_packer_output := $(intermediates)/PACKED/$(my_built_module_stem)
 
-ifeq ($(strip $(LOCAL_COMPRESS_MODULE_SYMBOLS)),)
-  LOCAL_COMPRESS_MODULE_SYMBOLS := $(strip $(TARGET_COMPRESS_MODULE_SYMBOLS))
+my_pack_module_relocations := $(LOCAL_PACK_MODULE_RELOCATIONS)
+
+ifeq ($(my_pack_module_relocations),)
+  my_pack_module_relocations := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_PACK_MODULE_RELOCATIONS)
 endif
 
-ifeq ($(LOCAL_COMPRESS_MODULE_SYMBOLS),true)
-$(error Symbol compression not yet supported.)
-compress_output := $(intermediates)/COMPRESSED-$(my_built_module_stem)
+# Do not pack relocations for executables. Because packing results in
+# non-zero p_vaddr which causes kernel to load executables to lower
+# address (starting at 0x8000) http://b/20665974
+ifeq ($(LOCAL_MODULE_CLASS),EXECUTABLES)
+  my_pack_module_relocations := false
+endif
 
-#TODO: write the real $(STRIPPER) rule.
-#TODO: define a rule to build TARGET_SYMBOL_FILTER_FILE, and
-#      make it depend on ALL_ORIGINAL_DYNAMIC_BINARIES.
-$(compress_output): $(compress_input) $(TARGET_SYMBOL_FILTER_FILE) | $(ACP)
-	@echo -e ${PRT_TGT}"target Compress Symbols:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
-	$(copy-file-to-target)
+# TODO (dimitry): Relocation packer is not yet available for darwin
+ifneq ($(HOST_OS),linux)
+  my_pack_module_relocations := false
+endif
+
+ifeq (true,$(my_pack_module_relocations))
+# Pack relocations
+$(relocation_packer_output): $(relocation_packer_input) | $(ACP)
+	$(pack-elf-relocations)
 else
-# Skip this step.
-compress_output := $(compress_input)
+$(relocation_packer_output): $(relocation_packer_input) | $(ACP)
+	@echo "target Unpacked: $(PRIVATE_MODULE) ($@)"
+	$(copy-file-to-target)
 endif
 
 ###########################################################
@@ -70,7 +80,7 @@ my_unstripped_path := $(TARGET_OUT_UNSTRIPPED)/$(patsubst $(PRODUCT_OUT)/%,%,$(m
 else
 my_unstripped_path := $(LOCAL_UNSTRIPPED_PATH)
 endif
-symbolic_input := $(compress_output)
+symbolic_input := $(relocation_packer_output)
 symbolic_output := $(my_unstripped_path)/$(my_installed_module_stem)
 $(symbolic_output) : $(symbolic_input) | $(ACP)
 	@echo -e ${PRT_TGT}"target Symbolic:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
@@ -85,21 +95,24 @@ strip_output := $(LOCAL_BUILT_MODULE)
 
 my_strip_module := $(LOCAL_STRIP_MODULE)
 ifeq ($(my_strip_module),)
-  my_strip_module := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP_MODULE)
+  my_strip_module := true
 endif
 
-ifeq ($(my_strip_module),true)
-# Strip the binary
-$(strip_output): PRIVATE_STRIP := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP)
-$(strip_output): PRIVATE_OBJCOPY := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_OBJCOPY)
-$(strip_output): $(strip_input) | $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP)
-	$(transform-to-stripped)
-else
-ifeq ($(my_strip_module),keep_symbols)
-# Strip only the debug frames, but leave the symbol table.
 $(strip_output): PRIVATE_STRIP := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP)
 $(strip_output): PRIVATE_OBJCOPY := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_OBJCOPY)
 $(strip_output): PRIVATE_READELF := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_READELF)
+ifeq ($(my_strip_module),no_debuglink)
+$(strip_output): PRIVATE_NO_DEBUGLINK := true
+else
+$(strip_output): PRIVATE_NO_DEBUGLINK :=
+endif
+
+ifneq ($(filter true no_debuglink,$(my_strip_module)),)
+# Strip the binary
+$(strip_output): $(strip_input) | $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP)
+	$(transform-to-stripped)
+else ifeq ($(my_strip_module),keep_symbols)
+# Strip only the debug frames, but leave the symbol table.
 $(strip_output): $(strip_input) | $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_STRIP)
 	$(transform-to-stripped-keep-symbols)
 
@@ -126,11 +139,9 @@ $(strip_output): $(strip_input)
 	@echo -e ${PRT_TGT}"target Unstripped:"${CL_RST}" $(PRIVATE_MODULE) ($@)"
 	$(copy-file-to-target-with-cp)
 endif
-endif
 endif # my_strip_module
-
 
 $(cleantarget): PRIVATE_CLEAN_FILES += \
     $(linked_module) \
     $(symbolic_output) \
-    $(compress_output)
+    $(strip_output)

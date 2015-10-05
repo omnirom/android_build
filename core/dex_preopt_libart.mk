@@ -24,6 +24,13 @@ PRELOADED_CLASSES := $(call word-colon,1,$(firstword \
 COMPILED_CLASSES := $(call word-colon,1,$(firstword \
     $(filter %system/etc/compiled-classes,$(PRODUCT_COPY_FILES))))
 
+# Default to debug version to help find bugs.
+# Set USE_DEX2OAT_DEBUG to false for only building non-debug versions.
+ifneq ($(USE_DEX2OAT_DEBUG), false)
+DEX2OAT = $(DEX2OATD)
+DEX2OAT_DEPENDENCY = $(DEX2OATD_DEPENDENCY)
+endif
+
 # start of image reserved address space
 LIBART_IMG_HOST_BASE_ADDRESS   := 0x60000000
 LIBART_IMG_TARGET_BASE_ADDRESS := 0x70000000
@@ -37,7 +44,7 @@ DEX2OAT_IMAGE_XMX := $(call get-product-default-property,dalvik.vm.image-dex2oat
 DEX2OAT_XMS := $(call get-product-default-property,dalvik.vm.dex2oat-Xms)
 DEX2OAT_XMX := $(call get-product-default-property,dalvik.vm.dex2oat-Xmx)
 
-ifeq ($(TARGET_ARCH),mips)
+ifeq ($(TARGET_ARCH),$(filter $(TARGET_ARCH),mips mips64))
 # MIPS specific overrides.
 # For MIPS the ART image is loaded at a lower address. This causes issues
 # with the image overlapping with memory on the host cross-compiling and
@@ -55,7 +62,7 @@ endif
 # $(1): the arch name.
 # $(2): the full path (including file name) of the corresponding .jar or .apk.
 define get-odex-file-path
-$(dir $(2))$(1)/$(basename $(notdir $(2))).odex
+$(dir $(2))oat/$(1)/$(basename $(notdir $(2))).odex
 endef
 
 # Returns the path to the image file (such as "/system/framework/<arch>/boot.art"
@@ -88,7 +95,7 @@ endif
 define dex2oat-one-file
 $(hide) rm -f $(2)
 $(hide) mkdir -p $(dir $(2))
-$(hide) $(DEX2OATD) \
+$(hide) $(DEX2OAT) \
 	--runtime-arg -Xms$(DEX2OAT_XMS) --runtime-arg -Xmx$(DEX2OAT_XMX) \
 	--boot-image=$(PRIVATE_DEX_PREOPT_IMAGE_LOCATION) \
 	--dex-file=$(1) \
@@ -96,7 +103,9 @@ $(hide) $(DEX2OATD) \
 	--oat-file=$(2) \
 	--android-root=$(PRODUCT_OUT)/system \
 	--instruction-set=$($(PRIVATE_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH) \
+	--instruction-set-variant=$($(PRIVATE_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT) \
 	--instruction-set-features=$($(PRIVATE_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES) \
-	--include-patch-information --runtime-arg -Xnorelocate --no-include-debug-symbols \
+	--include-patch-information --runtime-arg -Xnorelocate --no-generate-debug-info \
+	--abort-on-hard-verifier-error \
 	$(PRIVATE_DEX_PREOPT_FLAGS)
 endef

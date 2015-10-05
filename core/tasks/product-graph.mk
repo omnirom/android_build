@@ -61,7 +61,7 @@ define emit-product-node-props
 $(hide) echo \"$(1)\" [ \
 label=\"$(dir $(1))\\n$(notdir $(1))\\n\\n$(subst $(close_parenthesis),,$(subst $(open_parethesis),,$(PRODUCTS.$(strip $(1)).PRODUCT_MODEL)))\\n$(PRODUCTS.$(strip $(1)).PRODUCT_DEVICE)\" \
 $(if $(filter $(1),$(PRIVATE_PRODUCTS_FILTER)), style=\"filled\" fillcolor=\"#FFFDB0\",) \
-fontcolor=\"darkblue\" href=\"products/$(1).html\" \
+colorscheme=\"svg\" fontcolor=\"darkblue\" href=\"products/$(1).html\" \
 ] >> $(2)
 
 endef
@@ -109,7 +109,6 @@ $(OUT_DIR)/products/$(strip $(1)).txt: $(this_makefile)
 	$(hide) echo 'PRODUCT_EXTRA_RECOVERY_KEYS=$$(PRODUCTS.$(strip $(1)).PRODUCT_EXTRA_RECOVERY_KEYS)' >> $$@
 	$(hide) echo 'PRODUCT_PACKAGE_OVERLAYS=$$(PRODUCTS.$(strip $(1)).PRODUCT_PACKAGE_OVERLAYS)' >> $$@
 	$(hide) echo 'DEVICE_PACKAGE_OVERLAYS=$$(PRODUCTS.$(strip $(1)).DEVICE_PACKAGE_OVERLAYS)' >> $$@
-	$(hide) echo 'PRODUCT_TAGS=$$(PRODUCTS.$(strip $(1)).PRODUCT_TAGS)' >> $$@
 	$(hide) echo 'PRODUCT_SDK_ADDON_NAME=$$(PRODUCTS.$(strip $(1)).PRODUCT_SDK_ADDON_NAME)' >> $$@
 	$(hide) echo 'PRODUCT_SDK_ADDON_COPY_FILES=$$(PRODUCTS.$(strip $(1)).PRODUCT_SDK_ADDON_COPY_FILES)' >> $$@
 	$(hide) echo 'PRODUCT_SDK_ADDON_COPY_MODULES=$$(PRODUCTS.$(strip $(1)).PRODUCT_SDK_ADDON_COPY_MODULES)' >> $$@
@@ -117,7 +116,6 @@ $(OUT_DIR)/products/$(strip $(1)).txt: $(this_makefile)
 	$(hide) echo 'PRODUCT_DEFAULT_WIFI_CHANNELS=$$(PRODUCTS.$(strip $(1)).PRODUCT_DEFAULT_WIFI_CHANNELS)' >> $$@
 	$(hide) echo 'PRODUCT_DEFAULT_DEV_CERTIFICATE=$$(PRODUCTS.$(strip $(1)).PRODUCT_DEFAULT_DEV_CERTIFICATE)' >> $$@
 	$(hide) echo 'PRODUCT_RESTRICT_VENDOR_FILES=$$(PRODUCTS.$(strip $(1)).PRODUCT_RESTRICT_VENDOR_FILES)' >> $$@
-	$(hide) echo 'PRODUCT_FACTORY_RAMDISK_MODULES=$$(PRODUCTS.$(strip $(1)).PRODUCT_FACTORY_RAMDISK_MODULES)' >> $$@
 	$(hide) echo 'PRODUCT_VENDOR_KERNEL_HEADERS=$$(PRODUCTS.$(strip $(1)).PRODUCT_VENDOR_KERNEL_HEADERS)' >> $$@
 
 $(call product-debug-filename, $(p)): \

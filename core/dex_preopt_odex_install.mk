@@ -33,10 +33,6 @@ endif
 ifeq (,$(strip $(built_dex)$(my_prebuilt_src_file))) # contains no java code
 LOCAL_DEX_PREOPT :=
 endif
-# if module oat file requested in data, disable LOCAL_DEX_PREOPT, will default location to dalvik-cache
-ifneq (,$(filter $(LOCAL_MODULE),$(PRODUCT_DEX_PREOPT_PACKAGES_IN_DATA)))
-LOCAL_DEX_PREOPT :=
-endif
 # if WITH_DEXPREOPT_BOOT_IMG_ONLY=true and module is not in boot class path skip
 ifeq (true,$(WITH_DEXPREOPT_BOOT_IMG_ONLY))
 ifeq ($(filter $(DEXPREOPT_BOOT_JARS_MODULES),$(LOCAL_MODULE)),)
@@ -50,28 +46,21 @@ built_installed_odex :=
 ifdef LOCAL_DEX_PREOPT
 dexpreopt_boot_jar_module := $(filter $(DEXPREOPT_BOOT_JARS_MODULES),$(LOCAL_MODULE))
 ifdef dexpreopt_boot_jar_module
-ifeq ($(DALVIK_VM_LIB),libdvm.so)
-built_odex := $(basename $(LOCAL_BUILT_MODULE)).odex
-installed_odex := $(basename $(LOCAL_INSTALLED_MODULE)).odex
-built_installed_odex := $(built_odex):$(installed_odex)
-else # libdvm.so
 # For libart, the boot jars' odex files are replaced by $(DEFAULT_DEX_PREOPT_INSTALLED_IMAGE).
 # We use this installed_odex trick to get boot.art installed.
 installed_odex := $(DEFAULT_DEX_PREOPT_INSTALLED_IMAGE)
 # Append the odex for the 2nd arch if we have one.
 installed_odex += $($(TARGET_2ND_ARCH_VAR_PREFIX)DEFAULT_DEX_PREOPT_INSTALLED_IMAGE)
-endif # libdvm.so
 else  # boot jar
-ifeq ($(DALVIK_VM_LIB),libdvm.so)
-built_odex := $(basename $(LOCAL_BUILT_MODULE)).odex
-installed_odex := $(basename $(LOCAL_INSTALLED_MODULE)).odex
-built_installed_odex := $(built_odex):$(installed_odex)
-
-$(built_odex) : $(DEXPREOPT_ONE_FILE_DEPENDENCY_BUILT_BOOT_PREOPT) \
-                $(DEXPREOPT_ONE_FILE_DEPENDENCY_TOOLS)
-else # libart
 ifeq ($(LOCAL_MODULE_CLASS),JAVA_LIBRARIES)
-# For a Java library, we build odex for both 1st arch and 2nd arch, if we have one.
+# For a Java library, by default we build odex for both 1st arch and 2nd arch.
+# But it can be overridden with "LOCAL_MULTILIB := first".
+ifneq (,$(filter $(PRODUCT_SYSTEM_SERVER_JARS),$(LOCAL_MODULE)))
+# For system server jars, we build for only "first".
+my_module_multilib := first
+else
+my_module_multilib := $(LOCAL_MULTILIB)
+endif
 # #################################################
 # Odex for the 1st arch
 my_2nd_arch_prefix :=
@@ -79,8 +68,10 @@ include $(BUILD_SYSTEM)/setup_one_odex.mk
 # #################################################
 # Odex for the 2nd arch
 ifdef TARGET_2ND_ARCH
+ifneq (first,$(my_module_multilib))
 my_2nd_arch_prefix := $(TARGET_2ND_ARCH_VAR_PREFIX)
 include $(BUILD_SYSTEM)/setup_one_odex.mk
+endif  # my_module_multilib is not first.
 endif  # TARGET_2ND_ARCH
 # #################################################
 else  # must be APPS
@@ -95,7 +86,6 @@ include $(BUILD_SYSTEM)/setup_one_odex.mk
 endif  # LOCAL_MULTILIB is both
 endif  # TARGET_2ND_ARCH
 endif  # LOCAL_MODULE_CLASS
-endif  # libart
 endif  # boot jar
 
 ifdef built_odex

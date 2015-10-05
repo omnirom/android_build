@@ -33,19 +33,8 @@ include $(BUILD_COMBOS)/mac_version.mk
 
 $(combo_2nd_arch_prefix)HOST_TOOLCHAIN_ROOT := prebuilts/gcc/darwin-x86/host/i686-apple-darwin-4.2.1
 $(combo_2nd_arch_prefix)HOST_TOOLCHAIN_PREFIX := $($(combo_2nd_arch_prefix)HOST_TOOLCHAIN_ROOT)/bin/i686-apple-darwin$(gcc_darwin_version)
-# Don't do anything if the toolchain is not there
-ifneq (,$(strip $(wildcard $($(combo_2nd_arch_prefix)HOST_TOOLCHAIN_PREFIX)-gcc)))
 $(combo_2nd_arch_prefix)HOST_CC  := $($(combo_2nd_arch_prefix)HOST_TOOLCHAIN_PREFIX)-gcc
 $(combo_2nd_arch_prefix)HOST_CXX := $($(combo_2nd_arch_prefix)HOST_TOOLCHAIN_PREFIX)-g++
-ifneq ($(filter 10.8 10.9, $(mac_sdk_version)),)
-# Mac SDK 10.8+ no longer has stdarg.h, etc
-host_toolchain_header := $($(combo_2nd_arch_prefix)HOST_TOOLCHAIN_ROOT)/lib/gcc/i686-apple-darwin$(gcc_darwin_version)/4.2.1/include
-$(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -isystem $(host_toolchain_header)
-endif
-else
-$(combo_2nd_arch_prefix)HOST_CC := gcc
-$(combo_2nd_arch_prefix)HOST_CXX := g++
-endif # $(HOST_TOOLCHAIN_PREFIX)-gcc exists
 
 # gcc location for clang; to be updated when clang is updated
 # HOST_TOOLCHAIN_ROOT is a Darwin-specific define
@@ -54,6 +43,7 @@ $(combo_2nd_arch_prefix)HOST_TOOLCHAIN_FOR_CLANG := $($(combo_2nd_arch_prefix)HO
 $(combo_2nd_arch_prefix)HOST_AR := $(AR)
 
 $(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -isysroot $(mac_sdk_root) -mmacosx-version-min=$(mac_sdk_version) -DMACOSX_DEPLOYMENT_TARGET=$(mac_sdk_version)
+$(combo_2nd_arch_prefix)HOST_GLOBAL_CPPFLAGS += -isystem $(mac_sdk_path)/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1
 $(combo_2nd_arch_prefix)HOST_GLOBAL_LDFLAGS += -isysroot $(mac_sdk_root) -Wl,-syslibroot,$(mac_sdk_root) -mmacosx-version-min=$(mac_sdk_version)
 
 $(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += -fPIC -funwind-tables
@@ -66,12 +56,6 @@ $(combo_2nd_arch_prefix)HOST_JNILIB_SUFFIX := .jnilib
 $(combo_2nd_arch_prefix)HOST_GLOBAL_CFLAGS += \
     -include $(call select-android-config-h,darwin-x86)
 
-ifneq ($(filter 10.7 10.7.% 10.8 10.8.%, $(build_mac_version)),)
-       $(combo_2nd_arch_prefix)HOST_RUN_RANLIB_AFTER_COPYING := false
-else
-       $(combo_2nd_arch_prefix)HOST_RUN_RANLIB_AFTER_COPYING := true
-       PRE_LION_DYNAMIC_LINKER_OPTIONS := -Wl,-dynamic
-endif
 $(combo_2nd_arch_prefix)HOST_GLOBAL_ARFLAGS := cqs
 
 ############################################################
@@ -94,14 +78,16 @@ $(hide) $(PRIVATE_CXX) \
         -o $@ \
         -install_name @rpath/$(notdir $@) \
         -Wl,-rpath,@loader_path/../$(notdir $($(PRIVATE_2ND_ARCH_VAR_PREFIX)HOST_OUT_SHARED_LIBRARIES)) \
+        -Wl,-rpath,@loader_path/$(notdir $($(PRIVATE_2ND_ARCH_VAR_PREFIX)HOST_OUT_SHARED_LIBRARIES)) \
         $(PRIVATE_LDFLAGS)
 endef
 
 define transform-host-o-to-executable-inner
 $(hide) $(PRIVATE_CXX) \
         -Wl,-rpath,@loader_path/../$(notdir $($(PRIVATE_2ND_ARCH_VAR_PREFIX)HOST_OUT_SHARED_LIBRARIES)) \
+        -Wl,-rpath,@loader_path/$(notdir $($(PRIVATE_2ND_ARCH_VAR_PREFIX)HOST_OUT_SHARED_LIBRARIES)) \
         -o $@ \
-        $(PRE_LION_DYNAMIC_LINKER_OPTIONS) -Wl,-headerpad_max_install_names \
+        -Wl,-headerpad_max_install_names \
         $($(PRIVATE_2ND_ARCH_VAR_PREFIX)HOST_GLOBAL_LD_DIRS) \
         $(if $(PRIVATE_NO_DEFAULT_COMPILER_FLAGS),, \
            $(PRIVATE_HOST_GLOBAL_LDFLAGS) \

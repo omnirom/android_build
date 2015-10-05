@@ -40,7 +40,13 @@ include $(BUILD_SYSTEM)/dynamic_binary.mk
 
 # Define PRIVATE_ variables from global vars
 my_target_global_ld_dirs := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_GLOBAL_LD_DIRS)
+my_target_libprofile_rt := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBPROFILE_RT)
+my_target_libgcov := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBGCOV)
+ifeq ($(LOCAL_NO_LIBGCC),true)
+my_target_libgcc :=
+else
 my_target_libgcc := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBGCC)
+endif
 my_target_libatomic := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_LIBATOMIC)
 my_target_crtbegin_so_o := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_CRTBEGIN_SO_O)
 my_target_crtend_so_o := $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_CRTEND_SO_O)
@@ -57,14 +63,20 @@ my_target_crtend_so_o := $(wildcard $(my_ndk_sysroot_lib)/crtend_so.o)
 endif
 $(linked_module): PRIVATE_TARGET_GLOBAL_LD_DIRS := $(my_target_global_ld_dirs)
 $(linked_module): PRIVATE_TARGET_GLOBAL_LDFLAGS := $(my_target_global_ldflags)
+$(linked_module): PRIVATE_TARGET_LIBPROFILE_RT := $(my_target_libprofile_rt)
+$(linked_module): PRIVATE_TARGET_LIBGCOV := $(my_target_libgcov)
 $(linked_module): PRIVATE_TARGET_LIBGCC := $(my_target_libgcc)
 $(linked_module): PRIVATE_TARGET_LIBATOMIC := $(my_target_libatomic)
 $(linked_module): PRIVATE_TARGET_CRTBEGIN_SO_O := $(my_target_crtbegin_so_o)
 $(linked_module): PRIVATE_TARGET_CRTEND_SO_O := $(my_target_crtend_so_o)
 
-$(linked_module): $(all_objects) $(all_libraries) \
-                  $(LOCAL_ADDITIONAL_DEPENDENCIES) \
-                  $(my_target_crtbegin_so_o) $(my_target_crtend_so_o)
+$(linked_module): \
+        $(all_objects) \
+        $(all_libraries) \
+        $(my_target_crtbegin_so_o) \
+        $(my_target_crtend_so_o) \
+        $(LOCAL_MODULE_MAKEFILE) \
+        $(LOCAL_ADDITIONAL_DEPENDENCIES)
 	$(transform-o-to-shared-lib)
 
 endif  # skip_build_from_source

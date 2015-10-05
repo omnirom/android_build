@@ -87,6 +87,7 @@ endif
 # file, tag the module as "gnu".  Search for "*_GPL*", "*_LGPL*" and "*_MPL*"
 # so that we can also find files like MODULE_LICENSE_GPL_AND_AFL
 #
+license_files := $(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*)
 gpl_license_file := $(call find-parent-file,$(LOCAL_PATH),MODULE_LICENSE*_GPL* MODULE_LICENSE*_MPL* MODULE_LICENSE*_LGPL*)
 ifneq ($(gpl_license_file),)
   my_module_tags += gnu
@@ -220,7 +221,12 @@ LOCAL_AIDL_INCLUDES += $(FRAMEWORKS_BASE_JAVA_SRC_DIRS)
 endif # LOCAL_SDK_VERSION
 $(aidl_java_sources): PRIVATE_AIDL_FLAGS := -b $(addprefix -p,$(aidl_preprocess_import)) -I$(LOCAL_PATH) -I$(LOCAL_PATH)/src $(addprefix -I,$(LOCAL_AIDL_INCLUDES))
 
-$(aidl_java_sources): $(intermediates.COMMON)/src/%.java: $(TOPDIR)$(LOCAL_PATH)/%.aidl $(LOCAL_ADDITIONAL_DEPENDENCIES) $(AIDL) $(aidl_preprocess_import)
+$(aidl_java_sources): $(intermediates.COMMON)/src/%.java: \
+        $(TOPDIR)$(LOCAL_PATH)/%.aidl \
+        $(LOCAL_MODULE_MAKEFILE) \
+        $(LOCAL_ADDITIONAL_DEPENDENCIES) \
+        $(AIDL) \
+        $(aidl_preprocess_import)
 	$(transform-aidl-to-java)
 -include $(aidl_java_sources:%.java=%.P)
 
@@ -376,7 +382,7 @@ endif # java_resource_file_groups
 # LOCAL_SOURCE_FILES_ALL_GENERATED is set only if the module does not have static source files,
 # but generated source files in its LOCAL_INTERMEDIATE_SOURCE_DIR.
 # You have to set up the dependency in some other way.
-need_compile_java := $(strip $(all_java_sources)$(all_res_assets))$(LOCAL_STATIC_JAVA_LIBRARIES)$(filter true,$(LOCAL_SOURCE_FILES_ALL_GENERATED))
+need_compile_java := $(strip $(all_java_sources)$(all_res_assets)$(java_resource_sources))$(LOCAL_STATIC_JAVA_LIBRARIES)$(filter true,$(LOCAL_SOURCE_FILES_ALL_GENERATED))
 ifdef need_compile_java
 
 full_static_java_libs := \
@@ -414,10 +420,11 @@ $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_STATIC_JAVA_LIBRARIES := $(full_static_ja
 #                 be up-to-date.
 ifdef LOCAL_IS_HOST_MODULE
 ifeq ($(USE_CORE_LIB_BOOTCLASSPATH),true)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-deps,core-libart-hostdex,$(LOCAL_IS_HOST_MODULE))
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH := -bootclasspath $(call java-lib-files,core-libart-hostdex,$(LOCAL_IS_HOST_MODULE))
 
 full_shared_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
-full_java_lib_deps := $(call java-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+full_java_lib_deps := $(call java-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE)) \
+    $(full_shared_java_libs)
 else
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH :=
 
@@ -564,27 +571,27 @@ endif # !LOCAL_UNINSTALLABLE_MODULE
 ###########################################################
 ## CHECK_BUILD goals
 ###########################################################
-
-ifdef java_alternative_checked_module
-  LOCAL_CHECKED_MODULE := $(java_alternative_checked_module)
-endif
-
+my_checked_module :=
 # If nobody has defined a more specific module for the
 # checked modules, use LOCAL_BUILT_MODULE.
-ifndef LOCAL_CHECKED_MODULE
-  LOCAL_CHECKED_MODULE := $(LOCAL_BUILT_MODULE)
+ifdef LOCAL_CHECKED_MODULE
+  my_checked_module := $(LOCAL_CHECKED_MODULE)
+else ifdef java_alternative_checked_module
+  my_checked_module := $(java_alternative_checked_module)
+else
+  my_checked_module := $(LOCAL_BUILT_MODULE)
 endif
 
 # If they request that this module not be checked, then don't.
 # PLEASE DON'T SET THIS.  ANY PLACES THAT SET THIS WITHOUT
 # GOOD REASON WILL HAVE IT REMOVED.
 ifdef LOCAL_DONT_CHECK_MODULE
-  LOCAL_CHECKED_MODULE :=
+  my_checked_module :=
 endif
 # Don't check build target module defined for the 2nd arch
 ifndef LOCAL_IS_HOST_MODULE
 ifdef LOCAL_2ND_ARCH_VAR_PREFIX
-  LOCAL_CHECKED_MODULE :=
+  my_checked_module :=
 endif
 endif
 
@@ -603,7 +610,7 @@ ALL_MODULES.$(my_register_name).PATH := \
 ALL_MODULES.$(my_register_name).TAGS := \
     $(ALL_MODULES.$(my_register_name).TAGS) $(my_module_tags)
 ALL_MODULES.$(my_register_name).CHECKED := \
-    $(ALL_MODULES.$(my_register_name).CHECKED) $(LOCAL_CHECKED_MODULE)
+    $(ALL_MODULES.$(my_register_name).CHECKED) $(my_checked_module)
 ALL_MODULES.$(my_register_name).BUILT := \
     $(ALL_MODULES.$(my_register_name).BUILT) $(LOCAL_BUILT_MODULE)
 ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
@@ -640,6 +647,21 @@ endif
 
 INSTALLABLE_FILES.$(LOCAL_INSTALLED_MODULE).MODULE := $(my_register_name)
 
+##########################################################
+# Track module-level dependencies.
+# Use $(LOCAL_MODULE) instead of $(my_register_name) to ignore module's bitness.
+ALL_DEPS.MODULES := $(sort $(ALL_DEPS.MODULES) $(LOCAL_MODULE))
+ALL_DEPS.$(LOCAL_MODULE).ALL_DEPS := $(sort \
+  $(ALL_MODULES.$(LOCAL_MODULE).ALL_DEPS) \
+  $(LOCAL_STATIC_LIBRARIES) \
+  $(LOCAL_WHOLE_STATIC_LIBRARIES) \
+  $(LOCAL_SHARED_LIBRARIES) \
+  $(LOCAL_STATIC_JAVA_LIBRARIES) \
+  $(LOCAL_JAVA_LIBRARIES)\
+  $(LOCAL_JNI_SHARED_LIBRARIES))
+
+ALL_DEPS.$(LOCAL_MODULE).LICENSE := $(sort $(ALL_DEPS.$(LOCAL_MODULE).LICENSE) $(license_files))
+
 ###########################################################
 ## Take care of my_module_tags
 ###########################################################
@@ -669,11 +691,91 @@ h_or_t := target
 endif
 
 ifdef j_or_n
-$(j_or_n) $(h_or_t) $(j_or_n)-$(h_or_t) : $(LOCAL_CHECKED_MODULE)
+$(j_or_n) $(h_or_t) $(j_or_n)-$(h_or_t) : $(my_checked_module)
 ifneq (,$(filter $(my_module_tags),tests))
-$(j_or_n)-$(h_or_t)-tests $(j_or_n)-tests $(h_or_t)-tests : $(LOCAL_CHECKED_MODULE)
+$(j_or_n)-$(h_or_t)-tests $(j_or_n)-tests $(h_or_t)-tests : $(my_checked_module)
 endif
 endif
+
+###########################################################
+# JACK
+###########################################################
+ifdef LOCAL_JACK_ENABLED
+ifdef need_compile_java
+
+full_static_jack_libs := \
+    $(foreach lib,$(LOCAL_STATIC_JAVA_LIBRARIES), \
+      $(call intermediates-dir-for, \
+        JAVA_LIBRARIES,$(lib),$(LOCAL_IS_HOST_MODULE),COMMON)/classes.jack)
+
+ifeq ($(my_prefix),TARGET_)
+ifeq ($(LOCAL_SDK_VERSION),)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES := $(call jack-lib-files,core-libart)
+else
+ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),current)
+# LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS.
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES := $(call jack-lib-files,android_stubs_current)
+else ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),system_current)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES := $(call jack-lib-files,android_system_stubs_current)
+else
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES := $(call jack-lib-files,sdk_v$(LOCAL_SDK_VERSION))
+endif # current or system_current
+endif # LOCAL_SDK_VERSION
+endif # TARGET_
+
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_STATIC_JACK_LIBRARIES := $(full_static_jack_libs)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JACK_VM_ARGS := $(LOCAL_JACK_VM_ARGS)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JACK_EXTRA_ARGS := $(LOCAL_JACK_EXTRA_ARGS)
+
+ifdef LOCAL_IS_HOST_MODULE
+ifeq ($(USE_CORE_LIB_BOOTCLASSPATH),true)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES := $(call jack-lib-files,core-libart-hostdex,$(LOCAL_IS_HOST_MODULE))
+full_shared_jack_libs := $(call jack-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+full_jack_lib_deps := $(call jack-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+else
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_BOOTCLASSPATH_JAVA_LIBRARIES :=
+full_shared_jack_libs := $(call jack-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+full_jack_lib_deps := $(full_shared_jack_libs)
+endif # USE_CORE_LIB_BOOTCLASSPATH
+else # !LOCAL_IS_HOST_MODULE
+full_shared_jack_libs := $(call jack-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+full_jack_lib_deps := $(call jack-lib-deps,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+endif # !LOCAL_IS_HOST_MODULE
+full_jack_libs := $(full_shared_jack_libs) $(full_static_jack_libs) $(LOCAL_JACK_CLASSPATH)
+full_jack_lib_deps += $(full_static_jack_libs) $(LOCAL_JACK_CLASSPATH)
+
+# This is set by packages that are linking to other packages that export
+# shared libraries, allowing them to make use of the code in the linked apk.
+ifneq ($(apk_libraries),)
+  link_apk_jack_libraries := \
+      $(foreach lib,$(apk_libraries), \
+        $(call intermediates-dir-for, \
+              APPS,$(lib),,COMMON)/classes.jack)
+
+  # link against the jar with full original names (before proguard processing).
+  full_shared_jack_libs += $(link_apk_jack_libraries)
+  full_jack_libs += $(link_apk_jack_libraries)
+  full_jack_lib_deps += $(link_apk_jack_libraries)
+endif
+
+# This is set by packages that contain instrumentation, allowing them to
+# link against the package they are instrumenting.  Currently only one such
+# package is allowed.
+ifdef LOCAL_INSTRUMENTATION_FOR
+
+   # link against the jar with full original names (before proguard processing).
+   link_instr_classes_jack := $(link_instr_intermediates_dir.COMMON)/classes.noshrob.jack
+   full_jack_libs += $(link_instr_classes_jack)
+   full_jack_lib_deps += $(link_instr_classes_jack)
+endif
+
+endif  # need_compile_java
+
+# Propagate local configuration options to this target.
+$(LOCAL_INTERMEDIATE_TARGETS) : PRIVATE_ALL_JACK_LIBRARIES:= $(full_jack_libs)
+$(LOCAL_INTERMEDIATE_TARGETS) : PRIVATE_JARJAR_RULES := $(LOCAL_JARJAR_RULES)
+
+endif # LOCAL_JACK_ENABLED
 
 ###########################################################
 ## NOTICE files
