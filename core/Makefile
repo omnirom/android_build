@@ -928,12 +928,12 @@ $(RECOVERY_INSTALL_OTA_KEYS): $(OTA_PUBLIC_KEYS) $(DUMPKEY_JAR) $(extra_keys)
 RECOVERYIMAGE_ID_FILE := $(PRODUCT_OUT)/recovery.id
 # $(1): output file
 define build-recoveryimage-target
-  @echo ----- Making recovery image ------
+  @echo -e ${PRT_IMG}"----- Making recovery image ------"${CL_RST}
   $(hide) mkdir -p $(TARGET_RECOVERY_OUT)
   $(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc $(TARGET_RECOVERY_ROOT_OUT)/tmp
-  @echo Copying baseline ramdisk...
+  @echo -e ${PRT_IMG}"Copying baseline ramdisk..."${CL_RST}
   $(hide) rsync -a $(TARGET_ROOT_OUT) $(TARGET_RECOVERY_OUT) # "cp -Rf" fails to overwrite broken symlinks on Mac.
-  @echo Modifying ramdisk contents...
+  @echo -e ${PRT_IMG}"Modifying ramdisk contents..."${CL_RST}
   $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init*.rc
   $(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/
   $(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/sepolicy
@@ -943,6 +943,8 @@ define build-recoveryimage-target
   $(hide) rm -rf $(TARGET_RECOVERY_ROOT_OUT)/res/*
   $(hide) cp -rf $(recovery_resources_common)/* $(TARGET_RECOVERY_ROOT_OUT)/res
   $(hide) cp -f $(recovery_font) $(TARGET_RECOVERY_ROOT_OUT)/res/images/font.png
+  $(hide) $(foreach item,$(recovery_root_private), \
+    cp -rf $(item) $(TARGET_RECOVERY_OUT)/)
   $(hide) $(foreach item,$(recovery_resources_private), \
     cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/)
   $(hide) $(foreach item,$(recovery_fstab), \
@@ -950,20 +952,11 @@ define build-recoveryimage-target
   $(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/res/keys
   $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
           > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-  $(hide) $(MKBOOTFS) -d $(TARGET_OUT) $(TARGET_RECOVERY_ROOT_OUT) | $(MINIGZIP) > $(recovery_ramdisk)
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
-    $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1).unsigned, \
-    $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1) --id > $(RECOVERYIMAGE_ID_FILE))
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)),\
-    $(BOOT_SIGNER) /recovery $(1) $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(1))
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
-    $(VBOOT_SIGNER) $(FUTILITY) $(1).unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(1).keyblock $(1))
-  $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE))
-  @echo ----- Made recovery image: $(1) --------
+  $(hide) $(SED_INPLACE) 's/ro.build.date.utc=.*/ro.build.date.utc=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+  $(hide) $(SED_INPLACE) 's/ro.adb.secure=1/ro.adb.secure=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
 endef
 
-$(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
-		$(INSTALLED_RAMDISK_TARGET) \
+$(recovery_uncompressed_ramdisk): $(MKBOOTFS) \
 		$(INSTALLED_BOOTIMAGE_TARGET) \
 		$(INTERNAL_RECOVERYIMAGE_FILES) \
 		$(recovery_initrc) $(recovery_sepolicy) $(recovery_kernel) \
@@ -971,56 +964,28 @@ $(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
 		$(recovery_build_prop) $(recovery_resource_deps) $(recovery_root_deps) \
 		$(recovery_fstab) \
 		$(RECOVERY_INSTALL_OTA_KEYS)
-		@echo -e ${PRT_IMG}"----- Making recovery filesystem ------"${CL_RST}
-		$(hide) mkdir -p $(TARGET_RECOVERY_OUT)
-		$(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/etc $(TARGET_RECOVERY_ROOT_OUT)/tmp
-		@echo -e ${PRT_IMG}"Copying baseline ramdisk..."${CL_RST}
-		$(hide) cp -R $(TARGET_ROOT_OUT) $(TARGET_RECOVERY_OUT)
-		@echo -e ${PRT_IMG}"Modifying ramdisk contents..."${CL_RST}
-		$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/init*.rc
-		$(hide) cp -f $(recovery_initrc) $(TARGET_RECOVERY_ROOT_OUT)/
-		$(hide) rm -f $(TARGET_RECOVERY_ROOT_OUT)/sepolicy
-		$(hide) cp -f $(recovery_sepolicy) $(TARGET_RECOVERY_ROOT_OUT)/sepolicy
-		$(hide) -cp $(TARGET_ROOT_OUT)/init.recovery.*.rc $(TARGET_RECOVERY_ROOT_OUT)/
-		$(hide) cp -f $(recovery_binary) $(TARGET_RECOVERY_ROOT_OUT)/sbin/
-		$(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/bin
-		$(hide) mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/res
-		$(hide) cp -rf $(recovery_resources_common)/* $(TARGET_RECOVERY_ROOT_OUT)/res
-		$(hide) cp -f $(recovery_font) $(TARGET_RECOVERY_ROOT_OUT)/res/images/font.png
-		$(hide) $(foreach item,$(recovery_root_private), \
-		  cp -rf $(item) $(TARGET_RECOVERY_OUT)/)
-		$(hide) $(foreach item,$(recovery_resources_private), \
-		  cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/)
-		$(hide) $(foreach item,$(recovery_fstab), \
-		  cp -f $(item) $(TARGET_RECOVERY_ROOT_OUT)/etc/recovery.fstab)
-		$(hide) cp $(RECOVERY_INSTALL_OTA_KEYS) $(TARGET_RECOVERY_ROOT_OUT)/res/keys
-		$(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
-		        > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-		$(SED_INPLACE) 's/ro.build.date.utc=.*/ro.build.date.utc=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-		$(SED_INPLACE) 's/ro.adb.secure=1/ro.adb.secure=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-		@echo -e ${PRT_IMG}"----- Made recovery filesystem -------- $(TARGET_RECOVERY_ROOT_OUT)"${CL_RST}
-
-$(recovery_uncompressed_ramdisk): $(MINIGZIP)
+	$(call build-recoveryimage-target, $@)
 	@echo -e ${PRT_IMG}"----- Making uncompressed recovery ramdisk ------"${CL_RST}
-	$(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
+	$(hide) $(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
 
 $(recovery_ramdisk): $(MKBOOTFS) \
 	$(recovery_uncompressed_ramdisk)
-	@echo -e ${PRT_IMG}"----- Making recovery ramdisk ------"${CL_RST}
-	$(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
+	@echo -e ${PRT_IMG}"----- Making compressed recovery ramdisk ------"${CL_RST}
+	$(hide) $(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
 
 ifndef BOARD_CUSTOM_BOOTIMG_MK
-$(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTIMG) \
-		$(recovery_ramdisk) \
-		$(recovery_kernel)
+$(INSTALLED_RECOVERYIMAGE_TARGET): $(recovery_ramdisk) $(MKBOOTIMG) $(recovery_kernel)
 	@echo -e ${PRT_IMG}"----- Making recovery image ------"${CL_RST}
 	$(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
-	$(hide) $(call assert-max-image-size,$@,$(BOARD_RECOVERYIMAGE_PARTITION_SIZE))
+	$(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
+		$(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1).unsigned, \
+		$(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1) --id > $(RECOVERYIMAGE_ID_FILE))
+	$(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)),\
+		$(BOOT_SIGNER) /recovery $(1) $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(1))
+	$(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
+		$(VBOOT_SIGNER) $(FUTILITY) $(1).unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(1).keyblock $(1))
+	$(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE))
 	@echo -e ${PRT_IMG}"----- Made recovery image: $@ --------"${CL_RST}
-endif
-
-ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VERITY))
-	$(BOOT_SIGNER) /recovery $@ $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $@
 endif
 
 $(RECOVERY_RESOURCE_ZIP): $(INSTALLED_RECOVERYIMAGE_TARGET)
