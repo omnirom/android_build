@@ -970,7 +970,8 @@ define build-recoveryimage-target
   $(hide) rm -rf $(TARGET_RECOVERY_ROOT_OUT)/res/*
   mkdir -p $(TARGET_RECOVERY_ROOT_OUT)/system/bin
   $(hide) cp -rf $(recovery_resources_common)/* $(TARGET_RECOVERY_ROOT_OUT)/res
-  $(hide) cp -f $(recovery_font) $(TARGET_RECOVERY_ROOT_OUT)/res/images/font.png
+  $(hide) $(foreach item,$(recovery_root_private), \
+    cp -rf $(item) $(TARGET_RECOVERY_OUT)/)
   $(hide) $(foreach item,$(TARGET_PRIVATE_RES_DIRS), \
     cp -rf $(item) $(TARGET_RECOVERY_ROOT_OUT)/$(newline))
   $(hide) $(foreach item,$(recovery_fstab), \
@@ -989,32 +990,36 @@ define build-recoveryimage-target
   @touch $(TARGET_RECOVERY_ROOT_TIMESTAMP)
 endef
 
-$(recovery_uncompressed_ramdisk): $(MINIGZIP) \
-        $(TARGET_RECOVERY_ROOT_TIMESTAMP)
-        @echo ----- Making uncompressed recovery ramdisk ------
-        $(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
+$(recovery_uncompressed_ramdisk): $(MKBOOTFS) \
+        $(INSTALLED_BOOTIMAGE_TARGET) \
+        $(INTERNAL_RECOVERYIMAGE_FILES) \
+        $(recovery_initrc) $(recovery_sepolicy) $(recovery_kernel) \
+        $(INSTALLED_2NDBOOTLOADER_TARGET) \
+        $(recovery_build_prop) $(recovery_resource_deps) $(recovery_root_deps) \
+        $(recovery_fstab) \
+        $(RECOVERY_INSTALL_OTA_KEYS)
+    $(call build-recoveryimage-target, $@)
+    @echo ----- Making uncompressed recovery ramdisk ------
+    $(hide) $(MKBOOTFS) $(TARGET_RECOVERY_ROOT_OUT) > $@
 
 $(recovery_ramdisk): $(MKBOOTFS) \
         $(recovery_uncompressed_ramdisk)
-        @echo ----- Making recovery ramdisk ------
-        $(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
+        @echo ----- Making compressed recovery ramdisk ------
+        $(hide) $(MINIGZIP) < $(recovery_uncompressed_ramdisk) > $@
 
 ifndef BOARD_CUSTOM_BOOTIMG_MK
-$(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTIMG) \
-        $(recovery_ramdisk) \
-        $(recovery_kernel)
-  @echo ----- Making recovery image ------
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
-    $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1).unsigned, \
-    $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1) --id > $(RECOVERYIMAGE_ID_FILE))
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)),\
-    $(BOOT_SIGNER) /recovery $(1) $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(1))
-  $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
-    $(VBOOT_SIGNER) $(FUTILITY) $(1).unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_SUBKEY).vbprivk $(1).keyblock $(1))
-  $(if $(filter true,BOARD_USES_RECOVERY_AS_BOOT), \
-    $(hide) $(call assert-max-image-size,$(1),$(BOARD_BOOTIMAGE_PARTITION_SIZE)), \
-    $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE)))
-  @echo ----- Made recovery image: $(1) --------
+$(INSTALLED_RECOVERYIMAGE_TARGET): $(recovery_ramdisk) $(MKBOOTIMG) $(recovery_kernel)
+        @echo ----- Making recovery image ------
+        $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
+        $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
+                $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1).unsigned, \
+                $(hide) $(MKBOOTIMG) $(INTERNAL_RECOVERYIMAGE_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(1) --id > $(RECOVERYIMAGE_ID_FILE))
+        $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)),\
+                $(BOOT_SIGNER) /recovery $(1) $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).pk8 $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VERITY_SIGNING_KEY).x509.pem $(1))
+        $(if $(filter true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT)), \
+                $(VBOOT_SIGNER) $(FUTILITY) $(1).unsigned $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbpubk $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_KEY).vbprivk $(1).keyblock $(1))
+        $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE))
+        @echo ----- Made recovery image: $@ --------
 endif
 
 ifeq ($(BOARD_USES_RECOVERY_AS_BOOT),true)
@@ -1035,19 +1040,6 @@ $(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
 		$(call pretty,"Target boot image from recovery: $@")
 		$(call build-recoveryimage-target, $@)
 endif
-
-TARGET_RECOVERY_ROOT_TIMESTAMP := $(TARGET_RECOVERY_OUT)/root.ts
-
-$(TARGET_RECOVERY_ROOT_TIMESTAMP): $(INTERNAL_RECOVERY_FILES) \
-		$(INSTALLED_RAMDISK_TARGET) \
-		$(INSTALLED_BOOTIMAGE_TARGET) \
-		$(INTERNAL_RECOVERYIMAGE_FILES) \
-		$(recovery_initrc) $(recovery_sepolicy) \
-		$(INSTALLED_2NDBOOTLOADER_TARGET) \
-		$(recovery_build_prop) $(recovery_resource_deps) \
-		$(recovery_fstab) \
-		$(RECOVERY_INSTALL_OTA_KEYS)
-		$(call build-recoveryimage-target, $@)
 
 ifdef RECOVERY_RESOURCE_ZIP
 $(RECOVERY_RESOURCE_ZIP): $(INSTALLED_RECOVERYIMAGE_TARGET) | $(ZIPTIME)
