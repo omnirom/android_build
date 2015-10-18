@@ -24,7 +24,7 @@ PRODUCT_PACKAGES := \
     InputDevices \
     Keyguard \
     LatinIME \
-    Launcher3 \
+    Launcher2 \
     OneTimeInitializer \
     Provision \
     SystemUI \
