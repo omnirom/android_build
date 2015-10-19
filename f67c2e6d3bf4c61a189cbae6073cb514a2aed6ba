@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_2598ba6a",
+        "filename": "core/Makefile",
+        "patchSetId": 6
+      },
+      "lineNbr": 954,
+      "author": {
+        "id": 1000004
+      },
+      "writtenOn": "2015-10-19T20:22:21Z",
+      "side": 1,
+      "message": "This would override what goes on in recovery_ramdisk and therefore sort of overrides what goes on in recovery_uncompressed_ramdisk, which may affect how custom boot image make file operate depending on if they pack their own ramdisk or if they depend on the rules for either recovery_ramdisk or recovery_uncompressed_ramdisk... might be fine though and just cause there to be 2 possible ways that those files could be created.",
+      "revId": "f67c2e6d3bf4c61a189cbae6073cb514a2aed6ba",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
