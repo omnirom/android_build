@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_ceba4b1d",
+        "filename": "core/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 959,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-23T21:10:11Z",
+      "side": 1,
+      "message": "Some of these dependencies should probably move to $(INSTALLED_RECOVERYIMAGE_TARGET). For recovery-in-boot setups, we can\u0027t depend on the finished bootimage here (but we somehow need to depend on a complete baseline ramdisk).",
+      "revId": "441aee5f15f20a27f3e8a591abed55784dc80c6f",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_0eb15341",
+        "filename": "core/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 975,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-23T21:10:11Z",
+      "side": 1,
+      "message": "For easier comparison with AOSP, maybe move this block directly under the definition of build-recoveryramdisk-target.",
+      "revId": "441aee5f15f20a27f3e8a591abed55784dc80c6f",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_eead0fe9",
+        "filename": "core/Makefile",
+        "patchSetId": 4
+      },
+      "lineNbr": 1003,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-23T21:10:11Z",
+      "side": 1,
+      "message": "should this call build-recoveryimage-target instead?",
+      "revId": "441aee5f15f20a27f3e8a591abed55784dc80c6f",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
