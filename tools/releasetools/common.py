@@ -422,7 +422,8 @@ def GetBootableImage(name, prebuilt_name, unpack_dir, tree_subdir,
   custom_bootimg_mk = os.getenv('MKBOOTIMG')
   if custom_bootimg_mk:
     bootimage_path = os.path.join(os.getenv('OUT'), "boot.img")
-    os.mkdir(prebuilt_dir)
+    if not os.path.exists(prebuilt_dir):
+      os.mkdir(prebuilt_dir)
     shutil.copyfile(bootimage_path, prebuilt_path)
   if os.path.exists(prebuilt_path):
     print "using prebuilt %s from BOOTABLE_IMAGES..." % (prebuilt_name,)
