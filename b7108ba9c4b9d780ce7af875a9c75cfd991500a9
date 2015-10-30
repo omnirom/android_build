@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_39469f7a",
+        "filename": "core/Makefile",
+        "patchSetId": 10
+      },
+      "lineNbr": 929,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-30T16:04:16Z",
+      "side": 1,
+      "message": "I guess this parameter applies only to build-recoveryimage-target and should be before line 958.",
+      "revId": "b7108ba9c4b9d780ce7af875a9c75cfd991500a9",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_59416360",
+        "filename": "core/Makefile",
+        "patchSetId": 10
+      },
+      "lineNbr": 987,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-30T16:04:16Z",
+      "side": 1,
+      "message": "Why did you remove the MKBOOTIMG dependency here?",
+      "revId": "b7108ba9c4b9d780ce7af875a9c75cfd991500a9",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_192bdb96",
+        "filename": "core/Makefile",
+        "patchSetId": 10
+      },
+      "lineNbr": 1001,
+      "author": {
+        "id": 1000768
+      },
+      "writtenOn": "2015-10-30T16:04:16Z",
+      "side": 1,
+      "message": "If a target is called recoveryimage-nodeps, I\u0027d expect it to build a recoveryimage, not only a ramdisk.",
+      "revId": "b7108ba9c4b9d780ce7af875a9c75cfd991500a9",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
