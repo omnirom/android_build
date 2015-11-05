@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_ab025476",
+        "filename": "tools/repopick.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 191,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2015-11-05T22:15:47Z",
+      "side": 1,
+      "message": "need to fix conditional, do not need this twice",
+      "revId": "f27af8a0eeaa952612e9c32840ecfcfc6f6297fb",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_cbd598e8",
+        "filename": "tools/repopick.py",
+        "patchSetId": 1
+      },
+      "lineNbr": 197,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2015-11-05T22:15:47Z",
+      "side": 1,
+      "message": "removing this, just verifies that the list is actually sorted by printing to the terminal",
+      "revId": "f27af8a0eeaa952612e9c32840ecfcfc6f6297fb",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
