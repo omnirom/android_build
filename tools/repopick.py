@@ -245,8 +245,13 @@ for change in args.change_number:
         committer_date   = current_revision['commit']['committer']['date'].replace(date_fluff, '')
         subject          = current_revision['commit']['subject']
 
+        # remove symbols from committer name
+        # from http://stackoverflow.com/questions/9942594/unicodeencodeerror-ascii-codec-cant-encode-character-u-xa0-in-position-20?rq=1
+        author_name = author_name.encode('ascii', 'ignore').decode('ascii')
+        committer_name = committer_name.encode('ascii', 'ignore').decode('ascii')
+
         # Check if commit is not open, skip it.
-        if (status != 'OPEN' and status != 'NEW'): 
+        if (status != 'OPEN' and status != 'NEW'):
             print("Change is not open. Skipping the cherry pick.")
             continue;
 
