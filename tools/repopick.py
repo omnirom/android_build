@@ -177,6 +177,7 @@ while(True):
     project_name_to_path[ppaths[1]] = ppaths[0]
 
 # Check for range of commits and rebuild array
+# and always sort ascending by change number
 changelist = []
 for change in args.change_number:
     c=str(change)
@@ -184,10 +185,16 @@ for change in args.change_number:
         templist = c.split('-')
         for i in range(int(templist[0]), int(templist[1]) + 1):
             changelist.append(str(i))
+    elif ',' in c:
+        templist = c.split(',')
+        for i in range(int(templist[0]), int(templist[1]) + 1):
+            changelist.append(str(i))
     else:
         changelist.append(c)
 
-args.change_number = changelist
+args.change_number = sorted(changelist)
+
+print(args.change_number)
 
 # Iterate through the requested change numbers
 for change in args.change_number:
