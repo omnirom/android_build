@@ -187,8 +187,9 @@ for change in args.change_number:
     else:
         changelist.append(c)
 
-args.change_number = changelist
+args.change_number = sorted(int(c) for c in changelist)
 
+print(args.change_number)
 # Iterate through the requested change numbers
 for change in args.change_number:
     if not args.quiet:
