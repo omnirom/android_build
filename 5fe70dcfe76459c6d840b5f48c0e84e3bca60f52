@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_3eea00ab",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 184,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:19:17Z",
+      "side": 0,
+      "message": "since we only expect one, it\u0027s probably better to force an error here.\n\nfirst, last \u003d c.split(\u0027-\u0027)\n\nwhich replaces index lookups on templist respectively",
+      "revId": "5fe70dcfe76459c6d840b5f48c0e84e3bca60f52",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_5ee5c4d8",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 186,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:19:17Z",
+      "side": 0,
+      "message": "changelist.extend(i for i in range(int(templist[0]), int(templist[1]) + 1))",
+      "revId": "5fe70dcfe76459c6d840b5f48c0e84e3bca60f52",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}

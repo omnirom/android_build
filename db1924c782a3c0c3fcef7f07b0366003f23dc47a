@@ -1,0 +1,55 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_1ecf3c5f",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 180,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:19:17Z",
+      "side": 1,
+      "message": "you don\u0027t actually do any sorting here..",
+      "revId": "db1924c782a3c0c3fcef7f07b0366003f23dc47a",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_7ee088ca",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 186,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:19:17Z",
+      "side": 1,
+      "message": "why add 2 syntax supports? a comma doesn\u0027t imply a range",
+      "revId": "db1924c782a3c0c3fcef7f07b0366003f23dc47a",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_9edb4c23",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 197,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:19:17Z",
+      "side": 1,
+      "message": "args.change_number \u003d sorted(int(c) for c in changelist)",
+      "revId": "db1924c782a3c0c3fcef7f07b0366003f23dc47a",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
