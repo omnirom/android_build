@@ -1,0 +1,123 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_deef94ae",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 77,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "if args.change_number\n\nif not args.change_number",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_fe3db826",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 195,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "should be d.lstrip(\")]}\u0027\\n\")",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_1e417caf",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 196,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "rule of thumb is, if you need to think about it, the code is bad (I know this is copied and pasted though).",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_7e32c85a",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 204,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "try:\n    # load\nexcept ValueError:\n    # do some error",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_5e370449",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 206,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "holey shit.\n\nchangelist.extend(d[\u0027_number\u0027] for d in data)",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_3e3c402b",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 207,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "or even better.\n\nargs.change_number \u003d sorted(d[\u0027_number\u0027] for d in data)",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "b8f5b13e_9e2d8cff",
+        "filename": "tools/repopick.py",
+        "patchSetId": 5
+      },
+      "lineNbr": 210,
+      "author": {
+        "id": 1000044
+      },
+      "writtenOn": "2015-11-10T23:44:54Z",
+      "side": 1,
+      "message": "better to do sorted(changelist), I don\u0027t know if the original order is guaranteed. knowing gerrit, it isn\u0027t.",
+      "revId": "9f85a9f84660eaa8f17ff0e7bd7d277d1b3973f3",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
