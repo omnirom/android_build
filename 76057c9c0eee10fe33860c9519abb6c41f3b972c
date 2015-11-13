@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_c156992b",
+        "filename": "core/Makefile",
+        "patchSetId": 3
+      },
+      "lineNbr": 1089,
+      "author": {
+        "id": 1000515
+      },
+      "writtenOn": "2015-11-13T22:27:27Z",
+      "side": 1,
+      "message": "endef ?",
+      "range": {
+        "startLine": 1089,
+        "startChar": 0,
+        "endLine": 1089,
+        "endChar": 5
+      },
+      "revId": "76057c9c0eee10fe33860c9519abb6c41f3b972c",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
