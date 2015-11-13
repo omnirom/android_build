@@ -1063,7 +1063,7 @@ systemimage_intermediates := \
 BUILT_SYSTEMIMAGE := $(systemimage_intermediates)/system.img
 
 # Create symlink /system/vendor to /vendor if necessary.
-ifneq ($(call ifdef_any_of,BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE BOARD_NEEDS_VENDORIMAGE_SYMLINK),)
+ifdef BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE
 define create-system-vendor-symlink
 $(hide) if [ -d $(TARGET_OUT)/vendor ] && [ ! -h $(TARGET_OUT)/vendor ]; then \
   echo 'Non-symlink $(TARGET_OUT)/vendor detected!' 1>&2; \
