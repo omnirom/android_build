@@ -952,7 +952,7 @@ define build-recoveryramdisk
   $(hide) cat $(INSTALLED_DEFAULT_PROP_TARGET) $(recovery_build_prop) \
           > $(TARGET_RECOVERY_ROOT_OUT)/default.prop
   $(hide) $(SED_INPLACE) 's/ro.build.date.utc=.*/ro.build.date.utc=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
-  $(hide) $(SED_INPLACE) 's/ro.adb.secure=1/ro.adb.secure=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
+  $(hide) $(SED_INPLACE) 's/ro.adb.secure=0/ro.adb.secure=0/g' $(TARGET_RECOVERY_ROOT_OUT)/default.prop
 endef
 
 # $(1): output file
