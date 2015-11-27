@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "b8f5b13e_adb024da",
+        "filename": "core/Makefile",
+        "patchSetId": 1
+      },
+      "lineNbr": 955,
+      "author": {
+        "id": 1001243
+      },
+      "writtenOn": "2015-11-27T06:44:06Z",
+      "side": 1,
+      "message": "This effectively does nothing. You\u0027re replacing ro.adb.secure\u003d0 with ro.adb.secure\u003d0",
+      "revId": "53e42145a3f20428e08aeb4093cbbc953f8dd48c",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
