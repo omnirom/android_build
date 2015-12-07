@@ -240,8 +240,7 @@ for change in args.change_number:
 
     # Clean up the result
     d = d.split('\n')[1]
-    matchObj = re.match(r'\[\s*\]', d)
-    if matchObj:
+    if re.match(r'\[\s*\]', d):
         sys.stderr.write('ERROR: Change number %s was not found on the server\n' % change)
         sys.exit(1)
 
