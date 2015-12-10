@@ -47,8 +47,10 @@ PRODUCT_PACKAGES += \
     vibrator.default \
     power.default
 
+ifneq ($(TARGET_USE_DEVICE_AUDIO_EFFECTS_CONF),true)
 PRODUCT_COPY_FILES := \
         frameworks/av/media/libeffects/data/audio_effects.conf:system/etc/audio_effects.conf
+endif
 
 PRODUCT_PROPERTY_OVERRIDES += \
     ro.carrier=unknown
