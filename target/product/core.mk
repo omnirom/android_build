@@ -31,7 +31,7 @@ PRODUCT_PACKAGES += \
     CaptivePortalLogin \
     CertInstaller \
     Contacts \
-    DeskClock \
+    DeskClock2 \
     DocumentsUI \
     DownloadProviderUi \
     Email \
