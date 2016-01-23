@@ -225,6 +225,12 @@ def create_dependency_manifest(dependencies):
         revision = dependency.get("revision", default_rev)
         remote = dependency.get("remote", default_rem)
 
+        # check for existing projects
+        if check_project_exists(repository, revision, target_path):
+            for project in iterate_manifests():
+                if project.get("name") == repository:
+                    print("project exists:", repository)
+
         # not adding an organization should default to android_team
         # only apply this to github
         if remote == "github":
