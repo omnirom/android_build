@@ -216,6 +216,21 @@ def parse_dependency_file(location):
         raise Exception("ERROR: malformed dependency file")
     return dependencies
 
+# if there is any conflict with existing and new
+# delete the roomservice.xml file and create new
+def check_manifest_problems(dependencies):
+    for dependency in dependencies:
+        repository = dependency.get("repository")
+        target_path = dependency.get("target_path")
+        revision = dependency.get("revision", default_rev)
+        remote = dependency.get("remote", default_rem)
+
+        # check for existing projects
+        for project in iterate_manifests():
+            if project.get("path") == target_path and project.get("revision") != revision:
+                print("WARNING: force recreation - detected conflict in revisions for repostory ", repository)
+                os.remove('/'.join([local_manifest_dir, "roomservice.xml"]))
+                return
 
 def create_dependency_manifest(dependencies):
     projects = []
@@ -248,6 +263,7 @@ def fetch_dependencies(device):
         raise Exception("ERROR: could not find your device "
                         "folder location, bailing out")
     dependencies = parse_dependency_file(location)
+    check_manifest_problems(dependencies)
     create_dependency_manifest(dependencies)
 
 
