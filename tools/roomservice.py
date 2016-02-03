@@ -114,12 +114,13 @@ def check_project_exists(url, revision, path):
     for project in iterate_manifests():
         if project.get("name") == url and project.get("revision") == revision and project.get("path") == path:
             return True
+        if os.path.isdir(project.get("path")):
+            return True
     return False
 
 
 def check_target_exists(directory):
     return os.path.isdir(directory)
-
 
 # Use the indent function from http://stackoverflow.com/a/4590052
 def indent(elem, level=0):
@@ -145,7 +146,7 @@ def create_manifest_project(url, directory,
 
     if project_exists:
         return None
-
+ 
     project = ES.Element("project",
                          attrib={
                              "path": directory,
