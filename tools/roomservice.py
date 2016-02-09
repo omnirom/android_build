@@ -229,8 +229,20 @@ def check_manifest_problems(dependencies):
         for project in iterate_manifests():
             if project.get("path") == target_path and project.get("revision") != revision:
                 print("WARNING: force recreation - detected conflict in revisions for repostory ", repository)
-                os.remove('/'.join([local_manifest_dir, "roomservice.xml"]))
-                return
+                # os.remove('/'.join([local_manifest_dir, "roomservice.xml"]))
+                delete_dupes(repository)
+
+def delete_dupes(repository):
+    file = ES.parse('/'.join([local_manifest_dir, "roomservice.xml"]))
+    print ('\n\n' + repository + '\n\n')
+    if not 'device' in repository:
+#        root = file.getroot()
+        for element in file.iter():
+            for subelement in element:
+                la = subelement.get('project')
+                if la is not None:
+                    elem.remove(subelement)
+                file.write(sys.stdout)
 
 def create_dependency_manifest(dependencies):
     projects = []
@@ -263,8 +275,8 @@ def fetch_dependencies(device):
         raise Exception("ERROR: could not find your device "
                         "folder location, bailing out")
     dependencies = parse_dependency_file(location)
-    check_manifest_problems(dependencies)
     create_dependency_manifest(dependencies)
+    check_manifest_problems(dependencies)
     fetch_device(device)
 
 def check_device_exists(device):
