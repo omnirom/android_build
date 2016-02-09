@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "98faad2e_9b7fe4db",
+        "filename": "tools/roomservice.py",
+        "patchSetId": 2
+      },
+      "lineNbr": 241,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2016-02-09T14:58:57Z",
+      "side": 1,
+      "message": "temp logging",
+      "revId": "1975af01a4d622670fb46ccba6f5474c871f0067",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
