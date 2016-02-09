@@ -228,8 +228,15 @@ def check_manifest_problems(dependencies):
         # check for existing projects
         for project in iterate_manifests():
             if project.get("path") == target_path and project.get("revision") != revision:
-                print("WARNING: force recreation - detected conflict in revisions for repostory ", repository)
-                os.remove('/'.join([local_manifest_dir, "roomservice.xml"]))
+                print("WARNING: detected conflict in revisions for repostory ", repository)
+                oldDep = str(project.get(repository))
+                file = ES.parse('/'.join([local_manifest_dir, "roomservice.xml"]))
+                conflictRoot = file.getroot()
+                for project2 in conflictRoot.findall('project'):
+                    newDep = str(project2.find('revision'))
+                    if newDep == oldDep:
+                        conflictRoot.remove(project2)
+                file.write('/'.join([local_manifest_dir, "roomservice.xml"]))
                 return
 
 def create_dependency_manifest(dependencies):
