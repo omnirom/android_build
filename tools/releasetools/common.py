@@ -1352,7 +1352,8 @@ PARTITION_TYPES = { "bml": "BML",
                     "f2fs": "EMMC",
                     "yaffs2": "MTD",
                     "vfat": "EMMC",
-                    "squashfs": "EMMC" }
+                    "squashfs": "EMMC",
+                    "osip": "OSIP" }
 
 def GetTypeAndDevice(mount_point, info):
   fstab = info["fstab"]
