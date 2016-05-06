@@ -69,15 +69,18 @@ def search_gerrit_for_device(device):
     git_req = urllib.request.Request(git_search_url)
     try:
         response = urllib.request.urlopen(git_req)
-    except urllib.request.HTTPError:
-        raise Exception("There was an issue connecting to gerrit."
+    except urllib.request.HTTPError as e:
+        print("There was an issue connecting to gerrit."
                         " Please try again in a minute")
-    # Skip silly gerrit "header"
-    response.readline()
-    git_data = json.load(response)
-    device_data = check_repo_exists(git_data, device)
-    print("found the {} device repo".format(device))
-    return device_data
+    except urllib.request.URLError as e:
+        print("WARNING: No network connection available.")
+    else:
+        # Skip silly gerrit "header"
+        response.readline()
+        git_data = json.load(response)
+        device_data = check_repo_exists(git_data, device)
+        print("found the {} device repo".format(device))
+        return device_data
 
 
 def parse_device_directory(device_url, device):
@@ -285,18 +288,19 @@ def fetch_device(device):
     if check_device_exists(device):
         print("WARNING: Trying to fetch a device that's already there")
     git_data = search_gerrit_for_device(device)
-    device_url = git_data['id']
-    device_dir = parse_device_directory(device_url, device)
-    project = create_manifest_project(device_url,
+    if git_data is not None:
+        device_url = git_data['id']
+        device_dir = parse_device_directory(device_url, device)
+        project = create_manifest_project(device_url,
                                       device_dir,
                                       remote=default_team_rem)
-    if project is not None:
-        manifest = append_to_manifest(project)
-        write_to_manifest(manifest)
-    # In case a project was written to manifest, but never synced
-    if project is not None or not check_target_exists(device_dir):
-        print("syncing the device config")
-        os.system('repo sync -f --no-clone-bundle %s' % device_dir)
+        if project is not None:
+            manifest = append_to_manifest(project)
+            write_to_manifest(manifest)
+        # In case a project was written to manifest, but never synced
+        if project is not None or not check_target_exists(device_dir):
+            print("syncing the device config")
+            os.system('repo sync -f --no-clone-bundle %s' % device_dir)
 
 
 if __name__ == '__main__':
