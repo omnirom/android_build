@@ -38,7 +38,7 @@ except ImportError:
 # set this to the default remote to use in repo
 default_rem = "omnirom"
 # set this to the default revision to use (branch/tag name)
-default_rev = "android-4.3"
+default_rev = "android-7.0"
 # set this to the remote that you use for projects from your team repos
 # example fetch="https://github.com/omnirom"
 default_team_rem = "omnirom"
