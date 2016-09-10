@@ -154,7 +154,7 @@ ifeq ($(KERNEL_TOOLCHAIN_PREFIX),)
     ifeq ($(KERNEL_ARCH),arm64)
 	KERNEL_TOOLCHAIN_PREFIX := aarch64-linux-android-
     else
-	KERNEL_TOOLCHAIN_PREFIX := arm-eabi-
+	KERNEL_TOOLCHAIN_PREFIX := arm-linux-androideabi-
     endif
 endif
 else
