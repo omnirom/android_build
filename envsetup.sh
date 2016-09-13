@@ -295,6 +295,7 @@ function set_stuff_for_environment()
     # With this environment variable new GCC can apply colors to warnings/errors
     export GCC_COLORS='error=01;31:warning=01;35:note=01;36:caret=01;32:locus=01:quote=01'
     export ASAN_OPTIONS=detect_leaks=0
+    export USE_NINJA=false
 }
 
 function set_sequence_number()
