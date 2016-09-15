@@ -644,6 +644,7 @@ function lunch()
     fi
 
     local product=$(echo -n $selection | sed -e "s/-.*$//")
+    check_product $product
     TARGET_PRODUCT=$product \
     TARGET_BUILD_VARIANT=$variant \
     build_build_var_cache
