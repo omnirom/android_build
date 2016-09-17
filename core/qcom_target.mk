@@ -10,12 +10,4 @@ ifeq ($(BOARD_USES_QCOM_HARDWARE),true)
         TARGET_GLOBAL_CFLAGS += -DQCOM_BSP
         TARGET_GLOBAL_CPPFLAGS += -DQCOM_BSP
     endif
-
-    # Enable DirectTrack for legacy targets
-    ifneq ($(filter caf caf-bfam,$(TARGET_QCOM_AUDIO_VARIANT)),)
-        ifeq ($(BOARD_USES_LEGACY_ALSA_AUDIO),true)
-            TARGET_GLOBAL_CFLAGS += -DQCOM_DIRECTTRACK
-            TARGET_GLOBAL_CPPFLAGS += -DQCOM_DIRECTTRACK
-        endif
-    endif
 endif
