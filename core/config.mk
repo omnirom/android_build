@@ -714,6 +714,8 @@ endif
 
 FRAMEWORK_MANIFEST_FILE := system/libhidl/manifest.xml
 FRAMEWORK_COMPATIBILITY_MATRIX_FILE := hardware/interfaces/compatibility_matrix.xml
+# Rules for QCOM targets
+include $(BUILD_SYSTEM)/qcom_target.mk
 
 # ###############################################################
 # Set up final options.
@@ -896,9 +898,6 @@ ifndef KATI
 include $(BUILD_SYSTEM)/ninja_config.mk
 include $(BUILD_SYSTEM)/soong_config.mk
 endif
-
-# Rules for QCOM targets
-include $(BUILD_SYSTEM)/qcom_target.mk
 
 ifneq ($(CUSTOM_BUILD),)
 ## We need to be sure the global selinux policies are included
