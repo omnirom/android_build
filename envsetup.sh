@@ -129,14 +129,6 @@ function check_product()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
-
-    if (echo -n $1 | grep -q -e "^omni_") ; then
-       CUSTOM_BUILD=$(echo -n $1 | sed -e 's/^omni_//g')
-    else
-       CUSTOM_BUILD=
-    fi
-    export CUSTOM_BUILD
-
         TARGET_PRODUCT=$1 \
         TARGET_BUILD_VARIANT= \
         TARGET_BUILD_TYPE= \
@@ -674,6 +666,13 @@ function lunch()
         echo
         return 1
     fi
+
+    if (echo -n $product | grep -q -e "^omni_") ; then
+       CUSTOM_BUILD=$(echo -n $product | sed -e 's/^omni_//g')
+    else
+       CUSTOM_BUILD=
+    fi
+    export CUSTOM_BUILD
 
     export TARGET_PRODUCT=$product
     export TARGET_BUILD_VARIANT=$variant
