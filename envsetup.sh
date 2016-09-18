@@ -144,14 +144,6 @@ function check_product()
         echo "Couldn't locate the top of the tree.  Try setting TOP." >&2
         return
     fi
-
-    if (echo -n $1 | grep -q -e "^custom_") ; then
-       CUSTOM_BUILD=$(echo -n $1 | sed -e 's/^custom_//g')
-    else
-       CUSTOM_BUILD=
-    fi
-    export CUSTOM_BUILD
-
         TARGET_PRODUCT=$1 \
         TARGET_BUILD_VARIANT= \
         TARGET_BUILD_TYPE= \
@@ -672,13 +664,16 @@ function lunch()
         return 1
     fi
 
-    export TARGET_PRODUCT=$(get_build_var TARGET_PRODUCT)
-    export TARGET_BUILD_VARIANT=$(get_build_var TARGET_BUILD_VARIANT)
-    if [ -n "$version" ]; then
-      export TARGET_PLATFORM_VERSION=$(get_build_var TARGET_PLATFORM_VERSION)
+    if (echo -n $product | grep -q -e "^omni_") ; then
+       CUSTOM_BUILD=$(echo -n $product | sed -e 's/^omni_//g')
     else
-      unset TARGET_PLATFORM_VERSION
+       CUSTOM_BUILD=
     fi
+    export CUSTOM_BUILD
+
+    export TARGET_PRODUCT=$product
+    export TARGET_BUILD_VARIANT=$variant
+    export TARGET_PLATFORM_VERSION=$(get_build_var TARGET_PLATFORM_VERSION)
     export TARGET_BUILD_TYPE=release
 
     echo
