@@ -1,4 +1,13 @@
-NINJA ?= prebuilts/ninja/$(HOST_PREBUILT_TAG)/ninja
+NINJA := $(shell command -v ninja)
+ifeq ($(NINJA),)
+  NINJA := $(shell command -v ninja-build)
+
+  ifeq ($(NINJA),)
+    NINJA := prebuilts/ninja/$(HOST_PREBUILT_TAG)/ninja
+  endif
+endif
+
+$(info Using '$(NINJA)' binary on '$(HOST_PREBUILT_TAG)')
 
 ifeq ($(USE_SOONG),true)
 USE_SOONG_FOR_KATI := true
