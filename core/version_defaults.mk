@@ -68,24 +68,6 @@ ifeq "" "$(PLATFORM_VERSION_CODENAME)"
   PLATFORM_VERSION_ALL_CODENAMES := $(PLATFORM_VERSION_CODENAME)
 endif
 
-ifeq "" "$(PLATFORM_SECURITY_PATCH)"
-  # Used to indicate the security patch that has been applied to the device.
-  #  It must signify that the build includes all security patches issued up through the designated Android Public Security Bulletin.
-  #  It must be of the form "YYYY-MM-DD" on production devices.
-  #  It must match one of the Android Security Patch Level strings of the Public Security Bulletins.
-  # 
-  #  If there is no $PLATFORM_SECURITY_PATCH set, keep it empty.
-  PLATFORM_SECURITY_PATCH := 2016-10-05
-endif
-
-ifeq "" "$(PLATFORM_BASE_OS)"
-  # Used to indicate the base os applied to the device.
-  # Can be an arbitrary string, but must be a single word.
-  #
-  # If there is no $PLATFORM_BASE_OS set, keep it empty.
-  PLATFORM_BASE_OS :=
-endif
-
 ifeq "" "$(DEFAULT_APP_TARGET_SDK)"
   # This is the default minSdkVersion and targetSdkVersion to use for
   # all .apks created by the build system.  It can be overridden by explicitly
@@ -97,6 +79,24 @@ ifeq "" "$(DEFAULT_APP_TARGET_SDK)"
   else
     DEFAULT_APP_TARGET_SDK := $(PLATFORM_VERSION_CODENAME)
   endif
+endif
+
+ifeq "" "$(PLATFORM_SECURITY_PATCH)"
+  # Used to indicate the security patch that has been applied to the device.
+  #  It must signify that the build includes all security patches issued up through the designated Android Public Security Bulletin.
+  #  It must be of the form "YYYY-MM-DD" on production devices.
+  #  It must match one of the Android Security Patch Level strings of the Public Security Bulletins.
+  # 
+  #  If there is no $PLATFORM_SECURITY_PATCH set, keep it empty.
+  PLATFORM_SECURITY_PATCH := 2016-11-05
+endif
+
+ifeq "" "$(PLATFORM_BASE_OS)"
+  # Used to indicate the base os applied to the device.
+  # Can be an arbitrary string, but must be a single word.
+  #
+  # If there is no $PLATFORM_BASE_OS set, keep it empty.
+  PLATFORM_BASE_OS :=
 endif
 
 ifeq "" "$(BUILD_ID)"
