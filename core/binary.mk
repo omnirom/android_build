@@ -228,9 +228,6 @@ ifneq ($(filter true always, $(LOCAL_FDO_SUPPORT)),)
     my_cflags += $($(LOCAL_2ND_ARCH_VAR_PREFIX)TARGET_FDO_OPTIMIZE_CFLAGS)
     my_fdo_build := true
   endif
-  # Disable ccache (or other compiler wrapper).
-  my_cc_wrapper :=
-  my_cxx_wrapper :=
 endif
 
 ###########################################################
