@@ -259,7 +259,7 @@ def LoadRecoveryFSTab(read_helper, fstab_version):
       line = line.strip()
       if not line or line.startswith("#"):
         continue
-      # <src> <mnt_point> <type> <mnt_flags and options> <fs_mgr_flags>
+      # <mnt_point> <type> <src> <mnt_flags and options> <fs_mgr_flags>
       pieces = line.split()
       if len(pieces) != 5:
         raise ValueError("malformed recovery.fstab line: \"%s\"" % (line,))
@@ -286,9 +286,9 @@ def LoadRecoveryFSTab(read_helper, fstab_version):
         if i.startswith("context="):
           context = i
 
-      mount_point = pieces[1]
-      d[mount_point] = Partition(mount_point=mount_point, fs_type=pieces[2],
-                                 device=pieces[0], length=length,
+      mount_point = pieces[0]
+      d[mount_point] = Partition(mount_point=mount_point, fs_type=pieces[1],
+                                 device=pieces[2], length=length,
                                  device2=None, context=context)
 
   else:
