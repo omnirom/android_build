@@ -225,6 +225,27 @@ load_all_product_makefiles := true
 endif
 endif
 
+#$(error TARGET_PRODUCT is "$(TARGET_PRODUCT)")
+#target_producttmp = $(TARGET_PRODUCT)
+#target_productwords = $(subst _, ,$(TARGET_PRODUCT))
+#TARGET_PRODUCT_VARIANT = $(word 3, $(target_productwords))
+#$(error TARGET_PRODUCT_VARIANT is "$(TARGET_PRODUCT_VARIANT)")
+#TARGET_PRODUCT_VARIANT := $(TARGET_PRODUCT_VARIANT)
+#TARGET_PRODUCT_tmp = $(subst _$(TARGET_PRODUCT_VARIANT),,$(TARGET_PRODUCT))
+#TARGET_PRODUCT := $(TARGET_PRODUCT_tmp)
+#$(error TARGET_PRODUCT is "$(TARGET_PRODUCT)")
+#$(error TARGET_PRODUCT_VARIANT is "$(TARGET_PRODUCT_VARIANT)")
+
+target_productwords = $(subst _, ,$(TARGET_PRODUCT))
+TARGET_PRODUCT_VARIANT = $(word 3, $(target_productwords))
+TARGET_PRODUCT_VARIANT := $(TARGET_PRODUCT_VARIANT)
+if TARGET_PRODUCT_VARIANT =""
+else
+TARGET_PRODUCT_tmp = $(subst _$(TARGET_PRODUCT_VARIANT),,$(TARGET_PRODUCT))
+endif
+TARGET_PRODUCT := $(TARGET_PRODUCT_tmp)
+$(error TARGET_PRODUCT is "$(TARGET_PRODUCT)")
+
 ifeq ($(load_all_product_makefiles),true)
 # Import all product makefiles.
 $(call import-products, $(all_product_makefiles))
