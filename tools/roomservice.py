@@ -49,8 +49,10 @@ android_team = "omnirom"
 # url to gerrit repository
 gerrit_url = "gerrit.omnirom.org"
 
-
 def check_repo_exists(git_data, device):
+    dev = [device.split("_")]
+    print (device[0][0])
+    device = dev[0][0]
     re_match = "^android_device_.*_{device}$".format(device=device)
     matches = filter(lambda x: re.match(re_match, x), git_data)
     if len(matches) != 1:
@@ -84,6 +86,9 @@ def search_gerrit_for_device(device):
 
 
 def parse_device_directory(device_url, device):
+    dev = [device.split("_")]
+    print (device[0][0])
+    device = dev[0][0]
     pattern = "^android_device_(?P<vendor>.+)_{}$".format(device)
     match = re.match(pattern, device_url)
 
@@ -190,6 +195,9 @@ def parse_device_from_manifest(device):
 
 
 def parse_device_from_folder(device):
+    dev = [device.split("_")]
+    print (device[0][0])
+    device = dev[0][0]
     search = []
     for sub_folder in os.listdir("device"):
         if os.path.isdir("device/%s/%s" % (sub_folder, device)):
@@ -316,6 +324,9 @@ def check_device_exists(device):
 
 
 def fetch_device(device):
+    dev = [device.split("_")]
+    print (device[0][0])
+    device = dev[0][0]
     if check_device_exists(device):
         print("WARNING: Trying to fetch a device that's already there")
     git_data = search_gerrit_for_device(device)
