@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "78209991_9eefdc1d",
+        "filename": "core/Makefile",
+        "patchSetId": 1
+      },
+      "lineNbr": 873,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2016-12-26T00:26:14Z",
+      "side": 1,
+      "message": "look at line 871 -- this is duplicate",
+      "revId": "dcc5907fd61601ba0561437cc25b3c2cca57d2bc",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "78209991_7ef400ed",
+        "filename": "core/Makefile",
+        "patchSetId": 1
+      },
+      "lineNbr": 1026,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2016-12-26T00:26:14Z",
+      "side": 1,
+      "message": "leave this in its old placs to reduce diffs from AOSP",
+      "revId": "dcc5907fd61601ba0561437cc25b3c2cca57d2bc",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
