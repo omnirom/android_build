@@ -125,17 +125,6 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   --payload_signer_args <args>
       Specify the arguments needed for payload signer.
 
-  --backup <boolean>
-      Enable or disable the execution of backuptool.sh.
-      Disabled by default.
-
-  --override_device <device>
-      Override device-specific asserts. Can be a comma-separated list.
-
-  --override_prop <boolean>
-      Override build.prop items with custom vendor init.
-      Enabled when TARGET_UNIFIED_DEVICE is defined in BoardConfig
-
 """
 
 import sys
@@ -2114,9 +2103,6 @@ def main(argv):
                                  "log_diff=",
                                  "payload_signer=",
                                  "payload_signer_args=",
-                                 "backup=",
-                                 "override_device=",
-                                 "override_prop="
                              ], extra_option_handler=option_handler)
 
   if len(args) != 2:
@@ -2174,6 +2160,15 @@ def main(argv):
 
   OPTIONS.target_tmp = OPTIONS.input_tmp
   OPTIONS.info_dict = common.LoadInfoDict(input_zip, OPTIONS.target_tmp)
+
+  if "ota_override_device" in OPTIONS.info_dict:
+    OPTIONS.override_device = OPTIONS.info_dict.get("ota_override_device")
+
+  if "ota_override_prop" in OPTIONS.info_dict:
+    OPTIONS.override_prop = OPTIONS.info_dict.get("ota_override_prop")
+
+  if "ota_backuptool" in OPTIONS.info_dict:
+    OPTIONS.backuptool = OPTIONS.info_dict.get("ota_backuptool")
 
   if OPTIONS.verbose:
     print "--- target info ---"
