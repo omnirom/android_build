@@ -21,9 +21,7 @@
 
 PRODUCT_PACKAGES := \
     libfwdlockengine \
-    OpenWnn \
     libWnnEngDic \
-    libWnnJpnDic \
     libwnndict \
     WAPPushManager
 
