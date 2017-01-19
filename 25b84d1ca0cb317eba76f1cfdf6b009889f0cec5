@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "78209991_46c4d247",
+        "filename": "core/tasks/kernel.mk",
+        "patchSetId": 2
+      },
+      "lineNbr": 178,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2017-01-19T21:36:33Z",
+      "side": 1,
+      "message": "is it really needed to print this only here?",
+      "revId": "25b84d1ca0cb317eba76f1cfdf6b009889f0cec5",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
