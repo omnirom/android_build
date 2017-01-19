@@ -1,0 +1,27 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "78209991_06181a1f",
+        "filename": "target/product/full_base.mk",
+        "patchSetId": 2
+      },
+      "lineNbr": 26,
+      "author": {
+        "id": 1000124
+      },
+      "writtenOn": "2017-01-19T03:31:02Z",
+      "side": 1,
+      "message": "probably can remove these too",
+      "range": {
+        "startLine": 24,
+        "startChar": 0,
+        "endLine": 26,
+        "endChar": 16
+      },
+      "revId": "145420251fe3417c189165a239a137dbb70a1532",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
