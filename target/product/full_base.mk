@@ -37,10 +37,12 @@ PRODUCT_PACKAGES += \
     PhaseBeam \
     PhotoTable
 
+ifeq ($(AOSP_SOUND_CONFIG),true)
 # Additional settings used in all AOSP builds
 PRODUCT_PROPERTY_OVERRIDES := \
     ro.config.ringtone=Ring_Synth_04.ogg \
     ro.config.notification_sound=pixiedust.ogg
+endif
 
 # Put en_US first in the list, so make it default.
 PRODUCT_LOCALES := en_US
