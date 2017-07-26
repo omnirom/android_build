@@ -54,7 +54,15 @@ ifneq (,$(findstring Macintosh,$(UNAME)))
   HOST_OS := darwin
 endif
 
-HOST_OS_EXTRA:=$(shell python -c "import platform; print(platform.platform())")
+HOST_OS_EXTRA := $(shell uname -rsm)
+ifeq ($(HOST_OS),linux)
+  ifneq ($(wildcard /etc/os-release),)
+    HOST_OS_EXTRA += $(shell source /etc/os-release; echo $$PRETTY_NAME)
+  endif
+else ifeq ($(HOST_OS),darwin)
+  HOST_OS_EXTRA += $(shell sw_vers -productVersion)
+endif
+HOST_OS_EXTRA := $(subst $(space),-,$(HOST_OS_EXTRA))
 
 # BUILD_OS is the real host doing the build.
 BUILD_OS := $(HOST_OS)

@@ -40,6 +40,8 @@ $(warning The build system needs unmodified output of grep.)
 $(error Please remove --color=always from your  $$GREP_OPTIONS)
 endif
 
+UNAME := $(shell uname -sm)
+
 # Standard source directories.
 SRC_DOCS:= $(TOPDIR)docs
 # TODO: Enforce some kind of layering; only add include paths
