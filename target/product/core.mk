@@ -51,6 +51,9 @@ PRODUCT_PACKAGES += \
     Settings \
     SharedStorageBackup \
     StorageManager \
-    VpnDialogs
+    Telecom \
+    TeleService \
+    VpnDialogs \
+    MmsService
 
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_base.mk)
