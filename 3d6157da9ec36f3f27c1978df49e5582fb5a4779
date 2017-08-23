@@ -1,0 +1,38 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "d692778d_6dc59291",
+        "filename": "core/Makefile",
+        "patchSetId": 1
+      },
+      "lineNbr": 2493,
+      "author": {
+        "id": 1000551
+      },
+      "writtenOn": "2017-08-23T21:12:22Z",
+      "side": 1,
+      "message": "move to vendor/omni",
+      "revId": "3d6157da9ec36f3f27c1978df49e5582fb5a4779",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    },
+    {
+      "key": {
+        "uuid": "fa3a2b86_f6c29f22",
+        "filename": "envsetup.sh",
+        "patchSetId": 1
+      },
+      "lineNbr": 557,
+      "author": {
+        "id": 1000551
+      },
+      "writtenOn": "2017-08-23T21:12:22Z",
+      "side": 1,
+      "message": "move to vendor/omni",
+      "revId": "3d6157da9ec36f3f27c1978df49e5582fb5a4779",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
