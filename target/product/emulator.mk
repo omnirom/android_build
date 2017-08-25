@@ -56,8 +56,12 @@ PRODUCT_PACKAGES += \
     android.hardware.biometrics.fingerprint@2.1-service \
     sensors.ranchu \
     android.hardware.graphics.composer@2.1-impl \
-	hwcomposer.goldfish \
-	hwcomposer.ranchu \
+    android.hardware.graphics.composer@2.1-service \
+    hwcomposer.goldfish \
+    hwcomposer.ranchu \
+    android.hardware.graphics.allocator@2.0-impl \
+    android.hardware.graphics.allocator@2.0-service \
+    android.hardware.graphics.mapper@2.0-impl
 
 PRODUCT_PACKAGES += \
     android.hardware.audio@2.0-impl \
@@ -66,16 +70,16 @@ PRODUCT_PACKAGES += \
     android.hardware.soundtrigger@2.0-impl
 
 PRODUCT_PACKAGES += \
-	android.hardware.keymaster@3.0-impl \
-	android.hardware.keymaster@3.0-service
+    android.hardware.keymaster@3.0-impl \
+    android.hardware.keymaster@3.0-service
 
 PRODUCT_PACKAGES += \
     android.hardware.gnss@1.0-service \
     android.hardware.gnss@1.0-impl
 
 PRODUCT_PACKAGES += \
-	android.hardware.sensors@1.0-impl \
-	android.hardware.sensors@1.0-service
+    android.hardware.sensors@1.0-impl \
+    android.hardware.sensors@1.0-service
 
 PRODUCT_PACKAGES += \
     android.hardware.power@1.0-service \
@@ -95,6 +99,12 @@ PRODUCT_COPY_FILES += \
     device/generic/goldfish/ueventd.ranchu.rc:root/ueventd.ranchu.rc \
     device/generic/goldfish/input/goldfish_rotary.idc:system/usr/idc/goldfish_rotary.idc \
     frameworks/native/data/etc/android.hardware.usb.accessory.xml:system/etc/permissions/android.hardware.usb.accessory.xml
+
+PRODUCT_COPY_FILES += \
+    device/generic/goldfish/manifest.xml:system/vendor/manifest.xml \
+    device/generic/goldfish/init.ranchu-core.sh:system/vendor/bin/init.ranchu-core.sh \
+    device/generic/goldfish/init.ranchu-net.sh:system/vendor/bin/init.ranchu-net.sh
+
 
 PRODUCT_PACKAGE_OVERLAYS := device/generic/goldfish/overlay
 
