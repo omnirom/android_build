@@ -165,6 +165,12 @@ PRODUCT_COPY_FILES += \
     device/generic/goldfish/audio_policy.conf:$(TARGET_COPY_OUT_VENDOR)/etc/audio_policy.conf
 
 
+PRODUCT_COPY_FILES += \
+    device/generic/goldfish/manifest.xml:system/vendor/manifest.xml \
+    device/generic/goldfish/init.ranchu-core.sh:system/vendor/bin/init.ranchu-core.sh \
+    device/generic/goldfish/init.ranchu-net.sh:system/vendor/bin/init.ranchu-net.sh
+
+
 PRODUCT_PACKAGE_OVERLAYS := device/generic/goldfish/overlay
 
 PRODUCT_CHARACTERISTICS := emulator

@@ -44,3 +44,5 @@
 /data/vendor/mediadrm(/.*)?            u:object_r:mediadrm_vendor_data_file:s0
 /data/vendor/var/run(/.*)?             u:object_r:varrun_file:s0
 
+/system/bin/init.ranchu-net.sh		u:object_r:goldfish_setup_exec:s0
+/system/bin/init.ranchu-core.sh		u:object_r:goldfish_setup_exec:s0
