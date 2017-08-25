@@ -886,7 +886,7 @@ def WriteFullOTAPackage(input_zip, output_file):
       metadata=metadata,
       info_dict=OPTIONS.info_dict)
 
-  assert HasRecoveryPatch(input_zip)
+  #assert HasRecoveryPatch(input_zip)
 
   # Assertions (e.g. downgrade check, device properties check).
   #ts = target_info.GetBuildProp("ro.build.date.utc")
