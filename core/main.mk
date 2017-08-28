@@ -272,9 +272,6 @@ endif
 # Bring in standard build system definitions.
 include $(BUILD_SYSTEM)/definitions.mk
 
-# Bring in Qualcomm helper macros
-include $(BUILD_SYSTEM)/qcom_utils.mk
-
 # Bring in dex_preopt.mk
 include $(BUILD_SYSTEM)/dex_preopt.mk
 
@@ -1111,7 +1108,7 @@ findbugs: $(INTERNAL_FINDBUGS_HTML_TARGET) $(INTERNAL_FINDBUGS_XML_TARGET)
 
 .PHONY: clean
 clean:
-	@rm -rf $(OUT_DIR)/* $(OUT_DIR)/..?* $(OUT_DIR)/.[!.]*
+	@rm -rf $(OUT_DIR)/*
 	@echo "Entire build directory removed."
 
 .PHONY: clobber
