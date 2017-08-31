@@ -37,7 +37,7 @@ ifneq ($(filter-out false,$(USE_CCACHE)),)
   export CCACHE_CPP2 := true
 
   # Detect if the system already has ccache installed to use instead of the prebuilt
-  ccache := $(shell command -v ccache)
+  ccache := $(shell which ccache)
 
   ifeq ($(ccache),)
     CCACHE_HOST_TAG := $(HOST_PREBUILT_TAG)

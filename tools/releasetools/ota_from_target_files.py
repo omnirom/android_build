@@ -131,13 +131,8 @@ Usage:  ota_from_target_files [flags] input_target_files output_ota_package
   --payload_signer_args <args>
       Specify the arguments needed for payload signer.
 
-  --backup <boolean>
-      Enable or disable the execution of backuptool.sh.
-      Disabled by default.
-
   --override_device <device>
       Override device-specific asserts. Can be a comma-separated list.
-
 """
 
 from __future__ import print_function
@@ -189,7 +184,6 @@ OPTIONS.log_diff = None
 OPTIONS.payload_signer = None
 OPTIONS.payload_signer_args = []
 OPTIONS.extracted_input = None
-OPTIONS.backuptool = False
 OPTIONS.override_device = 'auto'
 
 METADATA_NAME = 'META-INF/com/android/metadata'
@@ -206,7 +200,7 @@ def SignOutput(temp_zip_name, output_zip_name):
 
 def AppendAssertions(script, info_dict, oem_dicts=None):
   oem_props = info_dict.get("oem_fingerprint_properties")
-  if oem_props is None or len(oem_props) == 0:
+  if not oem_props:
     if OPTIONS.override_device == "auto":
       device = GetBuildProp("ro.product.device", info_dict)
     else:
@@ -414,14 +408,13 @@ def WriteFullOTAPackage(input_zip, output_zip):
       metadata=metadata,
       info_dict=OPTIONS.info_dict)
 
-  #assert HasRecoveryPatch(input_zip)
+  assert HasRecoveryPatch(input_zip)
 
   metadata["ota-type"] = "BLOCK"
 
-#  if not OPTIONS.omit_prereq:
-#    ts = GetBuildProp("ro.build.date.utc", OPTIONS.info_dict)
-#    ts_text = GetBuildProp("ro.build.date", OPTIONS.info_dict)
-#    script.AssertOlderBuild(ts, ts_text)
+  #ts = GetBuildProp("ro.build.date.utc", OPTIONS.info_dict)
+  #ts_text = GetBuildProp("ro.build.date", OPTIONS.info_dict)
+  #script.AssertOlderBuild(ts, ts_text)
 
   AppendAssertions(script, OPTIONS.info_dict, oem_dicts)
   device_specific.FullOTA_Assertions()
@@ -478,28 +471,12 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   script.AppendExtra("ifelse(is_mounted(\"/system\"), unmount(\"/system\"));")
   device_specific.FullOTA_InstallBegin()
 
-  if OPTIONS.backuptool:
-    script.Mount("/system")
-    script.RunBackup("backup")
-    script.Unmount("/system")
-
   system_progress = 0.75
 
   if OPTIONS.wipe_user_data:
     system_progress -= 0.1
   if HasVendorPartition(input_zip):
     system_progress -= 0.1
-
-  script.Print("#######################################");
-  script.Print("# _____            __  __  ______     #");
-  script.Print("#/\  __`\  /'\_/`\/\ \/\ \/\__  _\    #");
-  script.Print("#\ \ \/\ \/\  ``  \ \ ` \ \/_/\ \/    #");
-  script.Print("# \ \ \ \ \ \ \__\ \ \ . ` \ \ \ \    #");
-  script.Print("#  \ \ \_\ \ \ \_/\ \ \ \`\ \ \_\ \__ #");
-  script.Print("#   \ \_____\ \_\, \_\ \_\ \_\/\_____\#");
-  script.Print("#    \/_____/\/_/ \/_/\/_/\/_/\/_____/#");
-  script.Print("#                                     #");
-  script.Print("#######################################");
 
   # Place a copy of file_contexts.bin into the OTA package which will be used
   # by the recovery program.
@@ -522,10 +499,6 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   boot_img = common.GetBootableImage(
       "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
 
-  if OPTIONS.backuptool:
-    script.ShowProgress(0.2, 10)
-    script.RunBackup("restore")
-
   if HasVendorPartition(input_zip):
     script.ShowProgress(0.1, 0)
 
@@ -538,11 +511,9 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
   script.ShowProgress(0.05, 5)
-  script.Print("Flashing boot.img")
   script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.2, 10)
-  script.Print("Enjoy OMNI ROM!");
   device_specific.FullOTA_InstallEnd()
 
   if OPTIONS.extra_script is not None:
@@ -552,7 +523,6 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   if OPTIONS.wipe_user_data:
     script.ShowProgress(0.1, 10)
-    script.Print("Formatting /data")
     script.FormatPartition("/data")
 
   if OPTIONS.two_step:
@@ -1359,8 +1329,6 @@ def main(argv):
       OPTIONS.payload_signer_args = shlex.split(a)
     elif o == "--extracted_input_target_files":
       OPTIONS.extracted_input = a
-    elif o in ("--backup"):
-      OPTIONS.backuptool = bool(a.lower() == 'true')
     elif o in ("--override_device"):
       OPTIONS.override_device = a
     else:
@@ -1394,7 +1362,6 @@ def main(argv):
                                  "payload_signer=",
                                  "payload_signer_args=",
                                  "extracted_input_target_files=",
-                                 "backup=",
                                  "override_device=",
                              ], extra_option_handler=option_handler)
 
@@ -1424,6 +1391,9 @@ def main(argv):
     input_zip = zipfile.ZipFile(args[0], "r")
     OPTIONS.info_dict = common.LoadInfoDict(input_zip)
     common.ZipClose(input_zip)
+
+  if "ota_override_device" in OPTIONS.info_dict:
+    OPTIONS.override_device = OPTIONS.info_dict.get("ota_override_device")
 
   ab_update = OPTIONS.info_dict.get("ab_update") == "true"
 

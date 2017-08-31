@@ -24,12 +24,14 @@ PRODUCT_PACKAGES += \
     BasicDreams \
     BlockedNumberProvider \
     BookmarkProvider \
+    Browser2 \
     BuiltInPrintService \
     Calendar \
     CalendarProvider \
     CaptivePortalLogin \
     CertInstaller \
     Contacts \
+    DeskClock \
     DocumentsUI \
     DownloadProviderUi \
     Email \
@@ -40,7 +42,7 @@ PRODUCT_PACKAGES += \
     KeyChain \
     Keyguard \
     LatinIME \
-    Launcher3 \
+    Launcher2 \
     ManagedProvisioning \
     MtpDocumentsProvider \
     PicoTts \
