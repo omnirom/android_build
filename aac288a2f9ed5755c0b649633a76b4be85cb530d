@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "key": {
+        "uuid": "79766b41_f87adb13",
+        "filename": "core/main.mk",
+        "patchSetId": 4
+      },
+      "lineNbr": 276,
+      "author": {
+        "id": 1001070
+      },
+      "writtenOn": "2017-09-01T00:43:37Z",
+      "side": 0,
+      "message": "here! we need this... just change the path ?",
+      "revId": "aac288a2f9ed5755c0b649633a76b4be85cb530d",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55",
+      "unresolved": false
+    }
+  ]
+}
