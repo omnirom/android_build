@@ -953,7 +953,19 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   script.AppendExtra("ifelse(is_mounted(\"/system\"), unmount(\"/system\"));")
   device_specific.FullOTA_InstallBegin()
 
+  script.Print("#######################################");
+  script.Print("# _____            __  __  ______     #");
+  script.Print("#/\  __`\  /'\_/`\/\ \/\ \/\__  _\    #");
+  script.Print("#\ \ \/\ \/\  ``  \ \ ` \ \/_/\ \/    #");
+  script.Print("# \ \ \ \ \ \ \__\ \ \ . ` \ \ \ \    #");
+  script.Print("#  \ \ \_\ \ \ \_/\ \ \ \`\ \ \_\ \__ #");
+  script.Print("#   \ \_____\ \_\, \_\ \_\ \_\/\_____\#");
+  script.Print("#    \/_____/\/_/ \/_/\/_/\/_/\/_____/#");
+  script.Print("#                                     #");
+  script.Print("#######################################");
+
   if OPTIONS.backuptool:
+    script.Print("Backup");
     script.Mount("/system")
     script.RunBackup("backup")
     script.Unmount("/system")
@@ -1016,6 +1028,7 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
   if OPTIONS.backuptool:
+    script.Print("Restore");
     script.ShowProgress(0.02, 10)
     script.Mount("/system")
     script.RunBackup("restore")
