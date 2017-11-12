@@ -619,7 +619,11 @@ ZIPTIME := $(prebuilt_build_tools_bin)/ziptime
 # ---------------------------------------------------------------
 # Generic tools.
 
+ifeq ($(USE_HOST_FLEX),yes)
+LEX := flex
+else
 LEX := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/flex/flex-2.5.39
+endif
 # The default PKGDATADIR built in the prebuilt bison is a relative path
 # prebuilts/build-tools/common/bison.
 # To run bison from elsewhere you need to set up enviromental variable
