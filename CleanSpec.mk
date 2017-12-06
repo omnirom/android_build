@@ -417,6 +417,17 @@ $(call add-clean-step, rm -rf $(PRODUCT_OUT)/data/vendor/lib*)
 # Soong module variant change, remove obsolete intermediates
 $(call add-clean-step, rm -rf $(OUT_DIR)/soong/.intermediates)
 
+# Version checking moving to Soong
+$(call add-clean-step, rm -rf $(OUT_DIR)/versions_checked.mk)
+
+# Vendor tests were being installed into /vendor/bin accidentally
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/system/vendor/nativetest*)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/vendor/nativetest*)
+
+# Move adbd from $(PRODUCT_OUT)/root/sbin to $(PRODUCT_OUT)/system/bin
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/root/sbin/adbd)
+$(call add-clean-step, rm -rf $(PRODUCT_OUT)/symbols/sbin/adbd)
+
 # ************************************************
 # NEWER CLEAN STEPS MUST BE AT THE END OF THE LIST
 # ************************************************

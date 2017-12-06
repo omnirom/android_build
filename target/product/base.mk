@@ -23,6 +23,7 @@ PRODUCT_PACKAGES += \
     appops \
     am \
     android.policy \
+    android.test.mock \
     android.test.runner \
     app_process \
     applypatch \
@@ -75,8 +76,6 @@ PRODUCT_PACKAGES += \
     libnetlink \
     libnetutils \
     libpdfium \
-    libradio \
-    libradioservice \
     libradio_metadata \
     libreference-ril \
     libreverbwrapper \
@@ -139,6 +138,7 @@ PRODUCT_PACKAGES += \
 
 # Essential HAL modules
 PRODUCT_PACKAGES += \
+    android.hardware.cas@1.0-service \
     android.hardware.media.omx@1.0-service
 
 # XML schema files
@@ -147,15 +147,20 @@ PRODUCT_PACKAGES += \
 
 # Packages included only for eng or userdebug builds, previously debug tagged
 PRODUCT_PACKAGES_DEBUG := \
-    perfprofd
+    perfprofd \
+    sqlite3
 
 PRODUCT_COPY_FILES := $(call add-to-product-copy-files-if-exists,\
-    frameworks/base/preloaded-classes:system/etc/preloaded-classes)
+    frameworks/base/config/preloaded-classes:system/etc/preloaded-classes)
 
 # Note: it is acceptable to not have a compiled-classes file. In that case, all boot classpath
 #       classes will be compiled.
 PRODUCT_COPY_FILES += $(call add-to-product-copy-files-if-exists,\
-    frameworks/base/compiled-classes:system/etc/compiled-classes)
+    frameworks/base/config/compiled-classes:system/etc/compiled-classes)
 
+# Note: it is acceptable to not have a dirty-image-objects file. In that case, the special bin
+#       for known dirty objects in the image will be empty.
+PRODUCT_COPY_FILES += $(call add-to-product-copy-files-if-exists,\
+    frameworks/base/config/dirty-image-objects:system/etc/dirty-image-objects)
 
 $(call inherit-product, $(SRC_TARGET_DIR)/product/embedded.mk)

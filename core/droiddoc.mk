@@ -130,7 +130,13 @@ ifneq ($(strip $(LOCAL_DROIDDOC_USE_STANDARD_DOCLET)),true)
 ##
 
 droiddoc_templates := \
-    $(sort $(shell find $(LOCAL_DROIDDOC_CUSTOM_TEMPLATE_DIR) -type f))
+    $(sort $(shell find $(LOCAL_DROIDDOC_CUSTOM_TEMPLATE_DIR) -type f $(if $(ALLOW_MISSING_DEPENDENCIES),2>/dev/null)))
+
+ifdef ALLOW_MISSING_DEPENDENCIES
+  ifndef droiddoc_templates
+    droiddoc_templates := $(LOCAL_DROIDDOC_CUSTOM_TEMPLATE_DIR)
+  endif
+endif
 
 droiddoc := \
 	$(HOST_JDK_TOOLS_JAR) \
@@ -160,6 +166,10 @@ endif
 # TODO: not clear if this is used any more
 $(full_target): PRIVATE_LOCAL_PATH := $(LOCAL_PATH)
 
+# TODO(tobiast): Clean this up once we move to -source 1.9.
+# OpenJDK 9 does not have the concept of a "boot classpath" so we should
+# then rename PRIVATE_BOOTCLASSPATH to PRIVATE_MODULE or similar. For now,
+# keep -bootclasspath here since it works in combination with -source 1.8.
 $(full_target): \
         $(full_src_files) \
         $(droiddoc_templates) \
@@ -173,8 +183,9 @@ $(full_target): \
 	$(call prepare-doc-source-list,$(PRIVATE_SRC_LIST_FILE),$(PRIVATE_JAVA_FILES), \
 			$(PRIVATE_SOURCE_INTERMEDIATES_DIR) $(PRIVATE_ADDITIONAL_JAVA_DIR))
 	$(hide) ( \
-		javadoc \
+		$(JAVADOC) \
                 -encoding UTF-8 \
+                -source 1.8 \
                 \@$(PRIVATE_SRC_LIST_FILE) \
                 -J-Xmx1600m \
                 -J-XX:-OmitStackTraceInFastThrow \
@@ -204,22 +215,34 @@ else
 ## standard doclet only
 ##
 ##
+
+ifneq ($(EXPERIMENTAL_USE_OPENJDK9),)
+# For OpenJDK 9 we use --patch-module to define the core libraries code.
+# TODO(tobiast): Reorganize this when adding proper support for OpenJDK 9
+# modules. Here we treat all code in core libraries as being in java.base
+# to work around the OpenJDK 9 module system. http://b/62049770
+$(full_target): PRIVATE_BOOTCLASSPATH_ARG := --patch-module=java.base=$(PRIVATE_BOOTCLASSPATH)
+else
+# For OpenJDK 8 we can use -bootclasspath to define the core libraries code.
+$(full_target): PRIVATE_BOOTCLASSPATH_ARG := $(addprefix -bootclasspath ,$(PRIVATE_BOOTCLASSPATH))
+endif
+
 $(full_target): $(full_src_files) $(full_java_lib_deps)
 	@echo Docs javadoc: $(PRIVATE_OUT_DIR)
 	@mkdir -p $(dir $@)
 	$(call prepare-doc-source-list,$(PRIVATE_SRC_LIST_FILE),$(PRIVATE_JAVA_FILES), \
 			$(PRIVATE_SOURCE_INTERMEDIATES_DIR) $(PRIVATE_ADDITIONAL_JAVA_DIR))
 	$(hide) ( \
-		javadoc \
+		$(JAVADOC) \
                 -encoding UTF-8 \
                 $(PRIVATE_DROIDDOC_OPTIONS) \
                 \@$(PRIVATE_SRC_LIST_FILE) \
                 -J-Xmx1024m \
                 -XDignore.symbol.file \
-                $(if $(LEGACY_USE_JAVA7),,-Xdoclint:none) \
+                -Xdoclint:none \
                 $(PRIVATE_PROFILING_OPTIONS) \
                 $(addprefix -classpath ,$(PRIVATE_CLASSPATH)) \
-                $(addprefix -bootclasspath ,$(PRIVATE_BOOTCLASSPATH)) \
+                $(PRIVATE_BOOTCLASSPATH_ARG) \
                 -sourcepath $(PRIVATE_SOURCE_PATH)$(addprefix :,$(PRIVATE_CLASSPATH)) \
                 -d $(PRIVATE_OUT_DIR) \
                 -quiet \

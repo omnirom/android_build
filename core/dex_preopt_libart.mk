@@ -11,9 +11,9 @@ else
 DEX2OAT := $(HOST_OUT_EXECUTABLES)/dex2oatd$(HOST_EXECUTABLE_SUFFIX)
 endif
 
-# Pass special classpath to skip uses library check.
+# Pass special class loader context to skip the classpath and collision check.
 # Should modify build system to pass used libraries properly later.
-DEX2OAT_CLASSPATH := "&"
+DEX2OAT_CLASS_LOADER_CONTEXT := "&"
 
 DEX2OAT_DEPENDENCY += $(DEX2OAT)
 
@@ -24,6 +24,10 @@ PRELOADED_CLASSES := $(call word-colon,1,$(firstword \
 # Use the first compiled-classes file in PRODUCT_COPY_FILES.
 COMPILED_CLASSES := $(call word-colon,1,$(firstword \
     $(filter %system/etc/compiled-classes,$(PRODUCT_COPY_FILES))))
+
+# Use the first dirty-image-objects file in PRODUCT_COPY_FILES.
+DIRTY_IMAGE_OBJECTS := $(call word-colon,1,$(firstword \
+    $(filter %system/etc/dirty-image-objects,$(PRODUCT_COPY_FILES))))
 
 define get-product-default-property
 $(strip $(patsubst $(1)=%,%,$(filter $(1)=%,$(PRODUCT_DEFAULT_PROPERTY_OVERRIDES))))
@@ -88,6 +92,42 @@ LIBART_TARGET_BOOT_DEX_FILES := $(foreach jar,$(LIBART_TARGET_BOOT_JARS),$(call 
 LIBART_TARGET_BOOT_ART_EXTRA_FILES := $(foreach jar,$(wordlist 2,999,$(LIBART_TARGET_BOOT_JARS)),boot-$(jar).art boot-$(jar).oat boot-$(jar).vdex)
 LIBART_TARGET_BOOT_ART_EXTRA_FILES += boot.oat boot.vdex
 
+# If we use a boot image profile.
+my_use_profile_for_boot_image := $(PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE)
+ifeq (,$(my_use_profile_for_boot_image))
+# If not set, use the default.
+my_use_profile_for_boot_image := false
+endif
+
+ifeq (true,$(my_use_profile_for_boot_image))
+
+# Location of text based profile for the boot image.
+my_boot_image_profile_location := $(PRODUCT_DEX_PREOPT_BOOT_IMAGE_PROFILE_LOCATION)
+ifeq (,$(my_boot_image_profile_location))
+# If not set, use the default.
+my_boot_image_profile_location := frameworks/base/config/boot-image-profile.txt
+endif
+
+# Code to create the boot image profile, not in dex_preopt_libart_boot.mk since the profile is the same for all archs.
+my_out_boot_image_profile_location := $(DEXPREOPT_BOOT_JAR_DIR_FULL_PATH)/boot.prof
+$(my_out_boot_image_profile_location): PRIVATE_PROFILE_INPUT_LOCATION := $(my_boot_image_profile_location)
+$(my_out_boot_image_profile_location): $(PROFMAN) $(LIBART_TARGET_BOOT_DEX_FILES) $(my_boot_image_profile_location)
+	@echo "target profman: $@"
+	@mkdir -p $(dir $@)
+	ANDROID_LOG_TAGS="*:e" $(PROFMAN) \
+		--create-profile-from=$(PRIVATE_PROFILE_INPUT_LOCATION) \
+		$(addprefix --apk=,$(LIBART_TARGET_BOOT_DEX_FILES)) \
+		$(addprefix --dex-location=,$(LIBART_TARGET_BOOT_DEX_LOCATIONS)) \
+		--reference-profile-file=$@
+
+# We want to install the profile even if we are not using preopt since it is required to generate
+# the image on the device.
+my_installed_profile := $(TARGET_OUT)/etc/boot-image.prof
+$(eval $(call copy-one-file,$(my_out_boot_image_profile_location),$(my_installed_profile)))
+ALL_DEFAULT_INSTALLED_MODULES += $(my_installed_profile)
+
+endif
+
 my_2nd_arch_prefix :=
 include $(BUILD_SYSTEM)/dex_preopt_libart_boot.mk
 
@@ -110,7 +150,7 @@ $(hide) rm -f $(2)
 $(hide) mkdir -p $(dir $(2))
 $(hide) ANDROID_LOG_TAGS="*:e" $(DEX2OAT) \
 	--runtime-arg -Xms$(DEX2OAT_XMS) --runtime-arg -Xmx$(DEX2OAT_XMX) \
-	--runtime-arg -classpath --runtime-arg $(DEX2OAT_CLASSPATH) \
+	--class-loader-context=$(DEX2OAT_CLASS_LOADER_CONTEXT) \
 	--boot-image=$(PRIVATE_DEX_PREOPT_IMAGE_LOCATION) \
 	--dex-file=$(1) \
 	--dex-location=$(PRIVATE_DEX_LOCATION) \

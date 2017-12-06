@@ -44,6 +44,7 @@ endif
 # java libraries produce javalib.jar, so we will copy classes.jar there too.
 intermediates.COMMON := $(call local-intermediates-dir,COMMON)
 common_javalib.jar := $(intermediates.COMMON)/javalib.jar
+dex_preopt_profile_src_file := $(common_javalib.jar)
 LOCAL_INTERMEDIATE_TARGETS += $(common_javalib.jar)
 
 ifeq ($(LOCAL_PROGUARD_ENABLED),disabled)
@@ -53,12 +54,7 @@ endif
 ifeq (true,$(EMMA_INSTRUMENT))
 ifeq (true,$(LOCAL_EMMA_INSTRUMENT))
 ifeq (true,$(EMMA_INSTRUMENT_STATIC))
-ifdef LOCAL_JACK_ENABLED
-# Jack supports coverage with Jacoco
 LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
-else
-LOCAL_STATIC_JAVA_LIBRARIES += emma
-endif # LOCAL_JACK_ENABLED
 endif # LOCAL_EMMA_INSTRUMENT
 endif # EMMA_INSTRUMENT_STATIC
 else
