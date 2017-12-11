@@ -42,6 +42,7 @@ PRODUCT_PACKAGES += \
     libstagefright_soft_amrwbenc \
     libstagefright_soft_avcdec \
     libstagefright_soft_avcenc \
+    libstagefright_soft_flacdec \
     libstagefright_soft_flacenc \
     libstagefright_soft_g711dec \
     libstagefright_soft_gsmdec \
@@ -59,6 +60,10 @@ PRODUCT_PACKAGES += \
     libwebrtc_audio_preprocessing \
     mdnsd \
     requestsync \
-    wifi-service
+
+# Wifi modules
+PRODUCT_PACKAGES += \
+    wifi-service \
+    wificond \
 
 $(call inherit-product, $(SRC_TARGET_DIR)/product/core_minimal.mk)

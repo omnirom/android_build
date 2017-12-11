@@ -88,6 +88,7 @@ ifeq (,$(LOCAL_RESOURCE_DIR))
   LOCAL_RESOURCE_DIR := $(LOCAL_PATH)/res
 else
   need_compile_res := true
+  LOCAL_RESOURCE_DIR := $(foreach d,$(LOCAL_RESOURCE_DIR),$(call clean-path,$(d)))
 endif
 
 package_resource_overlays := $(strip \
@@ -121,7 +122,18 @@ ifneq ($(PRODUCT_ENFORCE_RRO_TARGETS),)
   endif
 endif
 
-ifndef enforce_rro_enabled
+ifdef enforce_rro_enabled
+  ifneq ($(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS),)
+    static_only_resource_overlays := $(filter $(addsuffix %,$(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS)),$(package_resource_overlays))
+    ifneq ($(static_only_resource_overlays),)
+      package_resource_overlays := $(filter-out $(static_only_resource_overlays),$(package_resource_overlays))
+      LOCAL_RESOURCE_DIR := $(static_only_resource_overlays) $(LOCAL_RESOURCE_DIR)
+      ifeq ($(package_resource_overlays),)
+        enforce_rro_enabled :=
+      endif
+    endif
+  endif
+else
 LOCAL_RESOURCE_DIR := $(package_resource_overlays) $(LOCAL_RESOURCE_DIR)
 endif
 
@@ -214,8 +226,20 @@ R_file_stamp := $(intermediates.COMMON)/src/R.stamp
 LOCAL_INTERMEDIATE_TARGETS += $(R_file_stamp)
 endif
 
+ifdef LOCAL_COMPRESSED_MODULE
+ifneq (true,$(LOCAL_COMPRESSED_MODULE))
+$(call pretty-error, Unknown value for LOCAL_COMPRESSED_MODULE $(LOCAL_COMPRESSED_MODULE))
+endif
+endif
+
+ifdef LOCAL_COMPRESSED_MODULE
+PACKAGES.$(LOCAL_PACKAGE_NAME).COMPRESSED := gz
+LOCAL_BUILT_MODULE_STEM := package.apk.gz
+LOCAL_INSTALLED_MODULE_STEM := $(LOCAL_MODULE).apk.gz
+else  # !LOCAL_COMPRESSED_MODULE
 LOCAL_BUILT_MODULE_STEM := package.apk
 LOCAL_INSTALLED_MODULE_STEM := $(LOCAL_MODULE).apk
+endif
 
 LOCAL_PROGUARD_ENABLED:=$(strip $(LOCAL_PROGUARD_ENABLED))
 ifndef LOCAL_PROGUARD_ENABLED
@@ -244,7 +268,7 @@ endif # LOCAL_JACK_ENABLED
 
 ifeq (true,$(EMMA_INSTRUMENT))
 ifndef LOCAL_EMMA_INSTRUMENT
-# No emma for test apks.
+# No jacoco for test apks.
 ifeq (,$(LOCAL_INSTRUMENTATION_FOR))
 LOCAL_EMMA_INSTRUMENT := true
 endif # No test apk
@@ -255,21 +279,14 @@ endif # EMMA_INSTRUMENT is true
 
 ifeq (true,$(LOCAL_EMMA_INSTRUMENT))
 ifeq (true,$(EMMA_INSTRUMENT_STATIC))
-ifdef LOCAL_JACK_ENABLED
-# Jack supports coverage with Jacoco
 ifneq ($(LOCAL_SRC_FILES)$(LOCAL_STATIC_JAVA_LIBRARIES)$(LOCAL_SOURCE_FILES_ALL_GENERATED),)
 # Only add jacocoagent if the package contains some java code
 LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
 endif # Contains java code
 else
-LOCAL_STATIC_JAVA_LIBRARIES += emma
-endif # LOCAL_JACK_ENABLED
-else
 ifdef LOCAL_SDK_VERSION
 ifdef TARGET_BUILD_APPS
 # In unbundled build, merge the coverage library into the apk.
-ifdef LOCAL_JACK_ENABLED
-# Jack supports coverage with Jacoco
 ifneq ($(LOCAL_SRC_FILES)$(LOCAL_STATIC_JAVA_LIBRARIES)$(LOCAL_SOURCE_FILES_ALL_GENERATED),)
 # Only add jacocoagent if the package contains some java code
 LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
@@ -277,9 +294,6 @@ LOCAL_STATIC_JAVA_LIBRARIES += jacocoagent
 LOCAL_PROGUARD_FLAGS += -include $(BUILD_SYSTEM)/proguard.jacoco.flags
 LOCAL_JACK_PROGUARD_FLAGS += -include $(BUILD_SYSTEM)/proguard.jacoco.flags
 endif # Contains java code
-else  # ! LOCAL_JACK_ENABLED
-LOCAL_STATIC_JAVA_LIBRARIES += emma
-endif # ! LOCAL_JACK_ENABLED
 else  # ! TARGET_BUILD_APPS
 ifdef LOCAL_JACK_ENABLED
 # If build against the SDK in full build, core.jar is not used
@@ -290,11 +304,6 @@ ifdef LOCAL_JACK_ENABLED
 # Note: we have nothing to do for proguard since jacoco will be
 # on the classpath only, thus not modified during the compilation.
 LOCAL_JAVA_LIBRARIES += jacocoagent
-else  # ! LOCAL_JACK_ENABLED
-# If build against the SDK in full build, core.jar is not used,
-# we have to use prebiult emma.jar to make Proguard happy;
-# Otherwise emma classes are included in core.jar.
-LOCAL_PROGUARD_FLAGS += -libraryjars $(EMMA_JAR)
 endif # ! LOCAL_JACK_ENABLED
 endif # ! TARGET_BUILD_APPS
 endif # LOCAL_SDK_VERSION
@@ -321,11 +330,19 @@ LOCAL_RESOURCE_DIR := $(data_binding_res_out)
 LOCAL_AAPT_FLAGS += --auto-add-overlay --extra-packages com.android.databinding.library
 endif  # LOCAL_DATA_BINDING
 
+# If the module is a compressed module, we don't pre-opt it because its final
+# installation location will be the data partition.
+ifdef LOCAL_COMPRESSED_MODULE
+LOCAL_DEX_PREOPT := false
+endif
+
 include $(BUILD_SYSTEM)/android_manifest.mk
 
+called_from_package_internal := true
 #################################
 include $(BUILD_SYSTEM)/java.mk
 #################################
+called_from_package_internal :=
 
 LOCAL_SDK_RES_VERSION:=$(strip $(LOCAL_SDK_RES_VERSION))
 ifeq ($(LOCAL_SDK_RES_VERSION),)
@@ -353,7 +370,7 @@ $(data_binding_stamp) : $(all_res_assets) $(full_android_manifest) \
 	@rm -rf $(PRIVATE_INTERMEDIATES) $(PRIVATE_SRC_OUT) && \
 	  mkdir -p $(PRIVATE_INTERMEDIATES) $(PRIVATE_SRC_OUT) \
 	      $(PRIVATE_XML_OUT) $(PRIVATE_RES_OUT) $(PRIVATE_ANNO_SRC_DIR)
-	$(hide) java -classpath $(DATA_BINDING_COMPILER) android.databinding.tool.MakeCopy \
+	$(hide) $(JAVA) -classpath $(DATA_BINDING_COMPILER) android.databinding.tool.MakeCopy \
 	  $(PRIVATE_MANIFEST) $(PRIVATE_SRC_OUT) $(PRIVATE_XML_OUT) $(PRIVATE_RES_OUT) $(PRIVATE_RES_IN)
 	$(hide) touch $@
 
@@ -372,9 +389,13 @@ installed_apk_splits :=
 my_apk_split_configs :=
 
 ifdef LOCAL_PACKAGE_SPLITS
+ifdef LOCAL_COMPRESSED_MODULE
+$(error $(LOCAL_MODULE): LOCAL_COMPRESSED_MODULE is not currently supported for split installs)
+endif  # LOCAL_COMPRESSED_MODULE
+
 my_apk_split_configs := $(LOCAL_PACKAGE_SPLITS)
 my_split_suffixes := $(subst $(comma),_,$(my_apk_split_configs))
-built_apk_splits := $(foreach s,$(my_split_suffixes),$(built_module_path)/package_$(s).apk)
+built_apk_splits := $(foreach s,$(my_split_suffixes),$(intermediates)/package_$(s).apk)
 installed_apk_splits := $(foreach s,$(my_split_suffixes),$(my_module_path)/$(LOCAL_MODULE)_$(s).apk)
 endif
 
@@ -585,6 +606,9 @@ $(LOCAL_BUILT_MODULE) : $(my_res_package) $(AAPT2) | $(ACP)
 else
 $(LOCAL_BUILT_MODULE) : $(all_res_assets) $(full_android_manifest) $(AAPT)
 endif
+ifdef LOCAL_COMPRESSED_MODULE
+$(LOCAL_BUILT_MODULE) : $(MINIGZIP)
+endif
 	@echo "target Package: $(PRIVATE_MODULE) ($@)"
 ifdef LOCAL_USE_AAPT2
 	$(call copy-file-to-new-target)
@@ -620,6 +644,9 @@ ifneq (nostripping,$(LOCAL_DEX_PREOPT))
 endif
 endif
 	$(sign-package)
+ifdef LOCAL_COMPRESSED_MODULE
+	$(compress-package)
+endif  # LOCAL_COMPRESSED_MODULE
 
 ###############################
 ## Build dpi-specific apks, if it's apps_only build.
@@ -654,7 +681,7 @@ ifdef LOCAL_PACKAGE_SPLITS
 # That way the build system will rerun the aapt after the user changes the splitting parameters.
 $(built_apk_splits): PRIVATE_PRIVATE_KEY := $(private_key)
 $(built_apk_splits): PRIVATE_CERTIFICATE := $(certificate)
-$(built_apk_splits) : $(built_module_path)/%.apk : $(LOCAL_BUILT_MODULE)
+$(built_apk_splits) : $(intermediates)/%.apk : $(LOCAL_BUILT_MODULE)
 	$(hide) if [ ! -f $@ ]; then \
 	  echo 'No $@ generated, check your apk splitting parameters.' 1>&2; \
 	  rm $<; exit 1; \
@@ -662,14 +689,14 @@ $(built_apk_splits) : $(built_module_path)/%.apk : $(LOCAL_BUILT_MODULE)
 	$(sign-package)
 
 # Rules to install the splits
-$(installed_apk_splits) : $(my_module_path)/$(LOCAL_MODULE)_%.apk : $(built_module_path)/package_%.apk
+$(installed_apk_splits) : $(my_module_path)/$(LOCAL_MODULE)_%.apk : $(intermediates)/package_%.apk
 	@echo "Install: $@"
 	$(copy-file-to-new-target)
 
 # Register the additional built and installed files.
 ALL_MODULES.$(my_register_name).INSTALLED += $(installed_apk_splits)
 ALL_MODULES.$(my_register_name).BUILT_INSTALLED += \
-  $(foreach s,$(my_split_suffixes),$(built_module_path)/package_$(s).apk:$(my_module_path)/$(LOCAL_MODULE)_$(s).apk)
+  $(foreach s,$(my_split_suffixes),$(intermediates)/package_$(s).apk:$(my_module_path)/$(LOCAL_MODULE)_$(s).apk)
 
 # Make sure to install the splits when you run "make <module_name>".
 $(my_all_targets): $(installed_apk_splits)
@@ -679,7 +706,7 @@ ifdef LOCAL_COMPATIBILITY_SUITE
 $(foreach suite, $(LOCAL_COMPATIBILITY_SUITE), \
   $(eval my_compat_dist_$(suite) := $(foreach dir, $(call compatibility_suite_dirs,$(suite)), \
     $(foreach s,$(my_split_suffixes),\
-      $(built_module_path)/package_$(s).apk:$(dir)/$(LOCAL_MODULE)_$(s).apk))))
+      $(intermediates)/package_$(s).apk:$(dir)/$(LOCAL_MODULE)_$(s).apk))))
 
 $(call create-suite-dependencies)
 

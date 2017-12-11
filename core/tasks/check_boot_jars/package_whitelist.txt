@@ -238,3 +238,8 @@ org\.apache\.xalan\.extensions
 org\.apache\.xalan\.processor
 org\.apache\.xalan\.transformer
 org\.apache\.xalan\.xslt
+
+###################################################
+# Packages in the google namespace across all bootclasspath jars.
+com\.google\.android\..*
+com\.google\.vr\.platform.*

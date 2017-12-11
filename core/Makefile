@@ -81,6 +81,9 @@ endif
 # prop.default
 ifdef property_overrides_split_enabled
 INSTALLED_DEFAULT_PROP_TARGET := $(TARGET_OUT)/etc/prop.default
+INSTALLED_DEFAULT_PROP_OLD_TARGET := $(TARGET_ROOT_OUT)/default.prop
+ALL_DEFAULT_INSTALLED_MODULES += $(INSTALLED_DEFAULT_PROP_OLD_TARGET)
+$(INSTALLED_DEFAULT_PROP_OLD_TARGET): $(INSTALLED_DEFAULT_PROP_TARGET)
 else
 # legacy path
 INSTALLED_DEFAULT_PROP_TARGET := $(TARGET_ROOT_OUT)/default.prop
@@ -114,7 +117,8 @@ $(INSTALLED_DEFAULT_PROP_TARGET): $(intermediate_system_build_prop)
 	$(hide) echo ro.bootimage.build.fingerprint="$(BUILD_FINGERPRINT_FROM_FILE)">>$@
 	$(hide) build/tools/post_process_props.py $@
 ifdef property_overrides_split_enabled
-	$(hide) ln -sf system/etc/prop.default $(TARGET_ROOT_OUT)/default.prop
+	$(hide) mkdir -p $(TARGET_ROOT_OUT)
+	$(hide) ln -sf system/etc/prop.default $(INSTALLED_DEFAULT_PROP_OLD_TARGET)
 endif
 
 # -----------------------------------------------------------------
@@ -234,10 +238,15 @@ endef
 BUILDINFO_SH := build/tools/buildinfo.sh
 VENDOR_BUILDINFO_SH := build/tools/vendor_buildinfo.sh
 
-# TARGET_BUILD_FLAVOR and ro.build.flavor are used only by the test harness to distinguish builds.
+# TARGET_BUILD_FLAVOR and ro.build.flavor are used only by the test
+# harness to distinguish builds. Only add _asan for a sanitized build
+# if it isn't already a part of the flavor (via a dedicated lunch
+# config for example).
 TARGET_BUILD_FLAVOR := $(TARGET_PRODUCT)-$(TARGET_BUILD_VARIANT)
 ifdef SANITIZE_TARGET
+ifeq (,$(findstring _asan,$(TARGET_BUILD_FLAVOR)))
 TARGET_BUILD_FLAVOR := $(TARGET_BUILD_FLAVOR)_asan
+endif
 endif
 
 ifdef TARGET_SYSTEM_PROP
@@ -293,7 +302,12 @@ endif
 			$(PRODUCT_BUILD_PROP_OVERRIDES) \
 	        bash $(BUILDINFO_SH) >> $@
 ifndef property_overrides_split_enabled
-	$(hide) TARGET_BOOTLOADER_BOARD_NAME="$(TARGET_BOOTLOADER_BOARD_NAME)" \
+	$(hide) TARGET_DEVICE="$(TARGET_DEVICE)" \
+			PRODUCT_NAME="$(TARGET_PRODUCT)" \
+			PRODUCT_BRAND="$(PRODUCT_BRAND)" \
+			PRODUCT_MODEL="$(PRODUCT_MODEL)" \
+			PRODUCT_MANUFACTURER="$(PRODUCT_MANUFACTURER)" \
+			TARGET_BOOTLOADER_BOARD_NAME="$(TARGET_BOOTLOADER_BOARD_NAME)" \
 			TARGET_BOARD_PLATFORM="$(TARGET_BOARD_PLATFORM)" \
 	        bash $(VENDOR_BUILDINFO_SH) >> $@
 endif
@@ -325,7 +339,11 @@ endif
 
 $(INSTALLED_BUILD_PROP_TARGET): $(intermediate_system_build_prop) $(INSTALLED_RECOVERYIMAGE_TARGET)
 	@echo "Target build info: $@"
+ifdef BOARD_VENDORIMAGE_FILE_SYSTEM_TYPE
+	$(hide) grep -v 'ro.product.first_api_level' $(intermediate_system_build_prop) > $@
+else
 	$(hide) cat $(intermediate_system_build_prop) > $@
+endif
 ifdef INSTALLED_RECOVERYIMAGE_TARGET
 	$(hide) echo ro.expect.recovery_id=`cat $(RECOVERYIMAGE_ID_FILE)` >> $@
 endif
@@ -345,15 +363,21 @@ FINAL_VENDOR_BUILD_PROPERTIES := $(call uniq-pairs-by-first-component, \
     $(FINAL_VENDOR_BUILD_PROPERTIES),=)
 endif  # property_overrides_split_enabled
 
-$(INSTALLED_VENDOR_BUILD_PROP_TARGET): $(VENDOR_BUILDINFO_SH)
+$(INSTALLED_VENDOR_BUILD_PROP_TARGET): $(VENDOR_BUILDINFO_SH) $(intermediate_system_build_prop)
 	@echo Target vendor buildinfo: $@
 	@mkdir -p $(dir $@)
 	$(hide) echo > $@
+	$(hide) grep 'ro.product.first_api_level' $(intermediate_system_build_prop) >> $@ || true
 	$(hide) echo ro.vendor.build.date=`$(DATE_FROM_FILE)`>>$@
 	$(hide) echo ro.vendor.build.date.utc=`$(DATE_FROM_FILE) +%s`>>$@
 	$(hide) echo ro.vendor.build.fingerprint="$(BUILD_FINGERPRINT_FROM_FILE)">>$@
 ifdef property_overrides_split_enabled
-	$(hide) TARGET_BOOTLOADER_BOARD_NAME="$(TARGET_BOOTLOADER_BOARD_NAME)" \
+	$(hide) TARGET_DEVICE="$(TARGET_DEVICE)" \
+			PRODUCT_NAME="$(TARGET_PRODUCT)" \
+			PRODUCT_BRAND="$(PRODUCT_BRAND)" \
+			PRODUCT_MODEL="$(PRODUCT_MODEL)" \
+			PRODUCT_MANUFACTURER="$(PRODUCT_MANUFACTURER)" \
+			TARGET_BOOTLOADER_BOARD_NAME="$(TARGET_BOOTLOADER_BOARD_NAME)" \
 			TARGET_BOARD_PLATFORM="$(TARGET_BOARD_PLATFORM)" \
 	        bash $(VENDOR_BUILDINFO_SH) >> $@
 	$(hide) echo "#" >> $@; \
@@ -416,8 +440,10 @@ package-stats: $(PACKAGE_STATS_FILE)
 # -----------------------------------------------------------------
 # Cert-to-package mapping.  Used by the post-build signing tools.
 # Use a macro to add newline to each echo command
-define _apkcerts_echo_with_newline
-$(hide) echo $(1)
+define _apkcerts_write_line
+$(hide) echo -n 'name="$(1).apk" certificate="$2" private_key="$3"' >> $5
+$(if $(4), $(hide) echo -n ' compressed="$4"' >> $5)
+$(hide) echo '' >> $5
 
 endef
 
@@ -437,12 +463,8 @@ $(APKCERTS_FILE):
 	@rm -f $@
 	$(foreach p,$(PACKAGES),\
 	  $(if $(PACKAGES.$(p).EXTERNAL_KEY),\
-	    $(call _apkcerts_echo_with_newline,\
-	      'name="$(p).apk" certificate="EXTERNAL" \
-	      private_key=""' >> $@),\
-	    $(call _apkcerts_echo_with_newline,\
-	      'name="$(p).apk" certificate="$(PACKAGES.$(p).CERTIFICATE)" \
-	      private_key="$(PACKAGES.$(p).PRIVATE_KEY)"' >> $@)))
+	    $(call _apkcerts_write_line,$(p),"EXTERNAL","",$(PACKAGES.$(p).COMPRESSED),$@),\
+	    $(call _apkcerts_write_line,$(p),$(PACKAGES.$(p).CERTIFICATE),$(PACKAGES.$(p).PRIVATE_KEY),$(PACKAGES.$(p).COMPRESSED),$@)))
 	# In case value of PACKAGES is empty.
 	$(hide) touch $@
 
@@ -649,25 +671,25 @@ $(error TARGET_BOOTIMAGE_USE_EXT2 is not supported anymore)
 
 else ifeq (true,$(BOARD_AVB_ENABLE)) # TARGET_BOOTIMAGE_USE_EXT2 != true
 
-$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(AVBTOOL) $(INTERNAL_BOOTIMAGE_FILES)
+$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTIMG) $(AVBTOOL) $(INTERNAL_BOOTIMAGE_FILES) $(BOARD_AVB_BOOT_KEY_PATH)
 	$(call pretty,"Target boot image: $@")
 	$(hide) $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $@
 	$(hide) $(call assert-max-image-size,$@,$(BOARD_BOOTIMAGE_PARTITION_SIZE))
 	$(hide) $(AVBTOOL) add_hash_footer \
 	  --image $@ \
 	  --partition_size $(BOARD_BOOTIMAGE_PARTITION_SIZE) \
-	  --partition_name boot $(INTERNAL_AVB_SIGNING_ARGS) \
+	  --partition_name boot $(INTERNAL_AVB_BOOT_SIGNING_ARGS) \
 	  $(BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS)
 
 .PHONY: bootimage-nodeps
-bootimage-nodeps: $(MKBOOTIMG) $(AVBTOOL)
+bootimage-nodeps: $(MKBOOTIMG) $(AVBTOOL) $(BOARD_AVB_BOOT_KEY_PATH)
 	@echo "make $@: ignoring dependencies"
 	$(hide) $(MKBOOTIMG) $(INTERNAL_BOOTIMAGE_ARGS) $(INTERNAL_MKBOOTIMG_VERSION_ARGS) $(BOARD_MKBOOTIMG_ARGS) --output $(INSTALLED_BOOTIMAGE_TARGET)
 	$(hide) $(call assert-max-image-size,$(INSTALLED_BOOTIMAGE_TARGET),$(BOARD_BOOTIMAGE_PARTITION_SIZE))
 	$(hide) $(AVBTOOL) add_hash_footer \
 	  --image $@ \
 	  --partition_size $(BOARD_BOOTIMAGE_PARTITION_SIZE) \
-	  --partition_name boot $(INTERNAL_AVB_SIGNING_ARGS) \
+	  --partition_name boot $(INTERNAL_AVB_BOOT_SIGNING_ARGS) \
 	  $(BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS)
 
 else ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER)) # BOARD_AVB_ENABLE != true
@@ -891,11 +913,11 @@ $(TARGET_OUT_ETC)/security/otacerts.zip: $(addsuffix .x509.pem,$(DEFAULT_KEY_CER
 	$(hide) zip -qjX $@ $<
 	$(remove-timestamps-from-package)
 
-# Carry the public key for update_engine if it's a non-Brillo target that
+# Carry the public key for update_engine if it's a non-IoT target that
 # uses the AB updater. We use the same key as otacerts but in RSA public key
 # format.
 ifeq ($(AB_OTA_UPDATER),true)
-ifeq ($(BRILLO),)
+ifneq ($(PRODUCT_IOT),true)
 ALL_DEFAULT_INSTALLED_MODULES += $(TARGET_OUT_ETC)/update_engine/update-payload-key.pub.pem
 $(TARGET_OUT_ETC)/update_engine/update-payload-key.pub.pem: $(addsuffix .x509.pem,$(DEFAULT_KEY_CERT_PAIR))
 	$(hide) rm -f $@
@@ -951,6 +973,10 @@ INTERNAL_USERIMAGES_DEPS += $(MKF2FSUSERIMG) $(MAKE_F2FS)
 endif
 endif
 
+ifeq ($(BOARD_AVB_ENABLE),true)
+INTERNAL_USERIMAGES_DEPS += $(AVBTOOL)
+endif
+
 ifneq (true,$(TARGET_USERIMAGES_SPARSE_SQUASHFS_DISABLED))
   INTERNAL_USERIMAGES_SPARSE_SQUASHFS_FLAG := -s
 endif
@@ -971,10 +997,6 @@ SELINUX_FC := $(call intermediates-dir-for,ETC,file_contexts.bin)/file_contexts.
 INTERNAL_USERIMAGES_DEPS += $(SELINUX_FC)
 
 INTERNAL_USERIMAGES_DEPS += $(BLK_ALLOC_TO_BASE_FS)
-
-INTERNAL_USERIMAGES_DEPS += \
-    $(ALL_MODULES.fs_config_dirs.INSTALLED) \
-    $(ALL_MODULES.fs_config_files.INSTALLED) \
 
 ifeq ($(INTERNAL_USERIMAGES_USE_EXT),true)
 INTERNAL_USERIMAGES_DEPS += $(MKE2FS_CONF)
@@ -1029,12 +1051,21 @@ $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT),$(hide) echo "vboot_
 $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT),$(hide) echo "vboot_subkey=$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VBOOT_SIGNING_SUBKEY)" >> $(1))
 $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT),$(hide) echo "futility=$(notdir $(FUTILITY))" >> $(1))
 $(if $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT),$(hide) echo "vboot_signer_cmd=$(VBOOT_SIGNER)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_signing_args=$(INTERNAL_AVB_SIGNING_ARGS)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_avbtool=$(AVBTOOL)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "system_avb_enable=$(BOARD_AVB_ENABLE)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "system_avb_add_hashtree_footer_args=$(BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "vendor_avb_enable=$(BOARD_AVB_ENABLE)" >> $(1))
-$(if $(BOARD_AVB_ENABLE),$(hide) echo "vendor_avb_add_hashtree_footer_args=$(BOARD_AVB_VENDOR_ADD_HASHTREE_FOOTER_ARGS)" >> $(1))
+$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_avbtool=$(notdir $(AVBTOOL))" >> $(1))
+$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_system_hashtree_enable=$(BOARD_AVB_ENABLE)" >> $(1))
+$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_system_add_hashtree_footer_args=$(BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS)" >> $(1))
+$(if $(BOARD_AVB_ENABLE),\
+    $(if $(BOARD_AVB_SYSTEM_KEY_PATH),\
+        $(hide) echo "avb_system_key_path=$(BOARD_AVB_SYSTEM_KEY_PATH)" >> $(1)
+        $(hide) echo "avb_system_algorithm=$(BOARD_AVB_SYSTEM_ALGORITHM)" >> $(1)
+        $(hide) echo "avb_system_rollback_index_location=$(BOARD_AVB_SYSTEM_ROLLBACK_INDEX_LOCATION)" >> $(1)))
+$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_vendor_hashtree_enable=$(BOARD_AVB_ENABLE)" >> $(1))
+$(if $(BOARD_AVB_ENABLE),$(hide) echo "avb_vendor_add_hashtree_footer_args=$(BOARD_AVB_VENDOR_ADD_HASHTREE_FOOTER_ARGS)" >> $(1))
+$(if $(BOARD_AVB_ENABLE),\
+    $(if $(BOARD_AVB_VENDOR_KEY_PATH),\
+        $(hide) echo "avb_vendor_key_path=$(BOARD_AVB_VENDOR_KEY_PATH)" >> $(1)
+        $(hide) echo "avb_vendor_algorithm=$(BOARD_AVB_VENDOR_ALGORITHM)" >> $(1)
+        $(hide) echo "avb_vendor_rollback_index_location=$(BOARD_AVB_VENDOR_ROLLBACK_INDEX_LOCATION)" >> $(1)))
 $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)),\
     $(hide) echo "recovery_as_boot=true" >> $(1))
 $(if $(filter true,$(BOARD_BUILD_SYSTEM_ROOT_IMAGE)),\
@@ -1188,7 +1219,7 @@ $(RECOVERY_INSTALL_OTA_KEYS): $(OTA_PUBLIC_KEYS) $(DUMPKEY_JAR) $(extra_keys)
 	@echo "DumpPublicKey: $@ <= $(PRIVATE_OTA_PUBLIC_KEYS) $(extra_keys)"
 	@rm -rf $@
 	@mkdir -p $(dir $@)
-	java -jar $(DUMPKEY_JAR) $(PRIVATE_OTA_PUBLIC_KEYS) $(extra_keys) > $@
+	$(JAVA) -jar $(DUMPKEY_JAR) $(PRIVATE_OTA_PUBLIC_KEYS) $(extra_keys) > $@
 
 # $(1): modules list
 # $(2): output dir
@@ -1204,6 +1235,7 @@ define build-image-kernel-modules
     $(hide) cp $(1) $(4)/lib/modules/0.0/$(3)lib/modules
     $(hide) $(DEPMOD) -b $(4) 0.0
     $(hide) sed -e 's/\(.*modules.*\):/\/\1:/g' -e 's/ \([^ ]*modules[^ ]*\)/ \/\1/g' $(4)/lib/modules/0.0/modules.dep > $(2)/lib/modules/modules.dep
+    $(hide) cp $(4)/lib/modules/0.0/modules.alias $(2)/lib/modules
 endef
 
 # $(1): output file
@@ -1214,6 +1246,8 @@ define build-recoveryramdisk
   @echo Copying baseline ramdisk...
   # Use rsync because "cp -Rf" fails to overwrite broken symlinks on Mac.
   $(hide) rsync -a --exclude=etc --exclude=sdcard --exclude=vendor $(IGNORE_RECOVERY_SEPOLICY) $(IGNORE_CACHE_LINK) $(TARGET_ROOT_OUT) $(TARGET_RECOVERY_OUT)
+  # Copy adbd from system/bin to recovery/root/sbin
+  $(hide) cp -f $(TARGET_OUT_EXECUTABLES)/adbd $(TARGET_RECOVERY_ROOT_OUT)/sbin/adbd
   @echo Modifying ramdisk contents...
   $(if $(BOARD_RECOVERY_KERNEL_MODULES), \
     $(call build-image-kernel-modules,$(BOARD_RECOVERY_KERNEL_MODULES),$(TARGET_RECOVERY_ROOT_OUT),,$(call intermediates-dir-for,PACKAGING,depmod_recovery)))
@@ -1266,13 +1300,15 @@ define build-recoveryimage-target
       $(hide) $(AVBTOOL) add_hash_footer \
         --image $(1) \
         --partition_size $(BOARD_BOOTIMAGE_PARTITION_SIZE) \
-        --partition_name boot $(INTERNAL_AVB_SIGNING_ARGS) \
+        --partition_name boot $(INTERNAL_AVB_BOOT_SIGNING_ARGS) \
         $(BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS))
   $(if $(filter true,$(BOARD_USES_RECOVERY_AS_BOOT)), \
     $(hide) $(call assert-max-image-size,$(1),$(BOARD_BOOTIMAGE_PARTITION_SIZE)), \
     $(hide) $(call assert-max-image-size,$(1),$(BOARD_RECOVERYIMAGE_PARTITION_SIZE)))
   @echo ----- Made recovery image: $(1) --------
 endef
+
+ADBD := $(TARGET_OUT_EXECUTABLES)/adbd
 
 ifeq ($(BOARD_USES_RECOVERY_AS_BOOT),true)
 ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_BOOT_SIGNER))
@@ -1281,7 +1317,10 @@ endif
 ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT))
 $(INSTALLED_BOOTIMAGE_TARGET) : $(VBOOT_SIGNER)
 endif
-$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) \
+ifeq (true,$(BOARD_AVB_ENABLE))
+$(INSTALLED_BOOTIMAGE_TARGET) : $(AVBTOOL) $(BOARD_AVB_BOOT_KEY_PATH)
+endif
+$(INSTALLED_BOOTIMAGE_TARGET): $(MKBOOTFS) $(MKBOOTIMG) $(MINIGZIP) $(ADBD) \
 		$(INSTALLED_RAMDISK_TARGET) \
 		$(INTERNAL_RECOVERYIMAGE_FILES) \
 		$(recovery_initrc) $(recovery_sepolicy) $(recovery_kernel) \
@@ -1375,7 +1414,6 @@ INTERNAL_SYSTEMIMAGE_FILES := $(filter $(TARGET_OUT)/%, \
     $(ALL_DEFAULT_INSTALLED_MODULES) \
     $(PDK_FUSION_SYSIMG_FILES) \
     $(RECOVERY_RESOURCE_ZIP))
-
 
 FULL_SYSTEMIMAGE_DEPS := $(INTERNAL_SYSTEMIMAGE_FILES) $(INTERNAL_USERIMAGES_DEPS)
 
@@ -1509,6 +1547,9 @@ ifeq (true,$(WITH_DEXPREOPT))
 $(warning Warning: with dexpreopt enabled, you may need a full rebuild.)
 endif
 endif
+
+.PHONY: sync
+sync: $(INTERNAL_SYSTEMIMAGE_FILES)
 
 #######
 ## system tarball
@@ -1892,6 +1933,8 @@ $(INSTALLED_VENDORIMAGE_TARGET): $(INTERNAL_USERIMAGES_DEPS) $(INTERNAL_VENDORIM
 vendorimage-nodeps vnod: | $(INTERNAL_USERIMAGES_DEPS) $(DEPMOD)
 	$(build-vendorimage-target)
 
+sync: $(INTERNAL_VENDORIMAGE_FILES)
+
 else ifdef BOARD_PREBUILT_VENDORIMAGE
 INSTALLED_VENDORIMAGE_TARGET := $(PRODUCT_OUT)/vendor.img
 $(eval $(call copy-one-file,$(BOARD_PREBUILT_VENDORIMAGE),$(INSTALLED_VENDORIMAGE_TARGET)))
@@ -1903,12 +1946,12 @@ ifdef BOARD_PREBUILT_DTBOIMAGE
 INSTALLED_DTBOIMAGE_TARGET := $(PRODUCT_OUT)/dtbo.img
 
 ifeq ($(BOARD_AVB_ENABLE),true)
-$(INSTALLED_DTBOIMAGE_TARGET): $(BOARD_PREBUILT_DTBOIMAGE) $(AVBTOOL)
+$(INSTALLED_DTBOIMAGE_TARGET): $(BOARD_PREBUILT_DTBOIMAGE) $(AVBTOOL) $(BOARD_AVB_DTBO_KEY_PATH)
 	cp $(BOARD_PREBUILT_DTBOIMAGE) $@
 	$(AVBTOOL) add_hash_footer \
 		--image $@ \
 		--partition_size $(BOARD_DTBOIMG_PARTITION_SIZE) \
-		--partition_name dtbo $(INTERNAL_AVB_SIGNING_ARGS) \
+		--partition_name dtbo $(INTERNAL_AVB_DTBO_SIGNING_ARGS) \
 		$(BOARD_AVB_DTBO_ADD_HASH_FOOTER_ARGS)
 else
 $(INSTALLED_DTBOIMAGE_TARGET): $(BOARD_PREBUILT_DTBOIMAGE)
@@ -1917,42 +1960,114 @@ endif
 
 endif
 
+# Convert to lower case without requiring a shell, which isn't cacheable.
+to-lower = $(subst A,a,$(subst B,b,$(subst C,c,$(subst D,d,$(subst E,e,$(subst F,f,$(subst G,g,\
+$(subst H,h,$(subst I,i,$(subst J,j,$(subst K,k,$(subst L,l,$(subst M,m,$(subst N,n,$(subst O,o,\
+$(subst P,p,$(subst Q,q,$(subst R,r,$(subst S,s,$(subst T,t,$(subst U,u,$(subst V,v,$(subst W,w,\
+$(subst X,x,$(subst Y,y,$(subst Z,z,$1))))))))))))))))))))))))))
+# Convert to upper case without requiring a shell, which isn't cacheable.
+to-upper=$(subst a,A,$(subst b,B,$(subst c,C,$(subst d,D,$(subst e,E,$(subst f,F,$(subst g,G,\
+$(subst h,H,$(subst i,I,$(subst j,J,$(subst k,K,$(subst l,L,$(subst m,M,$(subst n,N,$(subst o,O,\
+$(subst p,P,$(subst q,Q,$(subst r,R,$(subst s,S,$(subst t,T,$(subst u,U,$(subst v,V,$(subst w,W,\
+$(subst x,X,$(subst y,Y,$(subst z,Z,$1))))))))))))))))))))))))))
+
 # -----------------------------------------------------------------
 # vbmeta image
 ifeq ($(BOARD_AVB_ENABLE),true)
 
 BUILT_VBMETAIMAGE_TARGET := $(PRODUCT_OUT)/vbmeta.img
+AVB_CHAIN_KEY_DIR := $(TARGET_OUT_INTERMEDIATES)/avb_chain_keys
 
-INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS := \
-    --include_descriptors_from_image $(INSTALLED_BOOTIMAGE_TARGET) \
-    --include_descriptors_from_image $(INSTALLED_SYSTEMIMAGE) \
+ifdef BOARD_AVB_KEY_PATH
+$(if $(BOARD_AVB_ALGORITHM),,$(error BOARD_AVB_ALGORITHM is not defined))
+else
+# If key path isn't specified, use the 4096-bit test key.
+BOARD_AVB_ALGORITHM := SHA256_RSA4096
+BOARD_AVB_KEY_PATH := external/avb/test/data/testkey_rsa4096.pem
+endif
+
+INTERNAL_AVB_SIGNING_ARGS := \
+    --algorithm $(BOARD_AVB_ALGORITHM) --key $(BOARD_AVB_KEY_PATH)
+
+BOOT_FOOTER_ARGS := BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS
+DTBO_FOOTER_ARGS := BOARD_AVB_DTBO_ADD_HASH_FOOTER_ARGS
+SYSTEM_FOOTER_ARGS := BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS
+VENDOR_FOOTER_ARGS := BOARD_AVB_VENDOR_ADD_HASHTREE_FOOTER_ARGS
+
+# Check and set required build variables for a chain partition.
+# $(1): the partition to enable AVB chain, e.g., BOOT or SYSTEM.
+define check-and-set-avb-chain-args
+$(eval PART := $(1))
+$(eval part=$(call to-lower,$(PART)))
+
+$(eval _key_path := BOARD_AVB_$(PART)_KEY_PATH)
+$(eval _signing_algorithm := BOARD_AVB_$(PART)_ALGORITHM)
+$(eval _rollback_index := BOARD_AVB_$(PART)_ROLLBACK_INDEX)
+$(eval _rollback_index_location := BOARD_AVB_$(PART)_ROLLBACK_INDEX_LOCATION)
+$(if $($(_key_path)),,$(error $(_key_path) is not defined))
+$(if $($(_signing_algorithm)),,$(error $(_signing_algorithm) is not defined))
+$(if $($(_rollback_index)),,$(error $(_rollback_index) is not defined))
+$(if $($(_rollback_index_location)),,$(error $(_rollback_index_location) is not defined))
+
+# Set INTERNAL_AVB_(PART)_SIGNING_ARGS
+$(eval _signing_args := INTERNAL_AVB_$(PART)_SIGNING_ARGS)
+$(eval $(_signing_args) := \
+    --algorithm $($(_signing_algorithm)) --key $($(_key_path)))
+
+$(eval INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
+    --chain_partition $(part):$($(_rollback_index_location)):$(AVB_CHAIN_KEY_DIR)/$(part).avbpubkey)
+
+# Set rollback_index via footer args
+$(eval _footer_args := $(PART)_FOOTER_ARGS)
+$(eval $($(_footer_args)) += --rollback_index $($(_rollback_index)))
+endef
+
+ifdef BOARD_AVB_BOOT_KEY_PATH
+$(eval $(call check-and-set-avb-chain-args,BOOT))
+else
+INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
+    --include_descriptors_from_image $(INSTALLED_BOOTIMAGE_TARGET)
+endif
+
+ifdef BOARD_AVB_SYSTEM_KEY_PATH
+$(eval $(call check-and-set-avb-chain-args,SYSTEM))
+else
+INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
+    --include_descriptors_from_image $(INSTALLED_SYSTEMIMAGE)
+endif
 
 ifdef INSTALLED_VENDORIMAGE_TARGET
+ifdef BOARD_AVB_VENDOR_KEY_PATH
+$(eval $(call check-and-set-avb-chain-args,VENDOR))
+else
 INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
     --include_descriptors_from_image $(INSTALLED_VENDORIMAGE_TARGET)
 endif
-
-ifdef INSTALLED_DTBOIMAGE_TARGET
-INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
-		--include_descriptors_from_image $(INSTALLED_DTBOIMAGE_TARGET)
 endif
 
+ifdef INSTALLED_DTBOIMAGE_TARGET
+ifdef BOARD_AVB_DTBO_KEY_PATH
+$(eval $(call check-and-set-avb-chain-args,DTBO))
+else
+INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += \
+    --include_descriptors_from_image $(INSTALLED_DTBOIMAGE_TARGET)
+endif
+endif
+
+BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --padding_size 4096
+
+# Add kernel cmdline descriptor for kernel to mount system.img as root with
+# dm-verity. This works when system.img is either chained or not-chained:
+# - chained: The --setup_as_rootfs_from_kernel option will add dm-verity kernel
+#   cmdline descriptor to system.img
+# - not-chained: The --include_descriptors_from_image option for make_vbmeta_image
+#   will include the kernel cmdline descriptor from system.img into vbmeta.img
 ifeq ($(BOARD_BUILD_SYSTEM_ROOT_IMAGE),true)
-INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += --setup_rootfs_from_kernel $(BUILT_SYSTEMIMAGE)
+BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS += --setup_as_rootfs_from_kernel
 endif
 
 ifdef BOARD_AVB_ROLLBACK_INDEX
-INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS += --rollback_index $(BOARD_AVB_ROLLBACK_INDEX)
-endif
-
-ifndef BOARD_AVB_KEY_PATH
-# If key path isn't specified, use the 4096-bit test key.
-INTERNAL_AVB_SIGNING_ARGS := \
-    --algorithm SHA256_RSA4096 \
-    --key external/avb/test/data/testkey_rsa4096.pem
-else
-INTERNAL_AVB_SIGNING_ARGS := \
-    --algorithm $(BOARD_AVB_ALGORITHM) --key $(BOARD_AVB_KEY_PATH)
+BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS += --rollback_index $(BOARD_AVB_ROLLBACK_INDEX)
 endif
 
 ifndef BOARD_BOOTIMAGE_PARTITION_SIZE
@@ -1963,25 +2078,49 @@ ifndef BOARD_SYSTEMIMAGE_PARTITION_SIZE
   $(error BOARD_SYSTEMIMAGE_PARTITION_SIZE must be set for BOARD_AVB_ENABLE)
 endif
 
+# $(1): the directory to extract public keys to
+define extract-avb-chain-public-keys
+  $(if $(BOARD_AVB_BOOT_KEY_PATH),\
+    $(hide) $(AVBTOOL) extract_public_key --key $(BOARD_AVB_BOOT_KEY_PATH) \
+      --output $(1)/boot.avbpubkey)
+  $(if $(BOARD_AVB_SYSTEM_KEY_PATH),\
+    $(hide) $(AVBTOOL) extract_public_key --key $(BOARD_AVB_SYSTEM_KEY_PATH) \
+      --output $(1)/system.avbpubkey)
+  $(if $(BOARD_AVB_VENDOR_KEY_PATH),\
+    $(hide) $(AVBTOOL) extract_public_key --key $(BOARD_AVB_VENDOR_KEY_PATH) \
+      --output $(1)/vendor.avbpubkey)
+  $(if $(BOARD_AVB_DTBO_KEY_PATH),\
+    $(hide) $(AVBTOOL) extract_public_key --key $(BOARD_AVB_DTBO_KEY_PATH) \
+      --output $(1)/dtbo.avbpubkey)
+endef
+
 define build-vbmetaimage-target
   $(call pretty,"Target vbmeta image: $(INSTALLED_VBMETAIMAGE_TARGET)")
+  $(hide) mkdir -p $(AVB_CHAIN_KEY_DIR)
+  $(call extract-avb-chain-public-keys, $(AVB_CHAIN_KEY_DIR))
   $(hide) $(AVBTOOL) make_vbmeta_image \
     $(INTERNAL_AVB_MAKE_VBMETA_IMAGE_ARGS) \
     $(INTERNAL_AVB_SIGNING_ARGS) \
     $(BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS) \
     --output $@
+  $(hide) rm -rf $(AVB_CHAIN_KEY_DIR)
 endef
 
 INSTALLED_VBMETAIMAGE_TARGET := $(BUILT_VBMETAIMAGE_TARGET)
-$(INSTALLED_VBMETAIMAGE_TARGET): $(AVBTOOL) $(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_SYSTEMIMAGE) $(INSTALLED_VENDORIMAGE_TARGET) $(INSTALLED_DTBOIMAGE_TARGET)
+$(INSTALLED_VBMETAIMAGE_TARGET): $(AVBTOOL) $(INSTALLED_BOOTIMAGE_TARGET) $(INSTALLED_SYSTEMIMAGE) $(INSTALLED_VENDORIMAGE_TARGET) $(INSTALLED_DTBOIMAGE_TARGET) $(BOARD_AVB_KEY_PATH)
 	$(build-vbmetaimage-target)
 
 .PHONY: vbmetaimage-nodeps
 vbmetaimage-nodeps:
 	$(build-vbmetaimage-target)
 
-# We need $(AVBTOOL) for system.img generation.
-FULL_SYSTEMIMAGE_DEPS += $(AVBTOOL)
+else ifeq (true,$(BOARD_BUILD_DISABLED_VBMETAIMAGE))
+BUILT_DISABLED_VBMETAIMAGE := $(PRODUCT_OUT)/vbmeta.img
+
+INSTALLED_VBMETAIMAGE_TARGET := $(BUILT_DISABLED_VBMETAIMAGE)
+$(INSTALLED_VBMETAIMAGE_TARGET): $(AVBTOOL)
+	$(hide) $(AVBTOOL) make_vbmeta_image \
+	  --flag 2 --padding_size 4096 --output $@
 
 endif # BOARD_AVB_ENABLE
 
@@ -2032,6 +2171,7 @@ OTATOOLS :=  $(HOST_OUT_EXECUTABLES)/minigzip \
   $(HOST_OUT_JAVA_LIBRARIES)/dumpkey.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/signapk.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/BootSignature.jar \
+  $(HOST_OUT_JAVA_LIBRARIES)/VeritySigner.jar \
   $(HOST_OUT_EXECUTABLES)/make_ext4fs \
   $(HOST_OUT_EXECUTABLES)/mkuserimg.sh \
   $(HOST_OUT_EXECUTABLES)/mke2fs \
@@ -2053,13 +2193,9 @@ OTATOOLS :=  $(HOST_OUT_EXECUTABLES)/minigzip \
   $(HOST_OUT_EXECUTABLES)/brillo_update_payload \
   $(HOST_OUT_EXECUTABLES)/lib/shflags/shflags \
   $(HOST_OUT_EXECUTABLES)/delta_generator \
-  $(BLK_ALLOC_TO_BASE_FS)
-
-ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT))
-OTATOOLS += \
-  $(FUTILITY) \
-  $(VBOOT_SIGNER)
-endif
+  $(AVBTOOL) \
+  $(BLK_ALLOC_TO_BASE_FS) \
+  $(BRO)
 
 ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT))
 OTATOOLS += \
@@ -2093,7 +2229,9 @@ OTATOOLS += \
   $(HOST_LIBRARY_PATH)/libz-host$(HOST_SHLIB_SUFFIX) \
   $(HOST_LIBRARY_PATH)/libsparse-host$(HOST_SHLIB_SUFFIX) \
   $(HOST_LIBRARY_PATH)/libbase$(HOST_SHLIB_SUFFIX) \
-  $(HOST_LIBRARY_PATH)/libpcre2$(HOST_SHLIB_SUFFIX)
+  $(HOST_LIBRARY_PATH)/libpcre2$(HOST_SHLIB_SUFFIX) \
+  $(HOST_LIBRARY_PATH)/libbrotli$(HOST_SHLIB_SUFFIX)
+
 
 .PHONY: otatools
 otatools: $(OTATOOLS)
@@ -2101,23 +2239,32 @@ otatools: $(OTATOOLS)
 BUILT_OTATOOLS_PACKAGE := $(PRODUCT_OUT)/otatools.zip
 $(BUILT_OTATOOLS_PACKAGE): zip_root := $(call intermediates-dir-for,PACKAGING,otatools)/otatools
 
-$(BUILT_OTATOOLS_PACKAGE): $(OTATOOLS) | $(ACP)
+OTATOOLS_DEPS := \
+  system/extras/verity/build_verity_metadata.py \
+  system/extras/ext4_utils/mke2fs.conf \
+  external/avb/test/data/testkey_rsa4096.pem \
+  $(shell find build/target/product/security -type f -name \*.x509.pem -o -name \*.pk8 -o \
+      -name verity_key | sort) \
+  $(shell find device vendor -type f -name \*.pk8 -o -name verifiedboot\* -o \
+      -name \*.x509.pem -o -name oem\*.prop | sort)
+
+OTATOOLS_RELEASETOOLS := \
+  $(shell find build/tools/releasetools -name \*.pyc -prune -o -type f | sort)
+
+ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT))
+OTATOOLS_DEPS += \
+  $(shell find external/vboot_reference/tests/devkeys -type f | sort)
+endif
+
+$(BUILT_OTATOOLS_PACKAGE): $(OTATOOLS) $(OTATOOLS_DEPS) $(OTATOOLS_RELEASETOOLS) | $(ACP)
 	@echo "Package OTA tools: $@"
 	$(hide) rm -rf $@ $(zip_root)
-	$(hide) mkdir -p $(dir $@) $(zip_root)/bin $(zip_root)/framework $(zip_root)/releasetools $(zip_root)/system/extras/verity $(zip_root)/system/extras/ext4_utils
+	$(hide) mkdir -p $(dir $@) $(zip_root)/bin $(zip_root)/framework $(zip_root)/releasetools
 	$(call copy-files-with-structure,$(OTATOOLS),$(HOST_OUT)/,$(zip_root))
-	$(hide) $(ACP) $(HOST_OUT_JAVA_LIBRARIES)/VeritySigner.jar $(zip_root)/framework/
-	$(hide) $(ACP) -p system/extras/verity/build_verity_metadata.py $(zip_root)/system/extras/verity/
-	$(hide) $(ACP) -p system/extras/ext4_utils/mke2fs.conf $(zip_root)/system/extras/ext4_utils/
 	$(hide) $(ACP) -r -d -p build/tools/releasetools/* $(zip_root)/releasetools
-ifeq (true,$(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SUPPORTS_VBOOT))
-	$(hide) mkdir -p $(zip_root)/external/vboot_reference/tests/devkeys
-	$(hide) $(ACP) -r -d -p external/vboot_reference/tests/devkeys/* $(zip_root)/external/vboot_reference/tests/devkeys
-endif
 	$(hide) rm -rf $@ $(zip_root)/releasetools/*.pyc
 	$(hide) (cd $(zip_root) && zip -qryX $(abspath $@) *)
-	$(hide) zip -qryX $(abspath $@) build/target/product/security/
-	$(hide) find device vendor -name \*.pk8 -o -name verifiedboot\* -o -name \*.x509.pem -o -name oem\*.prop | xargs zip -qryX $(abspath $@)>/dev/null || true
+	$(hide) echo $(OTATOOLS_DEPS) | xargs zip -qryX $(abspath $@)>/dev/null || true
 
 .PHONY: otatools-package
 otatools-package: $(BUILT_OTATOOLS_PACKAGE)
@@ -2220,6 +2367,7 @@ $(BUILT_TARGET_FILES_PACKAGE): \
 		$(INSTALLED_USERDATAIMAGE_TARGET) \
 		$(INSTALLED_CACHEIMAGE_TARGET) \
 		$(INSTALLED_VENDORIMAGE_TARGET) \
+		$(INSTALLED_VBMETAIMAGE_TARGET) \
 		$(INSTALLED_DTBOIMAGE_TARGET) \
 		$(INTERNAL_SYSTEMOTHERIMAGE_FILES) \
 		$(INSTALLED_ANDROID_INFO_TXT_TARGET) \
@@ -2401,14 +2549,17 @@ ifeq ($(BOARD_USES_FULL_RECOVERY_IMAGE),true)
 	$(hide) echo "full_recovery_image=true" >> $(zip_root)/META/misc_info.txt
 endif
 ifeq ($(BOARD_AVB_ENABLE),true)
-	$(hide) echo "board_avb_enable=true" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_rollback_index=$(BOARD_AVB_ROLLBACK_INDEX)" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_key_path=$(BOARD_AVB_KEY_PATH)" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_algorithm=$(BOARD_AVB_ALGORITHM)" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_boot_add_hash_footer_args=$(BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS)" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_system_add_hashtree_footer_args=$(BOARD_AVB_SYSTEM_ADD_HASHTREE_FOOTER_ARGS)" >> $(zip_root)/META/misc_info.txt
-	$(hide) echo "board_avb_make_vbmeta_image_args=$(BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS)" >> $(zip_root)/META/misc_info.txt
-endif
+	$(hide) echo "avb_enable=true" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_vbmeta_key_path=$(BOARD_AVB_KEY_PATH)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_vbmeta_algorithm=$(BOARD_AVB_ALGORITHM)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_vbmeta_args=$(BOARD_AVB_MAKE_VBMETA_IMAGE_ARGS)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_boot_add_hash_footer_args=$(BOARD_AVB_BOOT_ADD_HASH_FOOTER_ARGS)" >> $(zip_root)/META/misc_info.txt
+ifdef BOARD_AVB_BOOT_KEY_PATH
+	$(hide) echo "avb_boot_key_path=$(BOARD_AVB_BOOT_KEY_PATH)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_boot_algorithm=$(BOARD_AVB_BOOT_ALGORITHM)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_boot_rollback_index_location=$(BOARD_AVB_BOOT_ROLLBACK_INDEX_LOCATION)" >> $(zip_root)/META/misc_info.txt
+endif # BOARD_AVB_BOOT_KEY_PATH
+endif # BOARD_AVB_ENABLE
 ifdef BOARD_BPT_INPUT_FILES
 	$(hide) echo "board_bpt_enable=true" >> $(zip_root)/META/misc_info.txt
 	$(hide) echo "board_bpt_make_table_args=$(BOARD_BPT_MAKE_TABLE_ARGS)" >> $(zip_root)/META/misc_info.txt
@@ -2456,11 +2607,42 @@ ifeq ($(BREAKPAD_GENERATE_SYMBOLS),true)
 	@# If breakpad symbols have been generated, add them to the zip.
 	$(hide) $(ACP) -r $(TARGET_OUT_BREAKPAD) $(zip_root)/BREAKPAD
 endif
+
 	$(hide) echo "ota_override_device=$(OTA_SCRIPT_OVERRIDE_DEVICE)" >> $(zip_root)/META/misc_info.txt
+
+# BOARD_BUILD_DISABLED_VBMETAIMAGE is used to build a special vbmeta.img
+# that disables AVB verification. The content is fixed and we can just copy
+# it to $(zip_root)/IMAGES without passing some info into misc_info.txt for
+# regeneration.
+ifeq (true,$(BOARD_BUILD_DISABLED_VBMETAIMAGE))
+	$(hide) mkdir -p $(zip_root)/IMAGES
+	$(hide) cp $(INSTALLED_VBMETAIMAGE_TARGET) $(zip_root)/IMAGES/
+endif
+
 ifdef BOARD_PREBUILT_VENDORIMAGE
 	$(hide) mkdir -p $(zip_root)/IMAGES
 	$(hide) cp $(INSTALLED_VENDORIMAGE_TARGET) $(zip_root)/IMAGES/
 endif
+ifdef BOARD_PREBUILT_DTBOIMAGE
+	$(hide) mkdir -p $(zip_root)/PREBUILT_IMAGES
+	$(hide) cp $(INSTALLED_DTBOIMAGE_TARGET) $(zip_root)/PREBUILT_IMAGES/
+	$(hide) echo "has_dtbo=true" >> $(zip_root)/META/misc_info.txt
+ifeq ($(BOARD_AVB_ENABLE),true)
+	$(hide) echo "dtbo_size=$(BOARD_DTBOIMG_PARTITION_SIZE)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_dtbo_add_hash_footer_args=$(BOARD_AVB_DTBO_ADD_HASH_FOOTER_ARGS)" >> $(zip_root)/META/misc_info.txt
+ifdef BOARD_AVB_DTBO_KEY_PATH
+	$(hide) echo "avb_dtbo_key_path=$(BOARD_AVB_DTBO_KEY_PATH)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_dtbo_algorithm=$(BOARD_AVB_DTBO_ALGORITHM)" >> $(zip_root)/META/misc_info.txt
+	$(hide) echo "avb_dtbo_rollback_index_location=$(BOARD_AVB_DTBO_ROLLBACK_INDEX_LOCATION)" \
+	    >> $(zip_root)/META/misc_info.txt
+endif # BOARD_AVB_DTBO_KEY_PATH
+endif # BOARD_AVB_ENABLE
+endif # BOARD_PREBUILT_DTBOIMAGE
+	@# The radio images in BOARD_PACK_RADIOIMAGES will be additionally copied from RADIO/ into
+	@# IMAGES/, which then will be added into <product>-img.zip. Such images must be listed in
+	@# INSTALLED_RADIOIMAGE_TARGET.
+	$(hide) $(foreach part,$(BOARD_PACK_RADIOIMAGES), \
+	    echo $(part) >> $(zip_root)/META/pack_radioimages.txt;)
 	@# Run fs_config on all the system, vendor, boot ramdisk,
 	@# and recovery ramdisk files in the zip, and save the output
 	$(hide) $(call fs_config,$(zip_root)/SYSTEM,system/) > $(zip_root)/META/filesystem_config.txt
@@ -2481,7 +2663,7 @@ endif
 ifeq ($(PRODUCT_FULL_TREBLE),true)
 	@# Metadata for compatibility verification.
 	$(hide) cp $(BUILT_SYSTEM_MANIFEST) $(zip_root)/META/system_manifest.xml
-	$(hide) cp $(BUILT_SYSTEM_COMPATIBILITY_MATRIX) $(zip_root)/META/system_compatibility_matrix.xml
+	$(hide) cp $(BUILT_SYSTEM_COMPATIBILITY_MATRIX) $(zip_root)/META/system_matrix.xml
 ifdef BUILT_VENDOR_MANIFEST
 	$(hide) cp $(BUILT_VENDOR_MANIFEST) $(zip_root)/META/vendor_manifest.xml
 endif
@@ -2545,6 +2727,12 @@ ifneq ($(CUSTOM_BUILD),)
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := true
 else
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := false
+endif
+
+ifeq ($(AB_OTA_UPDATER),true)
+$(INTERNAL_OTA_PACKAGE_TARGET): $(BRILLO_UPDATE_PAYLOAD)
+else
+$(INTERNAL_OTA_PACKAGE_TARGET): $(BRO)
 endif
 endif
 
@@ -2659,19 +2847,35 @@ $(APPS_ZIP): $(INSTALLED_SYSTEMIMAGE)
 		zip -qjX $@ $$apps_to_zip; \
 	fi
 
-#------------------------------------------------------------------
-# A zip of emma code coverage meta files. Generated for fully emma
-# instrumented build.
-#
 ifeq (true,$(EMMA_INSTRUMENT))
-EMMA_META_ZIP := $(PRODUCT_OUT)/emma_meta.zip
-# the dependency will be set up later in build/core/main.mk.
+  #------------------------------------------------------------------
+  # An archive of classes for use in generating code-coverage reports
+  # These are the uninstrumented versions of any classes that were
+  # to be instrumented.
+  # Any dependencies are set up later in build/core/main.mk.
+
+  ifeq ($(ANDROID_COMPILE_WITH_JACK),false)
+    JACOCO_REPORT_CLASSES_ALL := $(PRODUCT_OUT)/jacoco-report-classes-all.jar
+$(JACOCO_REPORT_CLASSES_ALL) :
+	@echo "Collecting uninstrumented classes"
+	$(hide) find $(TARGET_COMMON_OUT_ROOT) $(HOST_COMMON_OUT_ROOT) -name "jacoco-report-classes.jar" | \
+		zip -@ -0 -q -X $@
+# Meaning of these options:
+# -@ scan stdin for file paths to add to the zip
+# -0 don't do any compression
+# -q supress most output
+# -X skip storing extended file attributes
+
+  else
+    EMMA_META_ZIP := $(PRODUCT_OUT)/emma_meta.zip
 $(EMMA_META_ZIP) :
 	@echo "Collecting Emma coverage meta files."
 	$(hide) find $(TARGET_COMMON_OUT_ROOT) $(HOST_COMMON_OUT_ROOT) -name "coverage.em" | \
 		zip -@ -qX $@
+endif
 
 endif # EMMA_INSTRUMENT=true
+
 
 #------------------------------------------------------------------
 # A zip of Proguard obfuscation dictionary files.
@@ -2700,6 +2904,26 @@ endif # TARGET_BUILD_APPS
 .PHONY: dalvikfiles
 dalvikfiles: $(INTERNAL_DALVIK_MODULES)
 
+ifeq ($(BUILD_QEMU_IMAGES),true)
+INSTALLED_QEMU_SYSTEMIMAGE := $(PRODUCT_OUT)/system-qemu.img
+MK_QEMU_IMAGE_SH := device/generic/goldfish/tools/mk_qemu_image.sh
+SGDISK_HOST := $(HOST_OUT_EXECUTABLES)/sgdisk
+$(INSTALLED_QEMU_SYSTEMIMAGE): $(INSTALLED_SYSTEMIMAGE) $(MK_QEMU_IMAGE_SH) $(SGDISK_HOST)
+	@echo Create system-qemu.img
+	(export SGDISK=$(SGDISK_HOST); $(MK_QEMU_IMAGE_SH) ${PRODUCT_OUT}/system.img)
+
+systemimage: $(INSTALLED_QEMU_SYSTEMIMAGE)
+droidcore: $(INSTALLED_QEMU_SYSTEMIMAGE)
+ifeq ($(BOARD_USES_VENDORIMAGE),true)
+INSTALLED_QEMU_VENDORIMAGE := $(PRODUCT_OUT)/vendor-qemu.img
+$(INSTALLED_QEMU_VENDORIMAGE): $(INSTALLED_VENDORIMAGE_TARGET) $(MK_QEMU_IMAGE_SH) $(SGDISK_HOST)
+	@echo Create vendor-qemu.img
+	(export SGDISK=$(SGDISK_HOST); $(MK_QEMU_IMAGE_SH) ${PRODUCT_OUT}/vendor.img)
+
+vendorimage: $(INSTALLED_QEMU_VENDORIMAGE)
+droidcore: $(INSTALLED_QEMU_VENDORIMAGE)
+endif
+endif
 # -----------------------------------------------------------------
 # The emulator package
 ifeq ($(BUILD_EMULATOR),true)
@@ -2795,6 +3019,8 @@ deps := \
 	$(SYMBOLS_ZIP) \
 	$(COVERAGE_ZIP) \
 	$(INSTALLED_SYSTEMIMAGE) \
+	$(INSTALLED_QEMU_SYSTEMIMAGE) \
+	$(INSTALLED_QEMU_VENDORIMAGE) \
 	$(INSTALLED_USERDATAIMAGE_TARGET) \
 	$(INSTALLED_RAMDISK_TARGET) \
 	$(INSTALLED_SDK_BUILD_PROP_TARGET) \

@@ -18,6 +18,7 @@ import copy
 import errno
 import getopt
 import getpass
+import gzip
 import imp
 import os
 import platform
@@ -107,10 +108,15 @@ class ExternalError(RuntimeError):
   pass
 
 
-def Run(args, **kwargs):
-  """Create and return a subprocess.Popen object, printing the command
-  line on the terminal if -v was specified."""
-  if OPTIONS.verbose:
+def Run(args, verbose=None, **kwargs):
+  """Create and return a subprocess.Popen object.
+
+  Caller can specify if the command line should be printed. The global
+  OPTIONS.verbose will be used if not specified.
+  """
+  if verbose is None:
+    verbose = OPTIONS.verbose
+  if verbose:
     print("  running: ", " ".join(args))
   return subprocess.Popen(args, **kwargs)
 
@@ -340,14 +346,17 @@ def DumpInfoDict(d):
     print("%-25s = (%s) %s" % (k, type(v).__name__, v))
 
 
-def AppendAVBSigningArgs(cmd):
+def AppendAVBSigningArgs(cmd, partition):
   """Append signing arguments for avbtool."""
-  keypath = OPTIONS.info_dict.get("board_avb_key_path", None)
-  algorithm = OPTIONS.info_dict.get("board_avb_algorithm", None)
-  if not keypath or not algorithm:
-    algorithm = "SHA256_RSA4096"
-    keypath = "external/avb/test/data/testkey_rsa4096.pem"
-  cmd.extend(["--key", keypath, "--algorithm", algorithm])
+  # e.g., "--key path/to/signing_key --algorithm SHA256_RSA4096"
+  key_path = OPTIONS.info_dict.get("avb_" + partition + "_key_path")
+  algorithm = OPTIONS.info_dict.get("avb_" + partition + "_algorithm")
+  if key_path and algorithm:
+    cmd.extend(["--key", key_path, "--algorithm", algorithm])
+  avb_salt = OPTIONS.info_dict.get("avb_salt")
+  # make_vbmeta_image doesn't like "--salt" (and it's not needed).
+  if avb_salt and partition != "vbmeta":
+    cmd.extend(["--salt", avb_salt])
 
 
 def _BuildBootableImage(sourcedir, fs_config_file, info_dict=None,
@@ -500,13 +509,13 @@ def _BuildBootableImage(sourcedir, fs_config_file, info_dict=None,
     img_keyblock.close()
 
   # AVB: if enabled, calculate and add hash to boot.img.
-  if info_dict.get("board_avb_enable", None) == "true":
-    avbtool = os.getenv('AVBTOOL') or "avbtool"
-    part_size = info_dict.get("boot_size", None)
+  if info_dict.get("avb_enable") == "true":
+    avbtool = os.getenv('AVBTOOL') or info_dict["avb_avbtool"]
+    part_size = info_dict["boot_size"]
     cmd = [avbtool, "add_hash_footer", "--image", img.name,
            "--partition_size", str(part_size), "--partition_name", "boot"]
-    AppendAVBSigningArgs(cmd)
-    args = info_dict.get("board_avb_boot_add_hash_footer_args", None)
+    AppendAVBSigningArgs(cmd, "boot")
+    args = info_dict.get("avb_boot_add_hash_footer_args")
     if args and args.strip():
       cmd.extend(shlex.split(args))
     p = Run(cmd, stdout=subprocess.PIPE)
@@ -561,6 +570,13 @@ def GetBootableImage(name, prebuilt_name, unpack_dir, tree_subdir,
   if data:
     return File(name, data)
   return None
+
+
+def Gunzip(in_filename, out_filename):
+  """Gunzip the given gzip compressed file to a given output file.
+  """
+  with gzip.open(in_filename, "rb") as in_file, open(out_filename, "wb") as out_file:
+    shutil.copyfileobj(in_file, out_file)
 
 
 def UnzipTemp(filename, pattern=None):
@@ -768,16 +784,34 @@ def CheckSize(data, target, info_dict):
 
 def ReadApkCerts(tf_zip):
   """Given a target_files ZipFile, parse the META/apkcerts.txt file
-  and return a {package: cert} dict."""
+  and return a tuple with the following elements: (1) a dictionary that maps
+  packages to certs (based on the "certificate" and "private_key" attributes
+  in the file. (2) A string representing the extension of compressed APKs in
+  the target files (e.g ".gz" ".bro")."""
   certmap = {}
+  compressed_extension = None
+
+  # META/apkcerts.txt contains the info for _all_ the packages known at build
+  # time. Filter out the ones that are not installed.
+  installed_files = set()
+  for name in tf_zip.namelist():
+    basename = os.path.basename(name)
+    if basename:
+      installed_files.add(basename)
+
   for line in tf_zip.read("META/apkcerts.txt").split("\n"):
     line = line.strip()
     if not line:
       continue
-    m = re.match(r'^name="(.*)"\s+certificate="(.*)"\s+'
-                 r'private_key="(.*)"$', line)
+    m = re.match(r'^name="(?P<NAME>.*)"\s+certificate="(?P<CERT>.*)"\s+'
+                 r'private_key="(?P<PRIVKEY>.*?)"(\s+compressed="(?P<COMPRESSED>.*)")?$',
+                 line)
     if m:
-      name, cert, privkey = m.groups()
+      matches = m.groupdict()
+      cert = matches["CERT"]
+      privkey = matches["PRIVKEY"]
+      name = matches["NAME"]
+      this_compressed_extension = matches["COMPRESSED"]
       public_key_suffix_len = len(OPTIONS.public_key_suffix)
       private_key_suffix_len = len(OPTIONS.private_key_suffix)
       if cert in SPECIAL_CERT_STRINGS and not privkey:
@@ -788,7 +822,22 @@ def ReadApkCerts(tf_zip):
         certmap[name] = cert[:-public_key_suffix_len]
       else:
         raise ValueError("failed to parse line from apkcerts.txt:\n" + line)
-  return certmap
+      if this_compressed_extension:
+        # Only count the installed files.
+        filename = name + '.' + this_compressed_extension
+        if filename not in installed_files:
+          continue
+        # Make sure that all the values in the compression map have the same
+        # extension. We don't support multiple compression methods in the same
+        # system image.
+        if compressed_extension:
+          if this_compressed_extension != compressed_extension:
+            raise ValueError("multiple compressed extensions : %s vs %s",
+                             (compressed_extension, this_compressed_extension))
+        else:
+          compressed_extension = this_compressed_extension
+
+  return (certmap, ("." + compressed_extension) if compressed_extension else None)
 
 
 COMMON_DOCSTRING = """
@@ -1526,9 +1575,34 @@ class BlockDifference(object):
     ZipWrite(output_zip,
              '{}.transfer.list'.format(self.path),
              '{}.transfer.list'.format(self.partition))
-    ZipWrite(output_zip,
-             '{}.new.dat'.format(self.path),
-             '{}.new.dat'.format(self.partition))
+
+    # For full OTA, compress the new.dat with brotli with quality 6 to reduce its size. Quailty 9
+    # almost triples the compression time but doesn't further reduce the size too much.
+    # For a typical 1.8G system.new.dat
+    #                       zip  | brotli(quality 6)  | brotli(quality 9)
+    #   compressed_size:    942M | 869M (~8% reduced) | 854M
+    #   compression_time:   75s  | 265s               | 719s
+    #   decompression_time: 15s  | 25s                | 25s
+
+    if not self.src:
+      bro_cmd = ['bro', '--quality', '6',
+                 '--input', '{}.new.dat'.format(self.path),
+                 '--output', '{}.new.dat.br'.format(self.path)]
+      print("Compressing {}.new.dat with brotli".format(self.partition))
+      p = Run(bro_cmd, stdout=subprocess.PIPE)
+      p.communicate()
+      assert p.returncode == 0,\
+          'compression of {}.new.dat failed'.format(self.partition)
+
+      new_data_name = '{}.new.dat.br'.format(self.partition)
+      ZipWrite(output_zip,
+               '{}.new.dat.br'.format(self.path),
+               new_data_name,
+               compress_type=zipfile.ZIP_STORED)
+    else:
+      new_data_name = '{}.new.dat'.format(self.partition)
+      ZipWrite(output_zip, '{}.new.dat'.format(self.path), new_data_name)
+
     ZipWrite(output_zip,
              '{}.patch.dat'.format(self.path),
              '{}.patch.dat'.format(self.partition),
@@ -1541,9 +1615,10 @@ class BlockDifference(object):
 
     call = ('block_image_update("{device}", '
             'package_extract_file("{partition}.transfer.list"), '
-            '"{partition}.new.dat", "{partition}.patch.dat") ||\n'
+            '"{new_data_name}", "{partition}.patch.dat") ||\n'
             '  abort("E{code}: Failed to update {partition} image.");'.format(
-                device=self.device, partition=self.partition, code=code))
+                device=self.device, partition=self.partition,
+                new_data_name=new_data_name, code=code))
     script.AppendExtra(script.WordWrap(call))
 
   def _HashBlocks(self, source, ranges): # pylint: disable=no-self-use
@@ -1616,7 +1691,6 @@ def MakeRecoveryPatch(input_dir, output_sink, recovery_img, boot_img,
     info_dict = OPTIONS.info_dict
 
   full_recovery_image = info_dict.get("full_recovery_image", None) == "true"
-  system_root_image = info_dict.get("system_root_image", None) == "true"
 
   if full_recovery_image:
     output_sink("etc/recovery.img", recovery_img.data)
@@ -1672,30 +1746,8 @@ fi
        'bonus_args': bonus_args}
 
   # The install script location moved from /system/etc to /system/bin
-  # in the L release.  Parse init.*.rc files to find out where the
-  # target-files expects it to be, and put it there.
-  sh_location = "etc/install-recovery.sh"
-  found = False
-  if system_root_image:
-    init_rc_dir = os.path.join(input_dir, "ROOT")
-  else:
-    init_rc_dir = os.path.join(input_dir, "BOOT", "RAMDISK")
-  init_rc_files = os.listdir(init_rc_dir)
-  for init_rc_file in init_rc_files:
-    if (not init_rc_file.startswith('init.') or
-        not init_rc_file.endswith('.rc')):
-      continue
-
-    with open(os.path.join(init_rc_dir, init_rc_file)) as f:
-      for line in f:
-        m = re.match(r"^service flash_recovery /system/(\S+)\s*$", line)
-        if m:
-          sh_location = m.group(1)
-          found = True
-          break
-
-    if found:
-      break
+  # in the L release.
+  sh_location = "bin/install-recovery.sh"
 
   print("putting script in", sh_location)
 
