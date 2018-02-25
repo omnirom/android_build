@@ -1391,12 +1391,13 @@ def ComputeDifferences(diffs):
 
 class BlockDifference(object):
   def __init__(self, partition, tgt, src=None, check_first_block=False,
-               version=None, disable_imgdiff=False):
+               version=None, disable_imgdiff=False, brotli=True):
     self.tgt = tgt
     self.src = src
     self.partition = partition
     self.check_first_block = check_first_block
     self.disable_imgdiff = disable_imgdiff
+    self.brotli = brotli
 
     if version is None:
       version = 1
@@ -1584,7 +1585,7 @@ class BlockDifference(object):
     #   compression_time:   75s  | 265s               | 719s
     #   decompression_time: 15s  | 25s                | 25s
 
-    if not self.src:
+    if not self.src and self.brotli:
       bro_cmd = ['bro', '--quality', '6',
                  '--input', '{}.new.dat'.format(self.path),
                  '--output', '{}.new.dat.br'.format(self.path)]

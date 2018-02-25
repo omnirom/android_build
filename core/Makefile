@@ -2729,6 +2729,16 @@ else
     $(INTERNAL_OTA_PACKAGE_TARGET): backuptool := false
 endif
 
+ifndef ANDROID_COMPILE_WITH_BROTLI
+    ANDROID_COMPILE_WITH_BROTLI := true
+endif
+
+ifeq ($(ANDROID_COMPILE_WITH_BROTLI),true)
+    $(INTERNAL_OTA_PACKAGE_TARGET): brotli := true
+else
+    $(INTERNAL_OTA_PACKAGE_TARGET): brotli := false
+endif
+
 ifeq ($(AB_OTA_UPDATER),true)
 $(INTERNAL_OTA_PACKAGE_TARGET): $(BRILLO_UPDATE_PAYLOAD)
 else
@@ -2747,6 +2757,7 @@ $(INTERNAL_OTA_PACKAGE_TARGET): $(BUILT_TARGET_FILES_PACKAGE) \
 	   -k $(KEY_CERT_PAIR) \
 	   --override_device=$(OTA_SCRIPT_OVERRIDE_DEVICE) \
 	   --backup=$(backuptool) \
+	   --brotli=$(brotli) \
 	   $(override_prop) \
 	   $(if $(OEM_OTA_CONFIG), -o $(OEM_OTA_CONFIG)) \
 	   $(BUILT_TARGET_FILES_PACKAGE) $@
