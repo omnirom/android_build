@@ -27,9 +27,9 @@ else
 endif
 
 ifeq ($(LOCAL_RRO_THEME),)
-  LOCAL_MODULE_PATH := $(partition)/overlay
+  LOCAL_MODULE_PATH := $(TARGET_OUT)/overlay
 else
-  LOCAL_MODULE_PATH := $(partition)/overlay/$(LOCAL_RRO_THEME)
+  LOCAL_MODULE_PATH := $(TARGET_OUT)/overlay/$(LOCAL_RRO_THEME)
 endif
 
 # Do not remove resources without default values nor dedupe resource
