@@ -1540,6 +1540,10 @@ ifdef BOARD_CUSTOM_BOOTIMG_MK
 include $(BOARD_CUSTOM_BOOTIMG_MK)
 endif
 
+ifdef BOARD_CUSTOM_BUILD_MAKEFILE
+include $(BOARD_CUSTOM_BUILD_MAKEFILE)
+endif
+
 
 # -----------------------------------------------------------------
 # system image
