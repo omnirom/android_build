@@ -93,6 +93,7 @@ $(SOONG_VARIABLES): FORCE
 	echo '    "BoardUsesQCOMHardware":  $(if $(BOARD_USES_QCOM_HARDWARE),true,false),';  \
 	echo '    "TargetUsesQCOMBsp":  $(if $(TARGET_USES_QCOM_BSP),true,false),';  \
 	echo '    "TargetUsesNoTrebleCamera":  $(if $(TARGET_USES_NON_TREBLE_CAMERA),true,false),';  \
+	echo '    "TargetStoresMetadataInBuffer":  $(if $(filter false,$(TARGET_STORES_METADATA_IN_BUFFER)),false,true),';  \
 	echo '    "DeviceKernelHeaders": $(call json_list,$(strip $(TARGET_PROJECT_SYSTEM_INCLUDES))),'; \
 	echo '    "TargetHeaderPath": "$(TARGET_SPECIFIC_HEADER_PATH)"'; \
 	echo '}') > $(SOONG_VARIABLES_TMP); \
