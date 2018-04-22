@@ -94,7 +94,9 @@ $(SOONG_VARIABLES): FORCE
 	echo '    "TargetUsesQCOMBsp":  $(if $(TARGET_USES_QCOM_BSP),true,false),';  \
 	echo '    "TargetUsesNoTrebleCamera":  $(if $(TARGET_USES_NON_TREBLE_CAMERA),true,false),';  \
 	echo '    "DeviceKernelHeaders": $(call json_list,$(strip $(TARGET_PROJECT_SYSTEM_INCLUDES))),'; \
-	echo '    "TargetHeaderPath": "$(TARGET_SPECIFIC_HEADER_PATH)"'; \
+	echo '    "TargetHeaderPath": "$(TARGET_SPECIFIC_HEADER_PATH)",';  \
+        echo ''; \
+	echo '    "LegacyCam": $(if $(TARGET_HAS_LEGACY_CAMERA),false,true)'; \
 	echo '}') > $(SOONG_VARIABLES_TMP); \
 	if ! cmp -s $(SOONG_VARIABLES_TMP) $(SOONG_VARIABLES); then \
 	  mv $(SOONG_VARIABLES_TMP) $(SOONG_VARIABLES); \
