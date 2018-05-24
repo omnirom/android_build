@@ -622,7 +622,7 @@ ZIPTIME := $(prebuilt_build_tools_bin)/ziptime
 ifneq ($(FLEX_EXEC),)
 LEX := $(FLEX_EXEC)
 else
-LEX := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/flex/flex-2.5.39
+LEX := $(prebuilt_build_tools_bin)/flex
 endif
 # The default PKGDATADIR built in the prebuilt bison is a relative path
 # prebuilts/build-tools/common/bison.
@@ -632,7 +632,7 @@ BISON_PKGDATADIR := $(PWD)/prebuilts/build-tools/common/bison
 ifneq ($(BISON_EXEC),)
 BISON := $(BISON_EXEC)
 else
-BISON := prebuilts/build-tools/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/bin/bison
+BISON := $(prebuilt_build_tools_bin)/bison
 endif
 YACC := $(BISON) -d
 BISON_DATA := $(wildcard $(BISON_PKGDATADIR)/* $(BISON_PKGDATADIR)/*/*)
