@@ -32,7 +32,6 @@ PRODUCT_PACKAGES += \
     Contacts \
     DocumentsUI \
     DownloadProviderUi \
-    Email \
     ExactCalculator \
     ExternalStorageProvider \
     FusedLocation \
@@ -49,7 +48,6 @@ PRODUCT_PACKAGES += \
     PrintSpooler \
     PrintRecommendationService \
     ProxyHandler \
-    QuickSearchBox \
     Settings \
     SharedStorageBackup \
     StorageManager \
