@@ -42,7 +42,7 @@ PRODUCT_COPY_FILES += \
 
 # Telephony:
 #   Provide a default APN configuration
-PRODUCT_COPY_FILES += \
+#PRODUCT_COPY_FILES += \
     device/generic/goldfish/data/etc/apns-conf.xml:system/etc/apns-conf.xml
 
 # NFC:
