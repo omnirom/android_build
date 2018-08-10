@@ -223,6 +223,9 @@ include vendor/omni/build/soong/soong_config.mk
 
 $(call json_end)
 
+include vendor/omni/build/soong/soong_config.mk
+
+
 $(file >$(SOONG_VARIABLES).tmp,$(json_contents))
 
 $(shell if ! cmp -s $(SOONG_VARIABLES).tmp $(SOONG_VARIABLES); then \
