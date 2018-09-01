@@ -146,7 +146,8 @@ $(call add_json_list, NamespacesToExport,                $(PRODUCT_SOONG_NAMESPA
 $(call add_json_list, PgoAdditionalProfileDirs,          $(PGO_ADDITIONAL_PROFILE_DIRS))
 
 #omni
-$(call add_json_bool, Healthd_enable_op_fastchg,             $(filter true,$(HEALTHD_ENABLE_OP_FASTCHG_CHECK)))
+$(call add_json_bool, Healthd_enable_op_fastchg,         $(filter true,$(HEALTHD_ENABLE_OP_FASTCHG_CHECK)))
+$(call add_json_bool, Use_init_vendor_lib,               $(call invert_bool,$(filter ,$(TARGET_INIT_VENDOR_LIB))))
 
 _contents := $(_contents)    "VendorVars": {$(newline)
 $(foreach namespace,$(SOONG_CONFIG_NAMESPACES),\
