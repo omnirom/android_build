@@ -44,6 +44,17 @@ $(DEFAULT_GOAL): droid_targets
 .PHONY: droid_targets
 droid_targets:
 
+# Create a symlink for 'out' to custom OUT_DIR.
+# Some soong scripts rely on 'out' for building.
+ifneq ($(OUT_DIR),$(PWD)/out)
+$(shell if [ ! -L out ]; then \
+    mv out old_out; fi)
+$(shell rm -f out; ln -s $(OUT_DIR) out)
+else
+$(shell if [ -L out ]; then \
+    rm -f out; mv old_out out; fi)
+endif
+
 # Set up various standard variables based on configuration
 # and host information.
 include $(BUILD_SYSTEM)/config.mk
