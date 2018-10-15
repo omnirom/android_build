@@ -147,6 +147,7 @@ $(call add_json_list, PgoAdditionalProfileDirs,          $(PGO_ADDITIONAL_PROFIL
 
 #omni
 $(call add_json_bool, Healthd_enable_op_fastchg,         $(filter true,$(HEALTHD_ENABLE_OP_FASTCHG_CHECK)))
+$(call add_json_bool, Healthd_enable_huawei_fastchg,     $(filter true,$(HEALTHD_ENABLE_HUAWEI_FASTCHG_CHECK)))
 $(call add_json_bool, Target_init_vendor_lib,            $(if $(TARGET_INIT_VENDOR_LIB), true))
 
 _contents := $(_contents)    "VendorVars": {$(newline)
