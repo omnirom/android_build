@@ -1019,6 +1019,11 @@ else ifndef BUILDING_VENDOR_BOOT_IMAGE # && BOARD_USES_GENERIC_KERNEL_IMAGE != t
   endif
 endif # BUILDING_VENDOR_BOOT_IMAGE == "" && BOARD_USES_GENERIC_KERNEL_IMAGE != true
 
+ifneq (,$(PLATFORM_SECURITY_PATCH_OVERRIDE))
+      PLATFORM_SECURITY_PATCH_OMNI := $(PLATFORM_SECURITY_PATCH)
+      PLATFORM_SECURITY_PATCH := $(PLATFORM_SECURITY_PATCH_OVERRIDE)
+endif
+
 ifdef BOARD_GKI_SIGNING_KEY_PATH
   # GKI boot images will not set system version & SPL value in the header.
   # They can be set by the device manufacturer in the AVB properties instead.
