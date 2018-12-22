@@ -1528,6 +1528,20 @@ $(INSTALLED_RECOVERYIMAGE_TARGET): $(MKBOOTIMG) $(recovery_ramdisk) $(recovery_k
 		$(call build-recoveryimage-target, $@)
 endif # BOARD_CUSTOM_BOOTIMG_MK
 
+ifeq ($(USE_RECOVERY_INSTALLER),true)
+ifneq ($(RECOVERY_INSTALLER_PATH),)
+	@echo ----- Making recovery installer for A/B devices ------
+ifeq ($(LZMA_RAMDISK_TARGETS),boot)
+	cp -fr $(RECOVERY_INSTALLER_PATH) $(PRODUCT_OUT)/installer && cp -f $(PRODUCT_OUT)/ramdisk-recovery.cpio.lzma $(PRODUCT_OUT)/installer/ramdisk-recovery.cpio && cd $(PRODUCT_OUT)/installer && zip -qr recovery-installer ./ && cp -f $(PRODUCT_OUT)/installer/recovery-installer.zip $(PRODUCT_OUT) && rm $(PRODUCT_OUT)/installer/recovery-installer.zip && rm $(PRODUCT_OUT)/installer/ramdisk-recovery.cpio
+else
+ifeq ($(LZMA_RAMDISK_TARGETS),recovery)
+	cp -fr $(RECOVERY_INSTALLER_PATH) $(PRODUCT_OUT)/installer && cp -f $(PRODUCT_OUT)/ramdisk-recovery.cpio.lzma $(PRODUCT_OUT)/installer/ramdisk-recovery.cpio && cd $(PRODUCT_OUT)/installer && zip -qr recovery-installer ./ && cp -f $(PRODUCT_OUT)/installer/recovery-installer.zip $(PRODUCT_OUT) && rm $(PRODUCT_OUT)/installer/recovery-installer.zip && rm $(PRODUCT_OUT)/installer/ramdisk-recovery.cpio
+else
+	cp -fr $(RECOVERY_INSTALLER_PATH) $(PRODUCT_OUT)/installer && cp -f $(recovery_uncompressed_ramdisk) $(PRODUCT_OUT)/installer && cd $(PRODUCT_OUT)/installer && zip -qr recovery-installer ./ && cp -f $(PRODUCT_OUT)/installer/recovery-installer.zip $(PRODUCT_OUT) && rm $(PRODUCT_OUT)/installer/recovery-installer.zip && rm $(PRODUCT_OUT)/installer/ramdisk-recovery.cpio
+endif
+endif
+endif
+endif
 
 ifdef RECOVERY_RESOURCE_ZIP
 $(RECOVERY_RESOURCE_ZIP): $(INSTALLED_RECOVERYIMAGE_TARGET) | $(ZIPTIME)
