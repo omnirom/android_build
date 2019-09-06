@@ -28,7 +28,6 @@ PRODUCT_PACKAGES += \
     Launcher3QuickStep \
     OneTimeInitializer \
     preinstalled-packages-platform-handheld-product.xml \
-    QuickSearchBox \
     SettingsIntelligence \
     frameworks-base-overlays
 
