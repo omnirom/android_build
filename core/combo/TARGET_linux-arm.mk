@@ -53,7 +53,6 @@ else ifneq (,$(filter $(TARGET_$(combo_2nd_arch_prefix)CPU_VARIANT), $(KNOWN_ARM
     $(error Incorrect TARGET_$(combo_2nd_arch_prefix)ARCH_VARIANT, $(TARGET_$(combo_2nd_arch_prefix)ARCH_VARIANT). Use armv8-a instead.)
   endif
 endif
-endif
 
 ifeq ($(strip $(TARGET_$(combo_2nd_arch_prefix)ARCH_VARIANT)),)
   $(error TARGET_$(combo_2nd_arch_prefix)ARCH_VARIANT must be set)
