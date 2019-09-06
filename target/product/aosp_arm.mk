@@ -14,15 +14,29 @@
 # limitations under the License.
 #
 
--include device/generic/goldfish/arm32-vendor.mk
+PRODUCT_USE_DYNAMIC_PARTITIONS := true
 
-# TODO(b/78308559): includes vr_hwc into GSI before vr_hwc move to vendor
-PRODUCT_PACKAGES += \
-    vr_hwc
+# The system image of aosp_arm-userdebug is a GSI for the devices with:
+# - ARM 32 bits user space
+# - 64 bits binder interface
+# - system-as-root
+# - VNDK enforcement
+# - compatible property override enabled
 
-include $(SRC_TARGET_DIR)/product/full.mk
+# GSI for system/product
+$(call inherit-product, $(SRC_TARGET_DIR)/product/gsi_common.mk)
 
-# Needed by Pi newly launched device to pass VtsTrebleSysProp on GSI
-PRODUCT_COMPATIBLE_PROPERTY_OVERRIDE := true
+# Enable mainline checking for excat this product name
+ifeq (aosp_arm,$(TARGET_PRODUCT))
+PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := relaxed
+endif
+
+# Emulator for vendor
+$(call inherit-product-if-exists, device/generic/goldfish/arm32-vendor.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/product/emulator_vendor.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/board/generic_x86/device.mk)
 
 PRODUCT_NAME := aosp_arm
+PRODUCT_DEVICE := generic
+PRODUCT_BRAND := Android
+PRODUCT_MODEL := AOSP on ARM32

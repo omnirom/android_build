@@ -33,7 +33,6 @@ full_classes_header_jarjar := $(intermediates.COMMON)/classes-header-jarjar.jar
 full_classes_header_jar := $(intermediates.COMMON)/classes-header.jar
 full_classes_compiled_jar := $(intermediates.COMMON)/classes-full-debug.jar
 full_classes_combined_jar := $(intermediates.COMMON)/classes-combined.jar
-full_classes_desugar_jar := $(intermediates.COMMON)/desugar.classes.jar
 full_classes_jarjar_jar := $(intermediates.COMMON)/classes-jarjar.jar
 full_classes_jar := $(intermediates.COMMON)/classes.jar
 built_dex := $(intermediates.COMMON)/classes.dex
@@ -43,7 +42,6 @@ LOCAL_INTERMEDIATE_TARGETS += \
     $(full_classes_turbine_jar) \
     $(full_classes_compiled_jar) \
     $(full_classes_combined_jar) \
-    $(full_classes_desugar_jar) \
     $(full_classes_jarjar_jar) \
     $(full_classes_jar) \
     $(built_dex) \
@@ -158,22 +156,6 @@ endif
 
 $(eval $(call copy-one-file,$(full_classes_jarjar_jar),$(full_classes_jar)))
 
-ifneq ($(USE_D8_DESUGAR),true)
-my_desugaring :=
-ifeq ($(LOCAL_JAVA_LANGUAGE_VERSION),1.8)
-my_desugaring := true
-$(full_classes_desugar_jar): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
-$(full_classes_desugar_jar): $(full_classes_jar) $(full_java_header_libs) $(DESUGAR)
-	$(desugar-classes-jar)
-endif
-else
-my_desugaring :=
-endif
-
-ifndef my_desugaring
-full_classes_desugar_jar := $(full_classes_jar)
-endif
-
 ifeq ($(LOCAL_IS_STATIC_JAVA_LIBRARY),true)
 # No dex; all we want are the .class files with resources.
 $(LOCAL_BUILT_MODULE) : $(java_resource_sources)
@@ -184,40 +166,26 @@ $(LOCAL_BUILT_MODULE) : $(full_classes_jar)
 else # !LOCAL_IS_STATIC_JAVA_LIBRARY
 $(built_dex): PRIVATE_INTERMEDIATES_DIR := $(intermediates.COMMON)
 $(built_dex): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
-$(built_dex): $(full_classes_desugar_jar) $(DX) $(ZIP2ZIP)
-ifneq ($(USE_D8_DESUGAR),true)
+$(built_dex): $(full_classes_jar) $(DX) $(ZIP2ZIP)
 	$(transform-classes.jar-to-dex)
-else
-	$(transform-classes-d8.jar-to-dex)
-endif
 
 $(LOCAL_BUILT_MODULE): PRIVATE_DEX_FILE := $(built_dex)
 $(LOCAL_BUILT_MODULE): PRIVATE_SOURCE_ARCHIVE := $(full_classes_jarjar_jar)
-$(LOCAL_BUILT_MODULE): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
+$(LOCAL_BUILT_MODULE): $(MERGE_ZIPS) $(SOONG_ZIP) $(ZIP2ZIP)
 $(LOCAL_BUILT_MODULE): $(built_dex) $(java_resource_sources)
 	@echo "Host Jar: $(PRIVATE_MODULE) ($@)"
-	$(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@)
-	$(add-dex-to-package)
+	rm -rf $@.parts
+	mkdir -p $@.parts
+	$(call create-dex-jar,$@.parts/dex.zip,$(PRIVATE_DEX_FILE))
+	$(call extract-resources-jar,$@.parts/res.zip,$(PRIVATE_SOURCE_ARCHIVE))
+	$(MERGE_ZIPS) -j $@ $@.parts/dex.zip $@.parts/res.zip
+	rm -rf $@.parts
 
 endif # !LOCAL_IS_STATIC_JAVA_LIBRARY
 
-ifneq (,$(filter-out current system_current test_current core_current, $(LOCAL_SDK_VERSION)))
-  my_default_app_target_sdk := $(call get-numeric-sdk-version,$(LOCAL_SDK_VERSION))
-  my_sdk_version := $(call get-numeric-sdk-version,$(LOCAL_SDK_VERSION))
-else
-  my_default_app_target_sdk := $(DEFAULT_APP_TARGET_SDK)
-  my_sdk_version := $(PLATFORM_SDK_VERSION)
-endif
-
-ifdef LOCAL_MIN_SDK_VERSION
-  my_min_sdk_version := $(LOCAL_MIN_SDK_VERSION)
-else
-  my_min_sdk_version := $(call codename-or-sdk-to-sdk,$(my_default_app_target_sdk))
-endif
-
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_DEFAULT_APP_TARGET_SDK := $(my_default_app_target_sdk)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_SDK_VERSION := $(my_sdk_version)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_MIN_SDK_VERSION := $(my_min_sdk_version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_DEFAULT_APP_TARGET_SDK := $(call module-target-sdk-version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_SDK_VERSION := $(call module-sdk-version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_MIN_SDK_VERSION := $(call codename-or-sdk-to-sdk,$(call module-min-sdk-version))
 
 USE_CORE_LIB_BOOTCLASSPATH :=
 

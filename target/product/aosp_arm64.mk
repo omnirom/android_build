@@ -14,12 +14,37 @@
 # limitations under the License.
 #
 
+PRODUCT_USE_DYNAMIC_PARTITIONS := true
+
+# The system image of aosp_arm64-userdebug is a GSI for the devices with:
+# - ARM 64 bits user space
+# - 64 bits binder interface
+# - system-as-root
+# - VNDK enforcement
+# - compatible property override enabled
+
 # This is a build configuration for a full-featured build of the
 # Open-Source part of the tree. It's geared toward a US-centric
 # build quite specifically for the emulator, and might not be
 # entirely appropriate to inherit from for on-device configurations.
 
--include device/generic/goldfish/arm64-vendor.mk
+# GSI for system/product
+$(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/product/gsi_common.mk)
+
+# Emulator for vendor
+$(call inherit-product-if-exists, device/generic/goldfish/arm64-vendor.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/product/emulator_vendor.mk)
+$(call inherit-product, $(SRC_TARGET_DIR)/board/generic_arm64/device.mk)
+
+# Enable mainline checking for excat this product name
+ifeq (aosp_arm64,$(TARGET_PRODUCT))
+PRODUCT_ENFORCE_ARTIFACT_PATH_REQUIREMENTS := relaxed
+endif
+
+PRODUCT_ARTIFACT_PATH_REQUIREMENT_WHITELIST += \
+    root/init.zygote32_64.rc \
+    root/init.zygote64_32.rc \
 
 # Copy different zygote settings for vendor.img to select by setting property
 # ro.zygote=zygote64_32 or ro.zygote=zygote32_64:
@@ -29,19 +54,7 @@
 PRODUCT_COPY_FILES += \
     system/core/rootdir/init.zygote32_64.rc:root/init.zygote32_64.rc
 
-# TODO(b/78308559): includes vr_hwc into GSI before vr_hwc move to vendor
-PRODUCT_PACKAGES += \
-    vr_hwc
-
-$(call inherit-product, $(SRC_TARGET_DIR)/product/emulator.mk)
-$(call inherit-product, $(SRC_TARGET_DIR)/product/core_64_bit.mk)
-$(call inherit-product, $(SRC_TARGET_DIR)/product/aosp_base_telephony.mk)
-$(call inherit-product, $(SRC_TARGET_DIR)/board/generic_arm64/device.mk)
-
-# Needed by Pi newly launched device to pass VtsTrebleSysProp on GSI
-PRODUCT_COMPATIBLE_PROPERTY_OVERRIDE := true
-
 PRODUCT_NAME := aosp_arm64
 PRODUCT_DEVICE := generic_arm64
 PRODUCT_BRAND := Android
-PRODUCT_MODEL := AOSP on ARM arm64 Emulator
+PRODUCT_MODEL := AOSP on ARM64

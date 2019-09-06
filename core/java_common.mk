@@ -6,6 +6,10 @@ ifneq ($(filter ../%,$(LOCAL_SRC_FILES)),)
 my_soong_problems += dotdot_srcs
 endif
 
+ifneq (,$(LOCAL_JNI_SHARED_LIBRARIES))
+my_soong_problems += jni_libs
+endif
+
 ###########################################################
 ## Java version
 ###########################################################
@@ -25,7 +29,7 @@ ifeq (,$(LOCAL_JAVA_LANGUAGE_VERSION))
     LOCAL_JAVA_LANGUAGE_VERSION := 1.7
   else ifneq (,$(filter $(LOCAL_SDK_VERSION), $(TARGET_SDK_VERSIONS_WITHOUT_JAVA_19_SUPPORT)))
     LOCAL_JAVA_LANGUAGE_VERSION := 1.8
-  else ifneq (,$(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS))
+  else ifneq (,$(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS_USE_PREBUILT_SDK))
     # TODO(ccross): allow 1.9 for current and unbundled once we have SDK system modules
     LOCAL_JAVA_LANGUAGE_VERSION := 1.8
   else
@@ -76,6 +80,7 @@ proto_java_sources_dir := $(proto_java_intemediate_dir)/src
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_INCLUDES := $(TOP)
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_SRC_FILES := $(proto_sources_fullpath)
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_DIR := $(proto_java_sources_dir)
+$(proto_java_sources_file_stamp): PRIVATE_PROTOC_FLAGS := $(LOCAL_PROTOC_FLAGS)
 ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),micro)
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --javamicro_out
 else
@@ -84,13 +89,13 @@ $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --javanano
   else
     ifeq ($(LOCAL_PROTOC_OPTIMIZE_TYPE),stream)
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --javastream_out
+$(proto_java_sources_file_stamp): PRIVATE_PROTOC_FLAGS += --plugin=$(HOST_OUT_EXECUTABLES)/protoc-gen-javastream
 $(proto_java_sources_file_stamp): $(HOST_OUT_EXECUTABLES)/protoc-gen-javastream
     else
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_OPTION := --java_out
     endif
   endif
 endif
-$(proto_java_sources_file_stamp): PRIVATE_PROTOC_FLAGS := $(LOCAL_PROTOC_FLAGS)
 $(proto_java_sources_file_stamp): PRIVATE_PROTO_JAVA_OUTPUT_PARAMS := $(if $(filter lite,$(LOCAL_PROTOC_OPTIMIZE_TYPE)),lite$(if $(LOCAL_PROTO_JAVA_OUTPUT_PARAMS),:,),)$(LOCAL_PROTO_JAVA_OUTPUT_PARAMS)
 $(proto_java_sources_file_stamp) : $(proto_sources_fullpath) $(PROTOC)
 	$(call transform-proto-to-java)
@@ -193,16 +198,25 @@ ifdef need_compile_java
 
 annotation_processor_flags :=
 annotation_processor_deps :=
+annotation_processor_jars :=
+
+# If error prone is enabled then add LOCAL_ERROR_PRONE_FLAGS to LOCAL_JAVACFLAGS
+ifeq ($(RUN_ERROR_PRONE),true)
+annotation_processor_jars += $(ERROR_PRONE_JARS)
+LOCAL_JAVACFLAGS += $(ERROR_PRONE_FLAGS)
+LOCAL_JAVACFLAGS += '-Xplugin:ErrorProne $(ERROR_PRONE_CHECKS) $(LOCAL_ERROR_PRONE_FLAGS)'
+endif
 
 ifdef LOCAL_ANNOTATION_PROCESSORS
-  annotation_processor_jars := $(call java-lib-files,$(LOCAL_ANNOTATION_PROCESSORS),true)
-  annotation_processor_flags += -processorpath $(call normalize-path-list,$(annotation_processor_jars))
-  annotation_processor_deps += $(annotation_processor_jars)
+  annotation_processor_jars += $(call java-lib-files,$(LOCAL_ANNOTATION_PROCESSORS),true)
 
   # b/25860419: annotation processors must be explicitly specified for grok
   annotation_processor_flags += $(foreach class,$(LOCAL_ANNOTATION_PROCESSOR_CLASSES),-processor $(class))
+endif
 
-  annotation_processor_jars :=
+ifneq (,$(strip $(annotation_processor_jars)))
+annotation_processor_flags += -processorpath $(call normalize-path-list,$(annotation_processor_jars))
+annotation_processor_deps += $(annotation_processor_jars)
 endif
 
 full_static_java_libs := $(call java-lib-files,$(LOCAL_STATIC_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
@@ -225,11 +239,29 @@ $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_JAVA_SOURCE_LIST := $(java_source_list_fi
 
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_RMTYPEDEFS := $(LOCAL_RMTYPEDEFS)
 
+# Sanity check class path vars.
+disallowed_deps := $(foreach sdk,$(TARGET_AVAILABLE_SDK_VERSIONS),$(call resolve-prebuilt-sdk-module,$(sdk)))
+disallowed_deps += $(foreach sdk,$(TARGET_AVAILABLE_SDK_VERSIONS),\
+  $(foreach sdk_lib,$(JAVA_SDK_LIBRARIES),$(call resolve-prebuilt-sdk-module,$(sdk),$(sdk_lib))))
+bad_deps := $(filter $(disallowed_deps),$(LOCAL_JAVA_LIBRARIES) $(LOCAL_STATIC_JAVA_LIBRARIES))
+ifneq (,$(bad_deps))
+  $(call pretty-error,SDK modules should not be depended on directly. Please use LOCAL_SDK_VERSION for $(bad_deps))
+endif
+
 full_java_bootclasspath_libs :=
 empty_bootclasspath :=
 my_system_modules :=
+exported_sdk_libs_files :=
+my_exported_sdk_libs_file :=
 
 ifndef LOCAL_IS_HOST_MODULE
+  sdk_libs :=
+
+  # When an sdk lib name is listed in LOCAL_JAVA_LIBRARIES, move it to LOCAL_SDK_LIBRARIES, so that
+  # it is correctly redirected to the stubs library.
+  LOCAL_SDK_LIBRARIES += $(filter $(JAVA_SDK_LIBRARIES),$(LOCAL_JAVA_LIBRARIES))
+  LOCAL_JAVA_LIBRARIES := $(filter-out $(JAVA_SDK_LIBRARIES),$(LOCAL_JAVA_LIBRARIES))
+
   ifeq ($(LOCAL_SDK_VERSION),)
     ifeq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
       # No bootclasspath. But we still need "" to prevent javac from using default host bootclasspath.
@@ -243,6 +275,13 @@ ifndef LOCAL_IS_HOST_MODULE
       LOCAL_JAVA_LIBRARIES := $(filter-out $(TARGET_DEFAULT_BOOTCLASSPATH_LIBRARIES) $(TARGET_DEFAULT_JAVA_LIBRARIES),$(LOCAL_JAVA_LIBRARIES))
       my_system_modules := $(DEFAULT_SYSTEM_MODULES)
     endif  # LOCAL_NO_STANDARD_LIBRARIES
+
+    ifneq (,$(TARGET_BUILD_APPS_USE_PREBUILT_SDK))
+      sdk_libs := $(foreach lib_name,$(LOCAL_SDK_LIBRARIES),$(call resolve-prebuilt-sdk-module,system_current,$(lib_name)))
+    else
+      # When SDK libraries are referenced from modules built without SDK, provide the all APIs to them
+      sdk_libs := $(foreach lib_name,$(LOCAL_SDK_LIBRARIES),$(lib_name))
+    endif
   else
     ifeq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
       $(call pretty-error,Must not define both LOCAL_NO_STANDARD_LIBRARIES and LOCAL_SDK_VERSION)
@@ -251,22 +290,30 @@ ifndef LOCAL_IS_HOST_MODULE
       $(call pretty-error,Invalid LOCAL_SDK_VERSION '$(LOCAL_SDK_VERSION)' \
              Choices are: $(TARGET_AVAILABLE_SDK_VERSIONS))
     endif
-    ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),current)
-      # LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS.
-      full_java_bootclasspath_libs := $(call java-lib-header-files,android_stubs_current)
-    else ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),system_current)
-      full_java_bootclasspath_libs := $(call java-lib-header-files,android_system_stubs_current)
-    else ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),test_current)
-      full_java_bootclasspath_libs := $(call java-lib-header-files,android_test_stubs_current)
-    else ifeq ($(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS),core_current)
-      full_java_bootclasspath_libs := $(call java-lib-header-files,core.current.stubs)
+
+    ifneq (,$(TARGET_BUILD_APPS_USE_PREBUILT_SDK)$(filter-out %current,$(LOCAL_SDK_VERSION)))
+      # TARGET_BUILD_APPS mode or numbered SDK. Use prebuilt modules.
+      sdk_module := $(call resolve-prebuilt-sdk-module,$(LOCAL_SDK_VERSION))
+      sdk_libs := $(foreach lib_name,$(LOCAL_SDK_LIBRARIES),$(call resolve-prebuilt-sdk-module,$(LOCAL_SDK_VERSION),$(lib_name)))
     else
-      # core_<ver> is subset of <ver>. Instead of defining a prebuilt lib for core_<ver>,
-      # use the stub for <ver> when building for apps.
-      _version := $(patsubst core_%,%,$(LOCAL_SDK_VERSION))
-      full_java_bootclasspath_libs := $(call java-lib-header-files,sdk_v$(_version))
-      _version :=
-    endif # current, system_current, system_${VER}, test_current or core_current
+      # Note: the lib naming scheme must be kept in sync with build/soong/java/sdk_library.go.
+      sdk_lib_suffix = $(call pretty-error,sdk_lib_suffix was not set correctly)
+      ifeq (current,$(LOCAL_SDK_VERSION))
+        sdk_module := android_stubs_current
+        sdk_lib_suffix := .stubs
+      else ifeq (system_current,$(LOCAL_SDK_VERSION))
+        sdk_module := android_system_stubs_current
+        sdk_lib_suffix := .stubs.system
+      else ifeq (test_current,$(LOCAL_SDK_VERSION))
+        sdk_module := android_test_stubs_current
+        sdk_lib_suffix := .stubs.test
+      else ifeq (core_current,$(LOCAL_SDK_VERSION))
+        sdk_module := core.current.stubs
+        sdk_lib_suffix = $(call pretty-error,LOCAL_SDK_LIBRARIES not supported for LOCAL_SDK_VERSION = core_current)
+      endif
+      sdk_libs := $(foreach lib_name,$(LOCAL_SDK_LIBRARIES),$(lib_name)$(sdk_lib_suffix))
+    endif
+    full_java_bootclasspath_libs := $(call java-lib-header-files,$(sdk_module))
   endif # LOCAL_SDK_VERSION
 
   ifneq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
@@ -286,15 +333,22 @@ ifndef LOCAL_IS_HOST_MODULE
   # related classes to be present. This change adds stubs needed for
   # javac to compile lambdas.
   ifneq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
-    ifdef TARGET_BUILD_APPS
+    ifdef TARGET_BUILD_APPS_USE_PREBUILT_SDK
       full_java_bootclasspath_libs += $(call java-lib-header-files,sdk-core-lambda-stubs)
     else
       full_java_bootclasspath_libs += $(call java-lib-header-files,core-lambda-stubs)
     endif
   endif
+  full_shared_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES) $(sdk_libs),$(LOCAL_IS_HOST_MODULE))
+  full_shared_java_header_libs := $(call java-lib-header-files,$(LOCAL_JAVA_LIBRARIES) $(sdk_libs),$(LOCAL_IS_HOST_MODULE))
+  sdk_libs :=
 
-  full_shared_java_libs := $(call java-lib-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
-  full_shared_java_header_libs := $(call java-lib-header-files,$(LOCAL_JAVA_LIBRARIES),$(LOCAL_IS_HOST_MODULE))
+  # Files that contains the names of SDK libraries exported from dependencies. These will be re-exported.
+  # Note: No need to consider LOCAL_*_ANDROID_LIBRARIES and LOCAL_STATIC_JAVA_AAR_LIBRARIES. They are all appended to
+  # LOCAL_*_JAVA_LIBRARIES in java.mk
+  exported_sdk_libs_files := $(call exported-sdk-libs-files,$(LOCAL_JAVA_LIBRARIES) $(LOCAL_STATIC_JAVA_LIBRARIES))
+  # The file that contains the names of all SDK libraries that this module exports and re-exports
+  my_exported_sdk_libs_file := $(call local-intermediates-dir,COMMON)/exported-sdk-libs
 
 else # LOCAL_IS_HOST_MODULE
 
@@ -331,6 +385,23 @@ else # LOCAL_IS_HOST_MODULE
     full_shared_java_header_libs := $(full_shared_java_libs)
   endif # USE_CORE_LIB_BOOTCLASSPATH
 endif # !LOCAL_IS_HOST_MODULE
+
+ALL_DEPS.$(LOCAL_MODULE).ALL_DEPS := $(ALL_DEPS.$(LOCAL_MODULE).ALL_DEPS) $(full_java_bootclasspath_libs)
+
+# Export the SDK libs. The sdk library names listed in LOCAL_SDK_LIBRARIES are first exported.
+# Then sdk library names exported from dependencies are all re-exported.
+$(my_exported_sdk_libs_file): PRIVATE_EXPORTED_SDK_LIBS_FILES := $(exported_sdk_libs_files)
+$(my_exported_sdk_libs_file): PRIVATE_SDK_LIBS := $(sort $(LOCAL_SDK_LIBRARIES))
+$(my_exported_sdk_libs_file): $(exported_sdk_libs_files)
+	@echo "Export SDK libs $@"
+	$(hide) mkdir -p $(dir $@) && rm -f $@ $@.temp
+	$(if $(PRIVATE_SDK_LIBS),\
+		echo $(PRIVATE_SDK_LIBS) | tr ' ' '\n' > $@.temp,\
+		touch $@.temp)
+	$(if $(PRIVATE_EXPORTED_SDK_LIBS_FILES),\
+		cat $(PRIVATE_EXPORTED_SDK_LIBS_FILES) >> $@.temp)
+	$(hide) cat $@.temp | sort -u > $@
+	$(hide) rm -f $@.temp
 
 ifdef empty_bootclasspath
   ifdef full_java_bootclasspath_libs
@@ -429,7 +500,7 @@ ALL_MODULES.$(my_register_name).INTERMEDIATE_SOURCE_DIR := \
 ifeq ($(ONE_SHOT_MAKEFILE),)
 installed_static_library_notice_file_targets := \
     $(foreach lib,$(LOCAL_STATIC_JAVA_LIBRARIES), \
-      NOTICE-$(if $(LOCAL_IS_HOST_MODULE),HOST,TARGET)-JAVA_LIBRARIES-$(lib))
+      NOTICE-$(if $(LOCAL_IS_HOST_MODULE),HOST$(if $(my_host_cross),_CROSS,),TARGET)-JAVA_LIBRARIES-$(lib))
 else
 installed_static_library_notice_file_targets :=
 endif
@@ -466,7 +537,7 @@ endif
 ifdef LOCAL_AAPT2_ONLY
 my_link_type += aapt2_only
 endif
-ifdef LOCAL_USE_AAPT2
+ifeq ($(LOCAL_USE_AAPT2),true)
 my_allowed_types += aapt2_only
 endif
 

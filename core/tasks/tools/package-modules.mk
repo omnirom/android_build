@@ -21,17 +21,16 @@ my_pickup_files :=
 my_modules_and_deps := $(my_modules)
 $(foreach m,$(my_modules),\
   $(eval _explicitly_required := \
-    $(strip $(ALL_MODULES.$(m).EXPLICITLY_REQUIRED)\
-    $(ALL_MODULES.$(m)$(TARGET_2ND_ARCH_MODULE_SUFFIX).EXPLICITLY_REQUIRED)))\
+    $(strip $(ALL_MODULES.$(m).EXPLICITLY_REQUIRED_FROM_TARGET)\
+    $(ALL_MODULES.$(m)$(TARGET_2ND_ARCH_MODULE_SUFFIX).EXPLICITLY_REQUIRED_FROM_TARGET)))\
   $(eval my_modules_and_deps += $(_explicitly_required))\
 )
 
 # Ignore unknown installed files on partial builds
 my_missing_files :=
-# These warnings are too noisy, silence them for now.
-#ifneq ($(ALLOW_MISSING_DEPENDENCIES),true)
-#my_missing_files = $(shell $(call echo-warning,$(my_makefile),$(my_package_name): Unknown installed file for module '$(1)'))
-#endif
+ifneq ($(ALLOW_MISSING_DEPENDENCIES),true)
+my_missing_files = $(shell $(call echo-warning,$(my_makefile),$(my_package_name): Unknown installed file for module '$(1)'))
+endif
 
 # Iterate over modules' built files and installed files;
 # Calculate the dest files in the output zip file.
@@ -41,6 +40,8 @@ $(foreach m,$(my_modules_and_deps),\
     $(ALL_MODULES.$(m)$(TARGET_2ND_ARCH_MODULE_SUFFIX).PICKUP_FILES)))\
   $(eval _built_files := $(strip $(ALL_MODULES.$(m).BUILT_INSTALLED)\
     $(ALL_MODULES.$(m)$(TARGET_2ND_ARCH_MODULE_SUFFIX).BUILT_INSTALLED)))\
+  $(eval _module_class_folder := $($(strip MODULE_CLASS_$(word 1, $(strip $(ALL_MODULES.$(m).CLASS)\
+    $(ALL_MODULES.$(m)$(TARGET_2ND_ARCH_MODULE_SUFFIX).CLASS))))))\
   $(if $(_pickup_files)$(_built_files),,\
     $(call my_missing_files,$(m)))\
   $(eval my_pickup_files += $(_pickup_files))\
@@ -50,9 +51,15 @@ $(foreach m,$(my_modules_and_deps),\
     $(if $(filter $(TARGET_OUT_ROOT)/%,$(ins)),\
       $(eval bui := $(word 1,$(bui_ins)))\
       $(eval my_built_modules += $(bui))\
+      $(if $(filter $(_module_class_folder), nativetest benchmarktest),\
+        $(eval module_class_folder_stem := $(_module_class_folder)$(findstring 64, $(patsubst $(PRODUCT_OUT)/%,%,$(ins)))),\
+        $(eval module_class_folder_stem := $(_module_class_folder)))\
       $(eval my_copy_dest := $(patsubst data/%,DATA/%,\
-                               $(patsubst system/%,DATA/%,\
-                                 $(patsubst $(PRODUCT_OUT)/%,%,$(ins)))))\
+                               $(patsubst testcases/%,DATA/$(module_class_folder_stem)/%,\
+                                 $(patsubst testcases/$(m)/$(TARGET_ARCH)/%,DATA/$(module_class_folder_stem)/$(m)/%,\
+                                   $(patsubst testcases/$(m)/$(TARGET_2ND_ARCH)/%,DATA/$(module_class_folder_stem)/$(m)/%,\
+                                     $(patsubst system/%,DATA/%,\
+                                       $(patsubst $(PRODUCT_OUT)/%,%,$(ins))))))))\
       $(eval my_copy_pairs += $(bui):$(my_staging_dir)/$(my_copy_dest)))\
   ))
 

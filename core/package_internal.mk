@@ -87,53 +87,76 @@ else
   LOCAL_RESOURCE_DIR := $(foreach d,$(LOCAL_RESOURCE_DIR),$(call clean-path,$(d)))
 endif
 
-package_resource_overlays := $(strip \
+# If LOCAL_MODULE matches a rule in PRODUCT_MANIFEST_PACKAGE_NAME_OVERRIDES,
+# override the manifest package name by the (first) rule matched
+override_manifest_name := $(strip $(word 1,\
+  $(foreach rule,$(PRODUCT_MANIFEST_PACKAGE_NAME_OVERRIDES),\
+    $(eval _pkg_name_pat := $(call word-colon,1,$(rule)))\
+    $(eval _manifest_name_pat := $(call word-colon,2,$(rule)))\
+    $(if $(filter $(_pkg_name_pat),$(LOCAL_MODULE)),\
+      $(patsubst $(_pkg_name_pat),$(_manifest_name_pat),$(LOCAL_MODULE))\
+     )\
+   )\
+))
+
+ifneq (,$(override_manifest_name))
+# Note: this can override LOCAL_MANIFEST_PACKAGE_NAME value set in Android.mk
+LOCAL_MANIFEST_PACKAGE_NAME := $(override_manifest_name)
+endif
+
+include $(BUILD_SYSTEM)/force_aapt2.mk
+
+# Process Support Library dependencies.
+include $(BUILD_SYSTEM)/support_libraries.mk
+
+# Determine whether auto-RRO is enabled for this package.
+enforce_rro_enabled :=
+ifeq ($(PRODUCT_ENFORCE_RRO_TARGETS),*)
+  # * means all system APKs, so enable conditionally based on module path.
+
+  # Note that base_rules.mk has not yet been included, so it's likely that only
+  # one of LOCAL_MODULE_PATH and the LOCAL_X_MODULE flags has been set.
+  ifeq (,$(LOCAL_MODULE_PATH))
+    non_system_module := $(filter true,\
+        $(LOCAL_ODM_MODULE) \
+        $(LOCAL_OEM_MODULE) \
+        $(LOCAL_PRODUCT_MODULE) \
+        $(LOCAL_PRODUCT_SERVICES_MODULE) \
+        $(LOCAL_PROPRIETARY_MODULE) \
+        $(LOCAL_VENDOR_MODULE))
+    enforce_rro_enabled := $(if $(non_system_module),,true)
+  else ifneq ($(filter $(TARGET_OUT)/%,$(LOCAL_MODULE_PATH)),)
+    enforce_rro_enabled := true
+  endif
+else ifneq (,$(filter $(LOCAL_PACKAGE_NAME), $(PRODUCT_ENFORCE_RRO_TARGETS)))
+  enforce_rro_enabled := true
+endif
+
+product_package_overlays := $(strip \
     $(wildcard $(foreach dir, $(PRODUCT_PACKAGE_OVERLAYS), \
-      $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))) \
+      $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))))
+device_package_overlays := $(strip \
     $(wildcard $(foreach dir, $(DEVICE_PACKAGE_OVERLAYS), \
       $(addprefix $(dir)/, $(LOCAL_RESOURCE_DIR)))))
 
-enforce_rro_enabled :=
-ifneq ($(PRODUCT_ENFORCE_RRO_TARGETS),)
-  ifneq ($(package_resource_overlays),)
-    ifeq ($(PRODUCT_ENFORCE_RRO_TARGETS),*)
-      enforce_rro_enabled := true
-    else ifneq (,$(filter $(LOCAL_PACKAGE_NAME), $(PRODUCT_ENFORCE_RRO_TARGETS)))
-      enforce_rro_enabled := true
-    endif
-  endif
-
-  ifdef enforce_rro_enabled
-    ifeq (,$(LOCAL_MODULE_PATH))
-      ifeq (true,$(LOCAL_PROPRIETARY_MODULE))
-        enforce_rro_enabled :=
-      else ifeq (true,$(LOCAL_OEM_MODULE))
-        enforce_rro_enabled :=
-      else ifeq (true,$(LOCAL_ODM_MODULE))
-        enforce_rro_enabled :=
-      else ifeq (true,$(LOCAL_PRODUCT_MODULE))
-        enforce_rro_enabled :=
-      endif
-    else ifeq ($(filter $(TARGET_OUT)/%,$(LOCAL_MODULE_PATH)),)
-      enforce_rro_enabled :=
-    endif
-  endif
-endif
-
+static_resource_overlays :=
+runtime_resource_overlays_product :=
+runtime_resource_overlays_vendor :=
 ifdef enforce_rro_enabled
   ifneq ($(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS),)
-    static_only_resource_overlays := $(filter $(addsuffix %,$(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS)),$(package_resource_overlays))
-    ifneq ($(static_only_resource_overlays),)
-      package_resource_overlays := $(filter-out $(static_only_resource_overlays),$(package_resource_overlays))
-      LOCAL_RESOURCE_DIR := $(static_only_resource_overlays) $(LOCAL_RESOURCE_DIR)
-      ifeq ($(package_resource_overlays),)
-        enforce_rro_enabled :=
-      endif
-    endif
+    # The PRODUCT_ exclusion variable applies to both inclusion variables..
+    static_resource_overlays += $(filter $(addsuffix %,$(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS)),$(product_package_overlays))
+    static_resource_overlays += $(filter $(addsuffix %,$(PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS)),$(device_package_overlays))
   endif
+  runtime_resource_overlays_product := $(filter-out $(static_resource_overlays),$(product_package_overlays))
+  runtime_resource_overlays_vendor := $(filter-out $(static_resource_overlays),$(device_package_overlays))
 else
-LOCAL_RESOURCE_DIR := $(package_resource_overlays) $(LOCAL_RESOURCE_DIR)
+  static_resource_overlays := $(product_package_overlays) $(device_package_overlays)
 endif
+
+# Add the static overlays. Auto-RRO is created later, as it depends on
+# other logic in this file.
+LOCAL_RESOURCE_DIR := $(static_resource_overlays) $(LOCAL_RESOURCE_DIR)
 
 all_assets := $(strip \
     $(foreach dir, $(LOCAL_ASSET_DIR), \
@@ -153,13 +176,13 @@ LOCAL_USE_AAPT2 := true
 endif
 
 my_res_package :=
-ifdef LOCAL_USE_AAPT2
+ifeq ($(LOCAL_USE_AAPT2),true)
 # In aapt2 the last takes precedence.
 my_resource_dirs := $(call reverse-list,$(LOCAL_RESOURCE_DIR))
 my_res_dir :=
 my_overlay_res_dirs :=
 
-ifneq ($(LOCAL_STATIC_ANDROID_LIBRARIES),)
+ifneq ($(strip $(LOCAL_STATIC_ANDROID_LIBRARIES) $(LOCAL_STATIC_JAVA_AAR_LIBRARIES)),)
 # If we are using static android libraries, every source file becomes an overlay.
 # This is to emulate old AAPT behavior which simulated library support.
 my_res_dir :=
@@ -186,6 +209,11 @@ all_resources := $(strip $(my_res_resources) $(my_overlay_resources))
 # The linked resource package.
 my_res_package := $(intermediates)/package-res.apk
 LOCAL_INTERMEDIATE_TARGETS += $(my_res_package)
+
+ifeq ($(LOCAL_USE_AAPT2),true)
+  my_bundle_module := $(intermediates)/base.zip
+  LOCAL_INTERMEDIATE_TARGETS += $(my_bundle_module)
+endif
 
 # Always run aapt2, because we need to at least compile the AndroidManifest.xml.
 need_compile_res := true
@@ -297,30 +325,16 @@ endif # LOCAL_EMMA_INSTRUMENT
 
 rs_compatibility_jni_libs :=
 
-ifeq ($(LOCAL_DATA_BINDING),true)
-data_binding_intermediates := $(intermediates.COMMON)/data-binding
-
-LOCAL_JAVACFLAGS += -processorpath $(DATA_BINDING_COMPILER) -s $(data_binding_intermediates)/anno-src
-
-LOCAL_STATIC_JAVA_LIBRARIES += databinding-baselibrary
-LOCAL_STATIC_JAVA_AAR_LIBRARIES += databinding-library databinding-adapters
-
-data_binding_res_in := $(LOCAL_RESOURCE_DIR)
-data_binding_res_out := $(data_binding_intermediates)/res
-
-# Replace with the processed merged res dir.
-LOCAL_RESOURCE_DIR := $(data_binding_res_out)
-
-LOCAL_AAPT_FLAGS += --auto-add-overlay --extra-packages com.android.databinding.library
-endif  # LOCAL_DATA_BINDING
-
-# Process Support Library dependencies.
-include $(BUILD_SYSTEM)/support_libraries.mk
-
 # If the module is a compressed module, we don't pre-opt it because its final
 # installation location will be the data partition.
 ifdef LOCAL_COMPRESSED_MODULE
 LOCAL_DEX_PREOPT := false
+endif
+
+# Default to use uncompressed native libraries in APKs if minSdkVersion >= marshmallow
+ifndef LOCAL_USE_EMBEDDED_NATIVE_LIBS
+  LOCAL_USE_EMBEDDED_NATIVE_LIBS := $(call math_gt_or_eq, \
+    $(patsubst $(PLATFORM_VERSION_CODENAME),100,$(call module-min-sdk-version)),23)
 endif
 
 include $(BUILD_SYSTEM)/android_manifest.mk
@@ -357,9 +371,9 @@ $(R_file_stamp) $(my_res_package): PRIVATE_MANIFEST_INSTRUMENTATION_FOR := $(LOC
 ###############################
 ## AAPT/AAPT2
 
-ifdef LOCAL_USE_AAPT2
+ifeq ($(LOCAL_USE_AAPT2),true)
   my_compiled_res_base_dir := $(intermediates.COMMON)/flat-res
-  ifneq (,$(renderscript_target_api))
+  ifneq (,$(filter-out current,$(renderscript_target_api)))
     ifneq ($(call math_gt_or_eq,$(renderscript_target_api),21),true)
       my_generated_res_zips := $(rs_generated_res_zip)
     endif  # renderscript_target_api < 21
@@ -409,20 +423,21 @@ else  # LOCAL_USE_AAPT2
     resource_export_package := $(intermediates.COMMON)/package-export.apk
     $(R_file_stamp): $(resource_export_package)
 
-    # add-assets-to-package looks at PRODUCT_AAPT_CONFIG, but this target
+    # create-assets-package looks at PRODUCT_AAPT_CONFIG, but this target
     # can't know anything about PRODUCT.  Clear it out just for this target.
     $(resource_export_package): PRIVATE_PRODUCT_AAPT_CONFIG :=
     $(resource_export_package): PRIVATE_PRODUCT_AAPT_PREF_CONFIG :=
     $(resource_export_package): PRIVATE_RESOURCE_LIST := $(all_res_assets)
     $(resource_export_package): $(all_res_assets) $(full_android_manifest) $(rs_generated_res_zip) $(AAPT)
 	@echo "target Export Resources: $(PRIVATE_MODULE) ($@)"
-	$(create-empty-package)
-	$(add-assets-to-package)
+	$(call create-assets-package,$@)
   endif
 
 endif  # LOCAL_USE_AAPT2
 
 endif  # need_compile_res
+
+my_dex_jar := $(intermediates.COMMON)/dex.jar
 
 called_from_package_internal := true
 #################################
@@ -450,34 +465,6 @@ endif
 $(LOCAL_INTERMEDIATE_TARGETS): \
     PRIVATE_ANDROID_MANIFEST := $(full_android_manifest)
 
-ifeq ($(LOCAL_DATA_BINDING),true)
-data_binding_stamp := $(data_binding_intermediates)/data-binding.stamp
-$(data_binding_stamp): PRIVATE_INTERMEDIATES := $(data_binding_intermediates)
-$(data_binding_stamp): PRIVATE_MANIFEST := $(full_android_manifest)
-# Generate code into $(LOCAL_INTERMEDIATE_SOURCE_DIR) so that the generated .java files
-# will be automatically picked up by function compile-java.
-$(data_binding_stamp): PRIVATE_SRC_OUT := $(LOCAL_INTERMEDIATE_SOURCE_DIR)/data-binding
-$(data_binding_stamp): PRIVATE_XML_OUT := $(data_binding_intermediates)/xml
-$(data_binding_stamp): PRIVATE_RES_OUT := $(data_binding_res_out)
-$(data_binding_stamp): PRIVATE_RES_IN := $(data_binding_res_in)
-$(data_binding_stamp): PRIVATE_ANNO_SRC_DIR := $(data_binding_intermediates)/anno-src
-
-$(data_binding_stamp) : $(all_res_assets) $(full_android_manifest) \
-    $(DATA_BINDING_COMPILER)
-	@echo "Data-binding process: $@"
-	@rm -rf $(PRIVATE_INTERMEDIATES) $(PRIVATE_SRC_OUT) && \
-	  mkdir -p $(PRIVATE_INTERMEDIATES) $(PRIVATE_SRC_OUT) \
-	      $(PRIVATE_XML_OUT) $(PRIVATE_RES_OUT) $(PRIVATE_ANNO_SRC_DIR)
-	$(hide) $(JAVA) -classpath $(DATA_BINDING_COMPILER) android.databinding.tool.MakeCopy \
-	  $(PRIVATE_MANIFEST) $(PRIVATE_SRC_OUT) $(PRIVATE_XML_OUT) $(PRIVATE_RES_OUT) $(PRIVATE_RES_IN)
-	$(hide) touch $@
-
-# Make sure the data-binding process happens before javac and generation of R.java.
-$(R_file_stamp): $(data_binding_stamp)
-$(java_source_list_file): $(data_binding_stamp)
-$(full_classes_compiled_jar): $(data_binding_stamp)
-endif  # LOCAL_DATA_BINDING
-
 framework_res_package_export :=
 
 ifneq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
@@ -486,10 +473,10 @@ ifneq ($(LOCAL_NO_STANDARD_LIBRARIES),true)
 # resources.
 ifeq ($(LOCAL_SDK_RES_VERSION),core_current)
 # core_current doesn't contain any framework resources.
-else ifneq ($(filter-out current system_current test_current,$(LOCAL_SDK_RES_VERSION))$(if $(TARGET_BUILD_APPS),$(filter current system_current test_current,$(LOCAL_SDK_RES_VERSION))),)
+else ifneq ($(filter-out current system_current test_current,$(LOCAL_SDK_RES_VERSION))$(if $(TARGET_BUILD_APPS_USE_PREBUILT_SDK),$(filter current system_current test_current,$(LOCAL_SDK_RES_VERSION))),)
 # for released sdk versions, the platform resources were built into android.jar.
 framework_res_package_export := \
-    $(HISTORICAL_SDK_VERSIONS_ROOT)/$(LOCAL_SDK_RES_VERSION)/android.jar
+    $(call resolve-prebuilt-sdk-jar-path,$(LOCAL_SDK_RES_VERSION))
 else # LOCAL_SDK_RES_VERSION
 framework_res_package_export := \
     $(call intermediates-dir-for,APPS,framework-res,,COMMON)/package-export.apk
@@ -509,7 +496,7 @@ $(resource_export_package) $(R_file_stamp) $(LOCAL_BUILT_MODULE): $(all_library_
 $(LOCAL_INTERMEDIATE_TARGETS): \
     PRIVATE_AAPT_INCLUDES := $(all_library_res_package_exports)
 
-ifdef LOCAL_USE_AAPT2
+ifeq ($(LOCAL_USE_AAPT2),true)
 $(my_res_package) : $(all_library_res_package_export_deps)
 endif
 
@@ -553,6 +540,7 @@ endif
 ifeq ($(dir $(strip $(LOCAL_CERTIFICATE))),./)
     LOCAL_CERTIFICATE := $(dir $(DEFAULT_SYSTEM_DEV_CERTIFICATE))$(LOCAL_CERTIFICATE)
 endif
+include $(BUILD_SYSTEM)/app_certificate_validate.mk
 private_key := $(LOCAL_CERTIFICATE).pk8
 certificate := $(LOCAL_CERTIFICATE).x509.pem
 additional_certificates := $(foreach c,$(LOCAL_ADDITIONAL_CERTIFICATES), $(c).x509.pem $(c).pk8)
@@ -588,12 +576,26 @@ else
 endif
 endif
 
-$(LOCAL_BUILT_MODULE): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
+# Run veridex on product, product_services and vendor modules.
+# We skip it for unbundled app builds where we cannot build veridex.
+module_run_appcompat :=
+ifeq (true,$(non_system_module))
+ifeq (,$(TARGET_BUILD_APPS)$(filter true,$(TARGET_BUILD_PDK)))  # ! unbundled app build
+ifneq ($(UNSAFE_DISABLE_HIDDENAPI_FLAGS),true)
+  module_run_appcompat := true
+endif
+endif
+endif
+
+ifeq ($(module_run_appcompat),true)
+$(LOCAL_BUILT_MODULE) : $(appcompat-files)
+$(LOCAL_BUILT_MODULE): PRIVATE_INSTALLED_MODULE := $(LOCAL_INSTALLED_MODULE)
+endif
+
 $(LOCAL_BUILT_MODULE): PRIVATE_RESOURCE_INTERMEDIATES_DIR := $(intermediates.COMMON)/resources
-$(LOCAL_BUILT_MODULE): PRIVATE_FULL_CLASSES_JAR := $(full_classes_jar)
 $(LOCAL_BUILT_MODULE) : $(jni_shared_libraries)
-$(LOCAL_BUILT_MODULE) : $(JAR_ARGS)
-ifdef LOCAL_USE_AAPT2
+$(LOCAL_BUILT_MODULE) : $(JAR_ARGS) $(SOONG_ZIP) $(MERGE_ZIPS) $(ZIP2ZIP)
+ifeq ($(LOCAL_USE_AAPT2),true)
 $(LOCAL_BUILT_MODULE): PRIVATE_RES_PACKAGE := $(my_res_package)
 $(LOCAL_BUILT_MODULE) : $(my_res_package) $(AAPT2) | $(ACP)
 else
@@ -603,44 +605,114 @@ endif  # LOCAL_USE_AAPT2
 ifdef LOCAL_COMPRESSED_MODULE
 $(LOCAL_BUILT_MODULE) : $(MINIGZIP)
 endif
+ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
+$(LOCAL_BUILT_MODULE) : $(ZIP2ZIP)
+endif
+ifneq ($(BUILD_PLATFORM_ZIP),)
+$(LOCAL_BUILT_MODULE) : .KATI_IMPLICIT_OUTPUTS := $(dir $(LOCAL_BUILT_MODULE))package.dex.apk
+endif
+ifdef LOCAL_DEX_PREOPT
+$(LOCAL_BUILT_MODULE) : PRIVATE_STRIP_SCRIPT := $(intermediates)/strip.sh
+$(LOCAL_BUILT_MODULE) : $(intermediates)/strip.sh
+$(LOCAL_BUILT_MODULE) : | $(DEXPREOPT_STRIP_DEPS)
+$(LOCAL_BUILT_MODULE): .KATI_DEPFILE := $(LOCAL_BUILT_MODULE).d
+endif
+$(LOCAL_BUILT_MODULE): PRIVATE_USE_EMBEDDED_NATIVE_LIBS := $(LOCAL_USE_EMBEDDED_NATIVE_LIBS)
+$(LOCAL_BUILT_MODULE):
 	@echo "target Package: $(PRIVATE_MODULE) ($@)"
-ifdef LOCAL_USE_AAPT2
-	$(call copy-file-to-new-target)
+	rm -rf $@.parts
+	mkdir -p $@.parts
+ifeq ($(LOCAL_USE_AAPT2),true)
+	cp -f $(PRIVATE_RES_PACKAGE) $@.parts/apk.zip
 else  # ! LOCAL_USE_AAPT2
-	$(if $(PRIVATE_SOURCE_ARCHIVE),\
-	  $(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@),\
-	  $(create-empty-package))
-	$(add-assets-to-package)
+	$(call create-assets-package,$@.parts/apk.zip)
 endif  # LOCAL_USE_AAPT2
 ifneq ($(jni_shared_libraries),)
-	$(add-jni-shared-libs-to-package)
+	$(call create-jni-shared-libs-package,$@.parts/jni.zip,$(PRIVATE_USE_EMBEDDED_NATIVE_LIBS))
 endif
 ifeq ($(full_classes_jar),)
 # We don't build jar, need to add the Java resources here.
-	$(if $(PRIVATE_EXTRA_JAR_ARGS),$(call add-java-resources-to,$@))
+	$(if $(PRIVATE_EXTRA_JAR_ARGS),$(call create-java-resources-jar,$@.parts/res.zip))
 else  # full_classes_jar
-	$(add-dex-to-package)
-ifdef LOCAL_USE_AAPT2
-	$(call add-jar-resources-to-package,$@,$(PRIVATE_FULL_CLASSES_JAR),$(PRIVATE_RESOURCE_INTERMEDIATES_DIR))
-endif
+	$(call create-dex-jar,$@.parts/dex.zip,$(PRIVATE_DEX_FILE))
+	$(call extract-resources-jar,$@.parts/res.zip,$(PRIVATE_SOURCE_ARCHIVE))
 endif  # full_classes_jar
+	$(MERGE_ZIPS) $@ $@.parts/*.zip
+	rm -rf $@.parts
 ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
 	@# No need to align, sign-package below will do it.
 	$(uncompress-dexs)
 endif
+# Run appcompat before stripping the classes.dex file.
+ifeq ($(module_run_appcompat),true)
+ifeq ($(LOCAL_USE_AAPT2),true)
+	$(call appcompat-header, aapt2)
+else
+	$(appcompat-header)
+endif
+	$(run-appcompat)
+endif  # module_run_appcompat
 ifdef LOCAL_DEX_PREOPT
 ifneq ($(BUILD_PLATFORM_ZIP),)
 	@# Keep a copy of apk with classes.dex unstripped
 	$(hide) cp -f $@ $(dir $@)package.dex.apk
 endif  # BUILD_PLATFORM_ZIP
-ifneq (nostripping,$(LOCAL_DEX_PREOPT))
-	$(call dexpreopt-remove-classes.dex,$@)
-endif
+	mv -f $@ $@.tmp
+	$(PRIVATE_STRIP_SCRIPT) $@.tmp $@
 endif  # LOCAL_DEX_PREOPT
 	$(sign-package)
 ifdef LOCAL_COMPRESSED_MODULE
 	$(compress-package)
 endif  # LOCAL_COMPRESSED_MODULE
+
+ifeq ($(LOCAL_USE_AAPT2),true)
+  my_package_res_pb := $(intermediates)/package-res.pb.apk
+  $(my_package_res_pb): $(my_res_package) $(AAPT2)
+	$(AAPT2) convert --output-format proto $< -o $@
+
+  $(my_bundle_module): $(my_package_res_pb)
+  $(my_bundle_module): PRIVATE_RES_PACKAGE := $(my_package_res_pb)
+
+  $(my_bundle_module): $(jni_shared_libraries)
+  $(my_bundle_module): PRIVATE_JNI_SHARED_LIBRARIES := $(jni_shared_libraries_with_abis)
+  $(my_bundle_module): PRIVATE_JNI_SHARED_LIBRARIES_ABI := $(jni_shared_libraries_abis)
+
+  ifneq ($(full_classes_jar),)
+    $(my_bundle_module): PRIVATE_DEX_FILE := $(built_dex)
+    # Use the jarjar processed archive as the initial package file.
+    $(my_bundle_module): PRIVATE_SOURCE_ARCHIVE := $(full_classes_pre_proguard_jar)
+    $(my_bundle_module): $(built_dex)
+  else
+    $(my_bundle_module): PRIVATE_DEX_FILE :=
+    $(my_bundle_module): PRIVATE_SOURCE_ARCHIVE :=
+  endif # full_classes_jar
+
+  $(my_bundle_module): $(MERGE_ZIPS) $(SOONG_ZIP) $(ZIP2ZIP)
+	@echo "target Bundle: $(PRIVATE_MODULE) ($@)"
+	rm -rf $@.parts
+	mkdir -p $@.parts
+	$(ZIP2ZIP) -i $(PRIVATE_RES_PACKAGE) -o $@.parts/apk.zip AndroidManifest.xml:manifest/AndroidManifest.xml resources.pb "res/**/*" "assets/**/*"
+        ifneq ($(jni_shared_libraries),)
+	  $(call create-jni-shared-libs-package,$@.parts/jni.zip)
+        endif
+        ifeq ($(full_classes_jar),)
+        # We don't build jar, need to add the Java resources here.
+	  $(if $(PRIVATE_EXTRA_JAR_ARGS),\
+	    $(call create-java-resources-jar,$@.parts/res.zip) && \
+	    $(ZIP2ZIP) -i $@.parts/res.zip -o $@.parts/res.zip.tmp "**/*:root/" && \
+	    mv -f $@.parts/res.zip.tmp $@.parts/res.zip)
+        else  # full_classes_jar
+	  $(call create-dex-jar,$@.parts/dex.zip,$(PRIVATE_DEX_FILE))
+	  $(ZIP2ZIP) -i $@.parts/dex.zip -o $@.parts/dex.zip.tmp "classes*.dex:dex/"
+	  mv -f $@.parts/dex.zip.tmp $@.parts/dex.zip
+	  $(call extract-resources-jar,$@.parts/res.zip,$(PRIVATE_SOURCE_ARCHIVE))
+	  $(ZIP2ZIP) -i $@.parts/res.zip -o $@.parts/res.zip.tmp "**/*:root/"
+	  mv -f $@.parts/res.zip.tmp $@.parts/res.zip
+        endif  # full_classes_jar
+	$(MERGE_ZIPS) $@ $@.parts/*.zip
+	rm -rf $@.parts
+  ALL_MODULES.$(LOCAL_MODULE).BUNDLE := $(my_bundle_module)
+endif
 
 ###############################
 ## Build dpi-specific apks, if it's apps_only build.
@@ -653,20 +725,13 @@ endif
 endif
 
 ###############################
-## Rule to build the odex file
+## Rule to build a jar containing dex files to dexpreopt without waiting for
+## the APK
 ifdef LOCAL_DEX_PREOPT
-$(built_odex): PRIVATE_DEX_FILE := $(built_dex)
-# Use pattern rule - we may have multiple built odex files.
-$(built_odex) : $(dir $(LOCAL_BUILT_MODULE))% : $(built_dex)
+  $(my_dex_jar): PRIVATE_DEX_FILE := $(built_dex)
+  $(my_dex_jar): $(built_dex)
 	$(hide) mkdir -p $(dir $@) && rm -f $@
-	$(add-dex-to-package)
-ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
-	$(uncompress-dexs)
-	$(align-package)
-endif
-	$(hide) mv $@ $@.input
-	$(call dexpreopt-one-file,$@.input,$@)
-	$(hide) rm $@.input
+	$(call create-dex-jar,$@,$(PRIVATE_DEX_FILE))
 endif
 
 ###############################
@@ -705,7 +770,7 @@ ifdef LOCAL_COMPATIBILITY_SUITE
 $(foreach suite, $(LOCAL_COMPATIBILITY_SUITE), \
   $(eval my_compat_dist_$(suite) := $(foreach dir, $(call compatibility_suite_dirs,$(suite)), \
     $(foreach s,$(my_split_suffixes),\
-      $(intermediates)/package_$(s).apk:$(dir)/$(LOCAL_MODULE)_$(s).apk))))
+      $(call compat-copy-pair,$(intermediates)/package_$(s).apk,$(dir)/$(LOCAL_MODULE)_$(s).apk)))))
 
 $(call create-suite-dependencies)
 
@@ -723,7 +788,7 @@ endif # skip_definition
 # Reset internal variables.
 all_res_assets :=
 
-ifdef enforce_rro_enabled
+ifneq (,$(runtime_resource_overlays_product)$(runtime_resource_overlays_vendor))
   ifdef LOCAL_EXPORT_PACKAGE_RESOURCES
     enforce_rro_use_res_lib := true
   else
@@ -738,11 +803,24 @@ ifdef enforce_rro_enabled
     enforce_rro_manifest_package_info := $(full_android_manifest)
   endif
 
-$(call append_enforce_rro_sources, \
-    $(my_register_name), \
-    $(enforce_rro_is_manifest_package_name), \
-    $(enforce_rro_manifest_package_info), \
-    $(enforce_rro_use_res_lib), \
-    $(package_resource_overlays) \
+  ifdef runtime_resource_overlays_product
+    $(call append_enforce_rro_sources, \
+        $(my_register_name), \
+        $(enforce_rro_is_manifest_package_name), \
+        $(enforce_rro_manifest_package_info), \
+        $(enforce_rro_use_res_lib), \
+        $(runtime_resource_overlays_product), \
+        product \
     )
-endif  # enforce_rro_enabled
+  endif
+  ifdef runtime_resource_overlays_vendor
+    $(call append_enforce_rro_sources, \
+        $(my_register_name), \
+        $(enforce_rro_is_manifest_package_name), \
+        $(enforce_rro_manifest_package_info), \
+        $(enforce_rro_use_res_lib), \
+        $(runtime_resource_overlays_vendor), \
+        vendor \
+    )
+  endif
+endif

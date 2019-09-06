@@ -175,15 +175,9 @@ include $(BUILD_SYSTEM)/node_fns.mk
 include $(BUILD_SYSTEM)/product.mk
 include $(BUILD_SYSTEM)/device.mk
 
-ifneq ($(strip $(TARGET_BUILD_APPS)),)
-# An unbundled app build needs only the core product makefiles.
-all_product_configs := $(call get-product-makefiles,\
-    $(SRC_TARGET_DIR)/product/AndroidProducts.mk)
-else
 # Read in all of the product definitions specified by the AndroidProducts.mk
 # files in the tree.
 all_product_configs := $(get-all-product-makefiles)
-endif
 
 all_named_products :=
 
@@ -195,18 +189,13 @@ all_named_products :=
 current_product_makefile :=
 all_product_makefiles :=
 $(foreach f, $(all_product_configs),\
-    $(eval _cpm_words := $(subst :,$(space),$(f)))\
+    $(eval _cpm_words := $(call _decode-product-name,$(f)))\
     $(eval _cpm_word1 := $(word 1,$(_cpm_words)))\
     $(eval _cpm_word2 := $(word 2,$(_cpm_words)))\
-    $(if $(_cpm_word2),\
-        $(eval all_product_makefiles += $(_cpm_word2))\
-        $(eval all_named_products += $(_cpm_word1))\
-        $(if $(filter $(TARGET_PRODUCT),$(_cpm_word1)),\
-            $(eval current_product_makefile += $(_cpm_word2)),),\
-        $(eval all_product_makefiles += $(f))\
-        $(eval all_named_products += $(basename $(notdir $(f))))\
-        $(if $(filter $(TARGET_PRODUCT),$(basename $(notdir $(f)))),\
-            $(eval current_product_makefile += $(f)),)))
+    $(eval all_product_makefiles += $(_cpm_word2))\
+    $(eval all_named_products += $(_cpm_word1))\
+    $(if $(filter $(TARGET_PRODUCT),$(_cpm_word1)),\
+        $(eval current_product_makefile += $(_cpm_word2)),))
 _cpm_words :=
 _cpm_word1 :=
 _cpm_word2 :=
@@ -239,12 +228,17 @@ endif
 $(call import-products, $(current_product_makefile))
 endif  # Import all or just the current product makefile
 
+# Import all the products that have made artifact path requirements, so that we can verify
+# the artifacts they produce.
+$(foreach makefile,$(ARTIFACT_PATH_REQUIREMENT_PRODUCTS),\
+  $(if $(filter-out $(makefile),$(PRODUCTS)),$(eval $(call import-products,$(makefile))))\
+)
+
 # Sanity check
 $(check-all-products)
 
 ifneq ($(filter dump-products, $(MAKECMDGOALS)),)
 $(dump-products)
-$(error done)
 endif
 
 # Convert a short name like "sooner" into the path to the product
@@ -258,27 +252,19 @@ current_product_makefile :=
 all_product_makefiles :=
 all_product_configs :=
 
+############################################################################
+# Strip and assign the PRODUCT_ variables.
+$(call strip-product-vars)
 
 #############################################################################
+# Sanity check and assign default values
 
-# A list of module names of BOOTCLASSPATH (jar files)
-PRODUCT_BOOT_JARS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BOOT_JARS))
-PRODUCT_SYSTEM_SERVER_JARS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_SERVER_JARS))
-PRODUCT_SYSTEM_SERVER_APPS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_SERVER_APPS))
-PRODUCT_DEXPREOPT_SPEED_APPS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEXPREOPT_SPEED_APPS))
-PRODUCT_LOADED_BY_PRIVILEGED_MODULES := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_LOADED_BY_PRIVILEGED_MODULES))
+TARGET_DEVICE := $(PRODUCT_DEVICE)
 
-# All of the apps that we force preopt, this overrides WITH_DEXPREOPT.
-PRODUCT_ALWAYS_PREOPT_EXTRACTED_APK := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ALWAYS_PREOPT_EXTRACTED_APK))
-
-# Find the device that this product maps to.
-TARGET_DEVICE := $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEVICE)
+# TODO: also keep track of things like "port", "land" in product files.
 
 # Figure out which resoure configuration options to use for this
 # product.
-PRODUCT_LOCALES := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_LOCALES))
-# TODO: also keep track of things like "port", "land" in product files.
-
 # If CUSTOM_LOCALES contains any locales not already included
 # in PRODUCT_LOCALES, add them to PRODUCT_LOCALES.
 extra_locales := $(filter-out $(PRODUCT_LOCALES),$(CUSTOM_LOCALES))
@@ -292,138 +278,56 @@ ifneq (,$(extra_locales))
 endif
 
 # Add PRODUCT_LOCALES to PRODUCT_AAPT_CONFIG
-PRODUCT_AAPT_CONFIG := $(strip $(PRODUCT_LOCALES) $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_AAPT_CONFIG))
-PRODUCT_AAPT_PREF_CONFIG := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_AAPT_PREF_CONFIG))
-PRODUCT_AAPT_PREBUILT_DPI := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_AAPT_PREBUILT_DPI))
+PRODUCT_AAPT_CONFIG := $(PRODUCT_LOCALES) $(PRODUCT_AAPT_CONFIG)
 
 # Keep a copy of the space-separated config
 PRODUCT_AAPT_CONFIG_SP := $(PRODUCT_AAPT_CONFIG)
+PRODUCT_AAPT_CONFIG := $(subst $(space),$(comma),$(PRODUCT_AAPT_CONFIG))
 
-# Convert spaces to commas.
-PRODUCT_AAPT_CONFIG := \
-    $(subst $(space),$(comma),$(strip $(PRODUCT_AAPT_CONFIG)))
-
-PRODUCT_BRAND := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BRAND))
-
-PRODUCT_MODEL := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_MODEL))
+ifndef PRODUCT_SYSTEM_NAME
+  PRODUCT_SYSTEM_NAME := $(PRODUCT_NAME)
+endif
+ifndef PRODUCT_SYSTEM_DEVICE
+  PRODUCT_SYSTEM_DEVICE := $(PRODUCT_DEVICE)
+endif
+ifndef PRODUCT_SYSTEM_BRAND
+  PRODUCT_SYSTEM_BRAND := $(PRODUCT_BRAND)
+endif
 ifndef PRODUCT_MODEL
-  PRODUCT_MODEL := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_NAME))
+  PRODUCT_MODEL := $(PRODUCT_NAME)
+endif
+ifndef PRODUCT_SYSTEM_MODEL
+  PRODUCT_SYSTEM_MODEL := $(PRODUCT_MODEL)
 endif
 
-PRODUCT_MANUFACTURER := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_MANUFACTURER))
 ifndef PRODUCT_MANUFACTURER
   PRODUCT_MANUFACTURER := unknown
 endif
+ifndef PRODUCT_SYSTEM_MANUFACTURER
+  PRODUCT_SYSTEM_MANUFACTURER := $(PRODUCT_MANUFACTURER)
+endif
 
-ifeq ($(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_CHARACTERISTICS),)
+ifndef PRODUCT_CHARACTERISTICS
   TARGET_AAPT_CHARACTERISTICS := default
 else
-  TARGET_AAPT_CHARACTERISTICS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_CHARACTERISTICS))
+  TARGET_AAPT_CHARACTERISTICS := $(PRODUCT_CHARACTERISTICS)
 endif
 
-PRODUCT_DEFAULT_WIFI_CHANNELS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_WIFI_CHANNELS))
-
-PRODUCT_DEFAULT_DEV_CERTIFICATE := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_DEV_CERTIFICATE))
 ifdef PRODUCT_DEFAULT_DEV_CERTIFICATE
-ifneq (1,$(words $(PRODUCT_DEFAULT_DEV_CERTIFICATE)))
+  ifneq (1,$(words $(PRODUCT_DEFAULT_DEV_CERTIFICATE)))
     $(error PRODUCT_DEFAULT_DEV_CERTIFICATE='$(PRODUCT_DEFAULT_DEV_CERTIFICATE)', \
       only 1 certificate is allowed.)
+  endif
 endif
-endif
 
-# A list of words like <source path>:<destination path>[:<owner>].
-# The file at the source path should be copied to the destination path
-# when building  this product.  <destination path> is relative to
-# $(PRODUCT_OUT), so it should look like, e.g., "system/etc/file.xml".
-# The rules for these copy steps are defined in build/make/core/Makefile.
-# The optional :<owner> is used to indicate the owner of a vendor file.
-PRODUCT_COPY_FILES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_COPY_FILES))
+ENFORCE_SYSTEM_CERTIFICATE := $(PRODUCT_ENFORCE_ARTIFACT_SYSTEM_CERTIFICATE_REQUIREMENT)
+ENFORCE_SYSTEM_CERTIFICATE_WHITELIST := $(PRODUCT_ARTIFACT_SYSTEM_CERTIFICATE_REQUIREMENT_WHITELIST)
 
-# A list of property assignments, like "key = value", with zero or more
-# whitespace characters on either side of the '='.
-PRODUCT_PROPERTY_OVERRIDES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PROPERTY_OVERRIDES))
-.KATI_READONLY := PRODUCT_PROPERTY_OVERRIDES
-
-PRODUCT_SHIPPING_API_LEVEL := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SHIPPING_API_LEVEL))
-
-# A list of property assignments, like "key = value", with zero or more
-# whitespace characters on either side of the '='.
-# used for adding properties to default.prop
-PRODUCT_DEFAULT_PROPERTY_OVERRIDES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEFAULT_PROPERTY_OVERRIDES))
-.KATI_READONLY := PRODUCT_DEFAULT_PROPERTY_OVERRIDES
-
-# A list of property assignments, like "key = value", with zero or more
-# whitespace characters on either side of the '='.
-# used for adding properties to default.prop of system partition
-PRODUCT_SYSTEM_DEFAULT_PROPERTIES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_DEFAULT_PROPERTIES))
-.KATI_READONLY := PRODUCT_SYSTEM_DEFAULT_PROPERTIES
-
-# A list of property assignments, like "key = value", with zero or more
-# whitespace characters on either side of the '='.
-# used for adding properties to build.prop of product partition
-PRODUCT_PRODUCT_PROPERTIES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PRODUCT_PROPERTIES))
-.KATI_READONLY := PRODUCT_PRODUCT_PROPERTIES
-
-# used for overriding properties in build.prop
-PRODUCT_BUILD_PROP_OVERRIDES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_BUILD_PROP_OVERRIDES))
-.KATI_READONLY := PRODUCT_BUILD_PROP_OVERRIDES
-
-# Should we use the default resources or add any product specific overlays
-PRODUCT_PACKAGE_OVERLAYS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_PACKAGE_OVERLAYS))
-DEVICE_PACKAGE_OVERLAYS := \
-        $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).DEVICE_PACKAGE_OVERLAYS))
-
-# The list of product-specific kernel header dirs
-PRODUCT_VENDOR_KERNEL_HEADERS := \
-    $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_VENDOR_KERNEL_HEADERS)
-
-# The OTA key(s) specified by the product config, if any.  The names
-# of these keys are stored in the target-files zip so that post-build
-# signing tools can substitute them for the test key embedded by
-# default.
-PRODUCT_OTA_PUBLIC_KEYS := $(sort \
-    $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_OTA_PUBLIC_KEYS))
-
-PRODUCT_EXTRA_RECOVERY_KEYS := $(sort \
-    $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_EXTRA_RECOVERY_KEYS))
-
-PRODUCT_DEX_PREOPT_DEFAULT_COMPILER_FILTER := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_DEFAULT_COMPILER_FILTER))
-PRODUCT_DEX_PREOPT_DEFAULT_FLAGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_DEFAULT_FLAGS))
-PRODUCT_DEX_PREOPT_GENERATE_DM_FILES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_GENERATE_DM_FILES))
-PRODUCT_DEX_PREOPT_BOOT_FLAGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_BOOT_FLAGS))
-PRODUCT_DEX_PREOPT_PROFILE_DIR := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_PROFILE_DIR))
-
-# Boot image options.
-PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_USE_PROFILE_FOR_BOOT_IMAGE))
-PRODUCT_DEX_PREOPT_BOOT_IMAGE_PROFILE_LOCATION := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_BOOT_IMAGE_PROFILE_LOCATION))
-
-PRODUCT_SYSTEM_SERVER_COMPILER_FILTER := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_SERVER_COMPILER_FILTER))
-PRODUCT_SYSTEM_SERVER_DEBUG_INFO := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_SERVER_DEBUG_INFO))
-PRODUCT_OTHER_JAVA_DEBUG_INFO := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_OTHER_JAVA_DEBUG_INFO))
+PRODUCT_OTA_PUBLIC_KEYS := $(sort $(PRODUCT_OTA_PUBLIC_KEYS))
+PRODUCT_EXTRA_RECOVERY_KEYS := $(sort $(PRODUCT_EXTRA_RECOVERY_KEYS))
 
 # Resolve and setup per-module dex-preopt configs.
-PRODUCT_DEX_PREOPT_MODULE_CONFIGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_DEX_PREOPT_MODULE_CONFIGS))
+DEXPREOPT_DISABLED_MODULES :=
 # If a module has multiple setups, the first takes precedence.
 _pdpmc_modules :=
 $(foreach c,$(PRODUCT_DEX_PREOPT_MODULE_CONFIGS),\
@@ -432,12 +336,13 @@ $(foreach c,$(PRODUCT_DEX_PREOPT_MODULE_CONFIGS),\
     $(eval _pdpmc_modules += $(m))\
     $(eval cf := $(patsubst $(m)=%,%,$(c)))\
     $(eval cf := $(subst $(_PDPMC_SP_PLACE_HOLDER),$(space),$(cf)))\
-    $(eval DEXPREOPT.$(TARGET_PRODUCT).$(m).CONFIG := $(cf))))
+    $(if $(filter disable,$(cf)),\
+      $(eval DEXPREOPT_DISABLED_MODULES += $(m)),\
+      $(eval DEXPREOPT.$(TARGET_PRODUCT).$(m).CONFIG := $(cf)))))
 _pdpmc_modules :=
 
+
 # Resolve and setup per-module sanitizer configs.
-PRODUCT_SANITIZER_MODULE_CONFIGS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SANITIZER_MODULE_CONFIGS))
 # If a module has multiple setups, the first takes precedence.
 _psmc_modules :=
 $(foreach c,$(PRODUCT_SANITIZER_MODULE_CONFIGS),\
@@ -449,64 +354,69 @@ $(foreach c,$(PRODUCT_SANITIZER_MODULE_CONFIGS),\
     $(eval SANITIZER.$(TARGET_PRODUCT).$(m).CONFIG := $(cf))))
 _psmc_modules :=
 
-# Whether the product wants to ship libartd. For rules and meaning, see art/Android.mk.
-PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD))
-
-# Make this art variable visible to soong_config.mk.
-PRODUCT_ART_USE_READ_BARRIER := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ART_USE_READ_BARRIER))
-
-# Whether the product is an Android Things variant.
-PRODUCT_IOT := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_IOT))
-
-# Resource overlay list which must be excluded from enforcing RRO.
-PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ENFORCE_RRO_EXCLUDED_OVERLAYS))
-
-# Package list to apply enforcing RRO.
-PRODUCT_ENFORCE_RRO_TARGETS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ENFORCE_RRO_TARGETS))
-
-# Add reserved headroom to a system image.
-PRODUCT_SYSTEM_HEADROOM := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SYSTEM_HEADROOM))
-
-# Whether to save disk space by minimizing java debug info
-PRODUCT_MINIMIZE_JAVA_DEBUG_INFO := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_MINIMIZE_JAVA_DEBUG_INFO))
-
-# Whether any paths are excluded from sanitization when SANITIZE_TARGET=integer_overflow
-PRODUCT_INTEGER_OVERFLOW_EXCLUDE_PATHS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_INTEGER_OVERFLOW_EXCLUDE_PATHS))
-
-# ADB keys for debuggable builds
-PRODUCT_ADB_KEYS :=
-ifneq ($(filter eng userdebug,$(TARGET_BUILD_VARIANT)),)
-  PRODUCT_ADB_KEYS := $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ADB_KEYS))
+# Reset ADB keys for non-debuggable builds
+ifeq (,$(filter eng userdebug,$(TARGET_BUILD_VARIANT)),)
+  PRODUCT_ADB_KEYS :=
 endif
 ifneq ($(filter-out 0 1,$(words $(PRODUCT_ADB_KEYS))),)
   $(error Only one file may be in PRODUCT_ADB_KEYS: $(PRODUCT_ADB_KEYS))
 endif
-.KATI_READONLY := PRODUCT_ADB_KEYS
 
-# Whether any paths are excluded from sanitization when SANITIZE_TARGET=cfi
-PRODUCT_CFI_EXCLUDE_PATHS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_CFI_EXCLUDE_PATHS))
+ifndef PRODUCT_USE_DYNAMIC_PARTITIONS
+  PRODUCT_USE_DYNAMIC_PARTITIONS := $(PRODUCT_RETROFIT_DYNAMIC_PARTITIONS)
+endif
 
-# Whether any paths should have CFI enabled for components
-PRODUCT_CFI_INCLUDE_PATHS := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_CFI_INCLUDE_PATHS))
+# All requirements of PRODUCT_USE_DYNAMIC_PARTITIONS falls back to
+# PRODUCT_USE_DYNAMIC_PARTITIONS if not defined.
+ifndef PRODUCT_USE_DYNAMIC_PARTITION_SIZE
+  PRODUCT_USE_DYNAMIC_PARTITION_SIZE := $(PRODUCT_USE_DYNAMIC_PARTITIONS)
+endif
 
-# which Soong namespaces to export to Make
-PRODUCT_SOONG_NAMESPACES := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_SOONG_NAMESPACES))
+ifndef PRODUCT_BUILD_SUPER_PARTITION
+  PRODUCT_BUILD_SUPER_PARTITION := $(PRODUCT_USE_DYNAMIC_PARTITIONS)
+endif
 
-# A flag to override PRODUCT_COMPATIBLE_PROPERTY
-PRODUCT_COMPATIBLE_PROPERTY_OVERRIDE := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_COMPATIBLE_PROPERTY_OVERRIDE))
+ifeq ($(PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS),)
+  ifdef PRODUCT_SHIPPING_API_LEVEL
+    ifeq (true,$(call math_gt_or_eq,$(PRODUCT_SHIPPING_API_LEVEL),29))
+      PRODUCT_OTA_ENFORCE_VINTF_KERNEL_REQUIREMENTS := true
+    endif
+  endif
+endif
 
-# Whether the whitelist of actionable compatible properties should be disabled or not
-PRODUCT_ACTIONABLE_COMPATIBLE_PROPERTY_DISABLE := \
-    $(strip $(PRODUCTS.$(INTERNAL_PRODUCT).PRODUCT_ACTIONABLE_COMPATIBLE_PROPERTY_DISABLE))
+define product-overrides-config
+$$(foreach rule,$$(PRODUCT_$(1)_OVERRIDES),\
+    $$(if $$(filter 2,$$(words $$(subst :,$$(space),$$(rule)))),,\
+        $$(error Rule "$$(rule)" in PRODUCT_$(1)_OVERRIDE is not <module_name>:<new_value>)))
+endef
+
+$(foreach var, \
+    MANIFEST_PACKAGE_NAME \
+    PACKAGE_NAME \
+    CERTIFICATE, \
+  $(eval $(call product-overrides-config,$(var))))
+
+# Macro to use below. $(1) is the name of the partition
+define product-build-image-config
+PRODUCT_BUILD_$(1)_IMAGE := $$(firstword $$(PRODUCT_BUILD_$(1)_IMAGE))
+ifneq ($$(filter-out true false,$$(PRODUCT_BUILD_$(1)_IMAGE)),)
+    $$(error Invalid PRODUCT_BUILD_$(1)_IMAGE: $$(PRODUCT_BUILD_$(1)_IMAGE) -- true false and empty are supported)
+endif
+endef
+
+# Copy and check the value of each PRODUCT_BUILD_*_IMAGE variable
+$(foreach image, \
+    SYSTEM \
+    SYSTEM_OTHER \
+    VENDOR \
+    PRODUCT \
+    PRODUCT_SERVICES \
+    ODM \
+    CACHE \
+    RAMDISK \
+    USERDATA, \
+  $(eval $(call product-build-image-config,$(image))))
+
+product-build-image-config :=
+
+$(call readonly-product-vars)

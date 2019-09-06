@@ -18,11 +18,7 @@ $(built_dpi_apk): PRIVATE_RESOURCE_DIR := $(LOCAL_RESOURCE_DIR)
 $(built_dpi_apk): PRIVATE_ASSET_DIR := $(LOCAL_ASSET_DIR)
 $(built_dpi_apk): PRIVATE_AAPT_INCLUDES := $(all_library_res_package_exports)
 $(built_dpi_apk): PRIVATE_RESOURCE_LIST := $(all_res_assets)
-ifneq (,$(filter-out current system_current test_current core_current, $(LOCAL_SDK_VERSION)))
-$(built_dpi_apk): PRIVATE_DEFAULT_APP_TARGET_SDK := $(call get-numeric-sdk-version,$(LOCAL_SDK_VERSION))
-else
-$(built_dpi_apk): PRIVATE_DEFAULT_APP_TARGET_SDK := $(DEFAULT_APP_TARGET_SDK)
-endif
+$(built_dpi_apk): PRIVATE_DEFAULT_APP_TARGET_SDK := $(call module-target-sdk-version)
 $(built_dpi_apk): PRIVATE_MANIFEST_PACKAGE_NAME := $(LOCAL_MANIFEST_PACKAGE_NAME)
 $(built_dpi_apk): PRIVATE_MANIFEST_INSTRUMENTATION_FOR := $(LOCAL_INSTRUMENTATION_FOR)
 $(built_dpi_apk): PRIVATE_JNI_SHARED_LIBRARIES := $(jni_shared_libraries_with_abis)
@@ -47,27 +43,31 @@ $(built_dpi_apk) : $(R_file_stamp)
 $(built_dpi_apk) : $(all_library_res_package_export_deps)
 $(built_dpi_apk) : $(private_key) $(certificate) $(SIGNAPK_JAR)
 $(built_dpi_apk) : $(AAPT)
+$(built_dpi_apk) : $(MERGE_ZIPS) $(SOONG_ZIP) $(ZIP2ZIP)
 $(built_dpi_apk) : $(all_res_assets) $(jni_shared_libraries) $(full_android_manifest)
 	@echo "target Package: $(PRIVATE_MODULE) ($@)"
-	$(if $(PRIVATE_SOURCE_ARCHIVE),\
-	  $(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@),\
-	  $(create-empty-package))
-	$(add-assets-to-package)
+	rm -rf $@.parts
+	mkdir -p $@.parts
+	$(call create-assets-package,$@.parts/apk.zip)
 ifneq ($(jni_shared_libraries),)
-	$(add-jni-shared-libs-to-package)
+	$(call create-jni-shared-libs-package,$@.parts/jni.zip)
 endif
 ifeq ($(full_classes_jar),)
 # We don't build jar, need to add the Java resources here.
-	$(if $(PRIVATE_EXTRA_JAR_ARGS),$(call add-java-resources-to,$@))
+	$(if $(PRIVATE_EXTRA_JAR_ARGS),$(call create-java-resources-jar,$@.parts/res.zip))
 else
-	$(add-dex-to-package)
+	$(call create-dex-jar,$@.parts/dex.zip,$(PRIVATE_DEX_FILE))
+	$(call extract-resources-jar,$@.parts/res.zip,$(PRIVATE_SOURCE_ARCHIVE))
 endif
+	$(MERGE_ZIPS) $@ $@.parts/*.zip
+	rm -rf $@.parts
 	$(sign-package)
 
 # Set up global variables to register this apk to the higher-level dependency graph.
 ALL_MODULES += $(dpi_apk_name)
 ALL_MODULES.$(dpi_apk_name).CLASS := APPS
 ALL_MODULES.$(dpi_apk_name).BUILT := $(built_dpi_apk)
+ALL_MODULES.$(dpi_apk_name).TARGET_BUILT := $(built_dpi_apk)
 PACKAGES := $(PACKAGES) $(dpi_apk_name)
 PACKAGES.$(dpi_apk_name).PRIVATE_KEY := $(private_key)
 PACKAGES.$(dpi_apk_name).CERTIFICATE := $(certificate)

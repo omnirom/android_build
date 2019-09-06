@@ -14,11 +14,11 @@
 # limitations under the License.
 #
 
+import copy
 import os
 import subprocess
 import tempfile
 import time
-import unittest
 import zipfile
 from hashlib import sha1
 
@@ -27,6 +27,7 @@ import test_utils
 import validate_target_files
 from rangelib import RangeSet
 
+from blockimgdiff import EmptyImage, DataImage
 
 KiB = 1024
 MiB = 1024 * KiB
@@ -43,7 +44,8 @@ def get_2gb_string():
     yield '\0' * (step_size - block_size)
 
 
-class CommonZipTest(unittest.TestCase):
+class CommonZipTest(test_utils.ReleaseToolsTestCase):
+
   def _verify(self, zip_file, zip_file_name, arcname, expected_hash,
               test_file_name=None, expected_stat=None, expected_mode=0o644,
               expected_compress_type=zipfile.ZIP_STORED):
@@ -333,8 +335,8 @@ class CommonZipTest(unittest.TestCase):
         self.assertFalse('Test2' in entries)
         self.assertTrue('Test3' in entries)
 
-      self.assertRaises(AssertionError, common.ZipDelete, zip_file.name,
-                        'Test2')
+      self.assertRaises(
+          common.ExternalError, common.ZipDelete, zip_file.name, 'Test2')
       with zipfile.ZipFile(zip_file.name, 'r') as check_zip:
         entries = check_zip.namelist()
         self.assertTrue('Test1' in entries)
@@ -357,8 +359,92 @@ class CommonZipTest(unittest.TestCase):
     finally:
       os.remove(zip_file.name)
 
+  @staticmethod
+  def _test_UnzipTemp_createZipFile():
+    zip_file = common.MakeTempFile(suffix='.zip')
+    output_zip = zipfile.ZipFile(
+        zip_file, 'w', compression=zipfile.ZIP_DEFLATED)
+    contents = os.urandom(1024)
+    with tempfile.NamedTemporaryFile() as entry_file:
+      entry_file.write(contents)
+      common.ZipWrite(output_zip, entry_file.name, arcname='Test1')
+      common.ZipWrite(output_zip, entry_file.name, arcname='Test2')
+      common.ZipWrite(output_zip, entry_file.name, arcname='Foo3')
+      common.ZipWrite(output_zip, entry_file.name, arcname='Bar4')
+      common.ZipWrite(output_zip, entry_file.name, arcname='Dir5/Baz5')
+      common.ZipClose(output_zip)
+    common.ZipClose(output_zip)
+    return zip_file
 
-class CommonApkUtilsTest(unittest.TestCase):
+  def test_UnzipTemp(self):
+    zip_file = self._test_UnzipTemp_createZipFile()
+    unzipped_dir = common.UnzipTemp(zip_file)
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+  def test_UnzipTemp_withPatterns(self):
+    zip_file = self._test_UnzipTemp_createZipFile()
+
+    unzipped_dir = common.UnzipTemp(zip_file, ['Test1'])
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+    unzipped_dir = common.UnzipTemp(zip_file, ['Test1', 'Foo3'])
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+    unzipped_dir = common.UnzipTemp(zip_file, ['Test*', 'Foo3*'])
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+    unzipped_dir = common.UnzipTemp(zip_file, ['*Test1', '*Baz*'])
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+  def test_UnzipTemp_withEmptyPatterns(self):
+    zip_file = self._test_UnzipTemp_createZipFile()
+    unzipped_dir = common.UnzipTemp(zip_file, [])
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+  def test_UnzipTemp_withPartiallyMatchingPatterns(self):
+    zip_file = self._test_UnzipTemp_createZipFile()
+    unzipped_dir = common.UnzipTemp(zip_file, ['Test*', 'Nonexistent*'])
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertTrue(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+  def test_UnzipTemp_withNoMatchingPatterns(self):
+    zip_file = self._test_UnzipTemp_createZipFile()
+    unzipped_dir = common.UnzipTemp(zip_file, ['Foo4', 'Nonexistent*'])
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test1')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Test2')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Foo3')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Bar4')))
+    self.assertFalse(os.path.exists(os.path.join(unzipped_dir, 'Dir5/Baz5')))
+
+
+class CommonApkUtilsTest(test_utils.ReleaseToolsTestCase):
   """Tests the APK utils related functions."""
 
   APKCERTS_TXT1 = (
@@ -405,9 +491,6 @@ class CommonApkUtilsTest(unittest.TestCase):
 
   def setUp(self):
     self.testdata_dir = test_utils.get_testdata_dir()
-
-  def tearDown(self):
-    common.Cleanup()
 
   @staticmethod
   def _write_apkcerts_txt(apkcerts_txt, additional=None):
@@ -492,6 +575,13 @@ class CommonApkUtilsTest(unittest.TestCase):
     wrong_input = os.path.join(self.testdata_dir, 'testkey.pk8')
     self.assertRaises(AssertionError, common.ExtractPublicKey, wrong_input)
 
+  def test_ExtractAvbPublicKey(self):
+    privkey = os.path.join(self.testdata_dir, 'testkey.key')
+    pubkey = os.path.join(self.testdata_dir, 'testkey.pubkey.pem')
+    with open(common.ExtractAvbPublicKey(privkey)) as privkey_fp, \
+        open(common.ExtractAvbPublicKey(pubkey)) as pubkey_fp:
+      self.assertEqual(privkey_fp.read(), pubkey_fp.read())
+
   def test_ParseCertificate(self):
     cert = os.path.join(self.testdata_dir, 'testkey.x509.pem')
 
@@ -504,11 +594,28 @@ class CommonApkUtilsTest(unittest.TestCase):
       actual = common.ParseCertificate(cert_fp.read())
     self.assertEqual(expected, actual)
 
+  def test_GetMinSdkVersion(self):
+    test_app = os.path.join(self.testdata_dir, 'TestApp.apk')
+    self.assertEqual('24', common.GetMinSdkVersion(test_app))
 
-class CommonUtilsTest(unittest.TestCase):
+  def test_GetMinSdkVersion_invalidInput(self):
+    self.assertRaises(
+        common.ExternalError, common.GetMinSdkVersion, 'does-not-exist.apk')
 
-  def tearDown(self):
-    common.Cleanup()
+  def test_GetMinSdkVersionInt(self):
+    test_app = os.path.join(self.testdata_dir, 'TestApp.apk')
+    self.assertEqual(24, common.GetMinSdkVersionInt(test_app, {}))
+
+  def test_GetMinSdkVersionInt_invalidInput(self):
+    self.assertRaises(
+        common.ExternalError, common.GetMinSdkVersionInt, 'does-not-exist.apk',
+        {})
+
+
+class CommonUtilsTest(test_utils.ReleaseToolsTestCase):
+
+  def setUp(self):
+    self.testdata_dir = test_utils.get_testdata_dir()
 
   def test_GetSparseImage_emptyBlockMapFile(self):
     target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
@@ -534,11 +641,13 @@ class CommonUtilsTest(unittest.TestCase):
         },
         sparse_image.file_map)
 
-  def test_GetSparseImage_invalidImageName(self):
+  def test_GetSparseImage_missingImageFile(self):
     self.assertRaises(
-        AssertionError, common.GetSparseImage, 'system2', None, None, False)
+        AssertionError, common.GetSparseImage, 'system2', self.testdata_dir,
+        None, False)
     self.assertRaises(
-        AssertionError, common.GetSparseImage, 'unknown', None, None, False)
+        AssertionError, common.GetSparseImage, 'unknown', self.testdata_dir,
+        None, False)
 
   def test_GetSparseImage_missingBlockMapFile(self):
     target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
@@ -645,8 +754,276 @@ class CommonUtilsTest(unittest.TestCase):
     self.assertFalse(sparse_image.file_map['/system/file1'].extra)
     self.assertTrue(sparse_image.file_map['/system/file2'].extra['incomplete'])
 
+  def test_GetSparseImage_systemRootImage_filenameWithExtraLeadingSlash(self):
+    target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
+    with zipfile.ZipFile(target_files, 'w') as target_files_zip:
+      target_files_zip.write(
+          test_utils.construct_sparse_image([(0xCAC2, 16)]),
+          arcname='IMAGES/system.img')
+      target_files_zip.writestr(
+          'IMAGES/system.map',
+          '\n'.join([
+              '//system/file1 1-5 9-10',
+              '//system/file2 11-12',
+              '/system/app/file3 13-15']))
+      target_files_zip.writestr('SYSTEM/file1', os.urandom(4096 * 7))
+      # '/system/file2' has less blocks listed (2) than actual (3).
+      target_files_zip.writestr('SYSTEM/file2', os.urandom(4096 * 3))
+      # '/system/app/file3' has less blocks listed (3) than actual (4).
+      target_files_zip.writestr('SYSTEM/app/file3', os.urandom(4096 * 4))
 
-class InstallRecoveryScriptFormatTest(unittest.TestCase):
+    tempdir = common.UnzipTemp(target_files)
+    with zipfile.ZipFile(target_files, 'r') as input_zip:
+      sparse_image = common.GetSparseImage('system', tempdir, input_zip, False)
+
+    self.assertFalse(sparse_image.file_map['//system/file1'].extra)
+    self.assertTrue(sparse_image.file_map['//system/file2'].extra['incomplete'])
+    self.assertTrue(
+        sparse_image.file_map['/system/app/file3'].extra['incomplete'])
+
+  def test_GetSparseImage_systemRootImage_nonSystemFiles(self):
+    target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
+    with zipfile.ZipFile(target_files, 'w') as target_files_zip:
+      target_files_zip.write(
+          test_utils.construct_sparse_image([(0xCAC2, 16)]),
+          arcname='IMAGES/system.img')
+      target_files_zip.writestr(
+          'IMAGES/system.map',
+          '\n'.join([
+              '//system/file1 1-5 9-10',
+              '//init.rc 13-15']))
+      target_files_zip.writestr('SYSTEM/file1', os.urandom(4096 * 7))
+      # '/init.rc' has less blocks listed (3) than actual (4).
+      target_files_zip.writestr('ROOT/init.rc', os.urandom(4096 * 4))
+
+    tempdir = common.UnzipTemp(target_files)
+    with zipfile.ZipFile(target_files, 'r') as input_zip:
+      sparse_image = common.GetSparseImage('system', tempdir, input_zip, False)
+
+    self.assertFalse(sparse_image.file_map['//system/file1'].extra)
+    self.assertTrue(sparse_image.file_map['//init.rc'].extra['incomplete'])
+
+  def test_GetSparseImage_fileNotFound(self):
+    target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
+    with zipfile.ZipFile(target_files, 'w') as target_files_zip:
+      target_files_zip.write(
+          test_utils.construct_sparse_image([(0xCAC2, 16)]),
+          arcname='IMAGES/system.img')
+      target_files_zip.writestr(
+          'IMAGES/system.map',
+          '\n'.join([
+              '//system/file1 1-5 9-10',
+              '//system/file2 11-12']))
+      target_files_zip.writestr('SYSTEM/file1', os.urandom(4096 * 7))
+
+    tempdir = common.UnzipTemp(target_files)
+    with zipfile.ZipFile(target_files, 'r') as input_zip:
+      self.assertRaises(
+          AssertionError, common.GetSparseImage, 'system', tempdir, input_zip,
+          False)
+
+  def test_GetAvbChainedPartitionArg(self):
+    pubkey = os.path.join(self.testdata_dir, 'testkey.pubkey.pem')
+    info_dict = {
+        'avb_avbtool': 'avbtool',
+        'avb_system_key_path': pubkey,
+        'avb_system_rollback_index_location': 2,
+    }
+    args = common.GetAvbChainedPartitionArg('system', info_dict).split(':')
+    self.assertEqual(3, len(args))
+    self.assertEqual('system', args[0])
+    self.assertEqual('2', args[1])
+    self.assertTrue(os.path.exists(args[2]))
+
+  def test_GetAvbChainedPartitionArg_withPrivateKey(self):
+    key = os.path.join(self.testdata_dir, 'testkey.key')
+    info_dict = {
+        'avb_avbtool': 'avbtool',
+        'avb_product_key_path': key,
+        'avb_product_rollback_index_location': 2,
+    }
+    args = common.GetAvbChainedPartitionArg('product', info_dict).split(':')
+    self.assertEqual(3, len(args))
+    self.assertEqual('product', args[0])
+    self.assertEqual('2', args[1])
+    self.assertTrue(os.path.exists(args[2]))
+
+  def test_GetAvbChainedPartitionArg_withSpecifiedKey(self):
+    info_dict = {
+        'avb_avbtool': 'avbtool',
+        'avb_system_key_path': 'does-not-exist',
+        'avb_system_rollback_index_location': 2,
+    }
+    pubkey = os.path.join(self.testdata_dir, 'testkey.pubkey.pem')
+    args = common.GetAvbChainedPartitionArg(
+        'system', info_dict, pubkey).split(':')
+    self.assertEqual(3, len(args))
+    self.assertEqual('system', args[0])
+    self.assertEqual('2', args[1])
+    self.assertTrue(os.path.exists(args[2]))
+
+  def test_GetAvbChainedPartitionArg_invalidKey(self):
+    pubkey = os.path.join(self.testdata_dir, 'testkey_with_passwd.x509.pem')
+    info_dict = {
+        'avb_avbtool': 'avbtool',
+        'avb_system_key_path': pubkey,
+        'avb_system_rollback_index_location': 2,
+    }
+    self.assertRaises(
+        common.ExternalError, common.GetAvbChainedPartitionArg, 'system',
+        info_dict)
+
+  INFO_DICT_DEFAULT = {
+      'recovery_api_version': 3,
+      'fstab_version': 2,
+      'system_root_image': 'true',
+      'no_recovery' : 'true',
+      'recovery_as_boot': 'true',
+  }
+
+  @staticmethod
+  def _test_LoadInfoDict_createTargetFiles(info_dict, fstab_path):
+    target_files = common.MakeTempFile(prefix='target_files-', suffix='.zip')
+    with zipfile.ZipFile(target_files, 'w') as target_files_zip:
+      info_values = ''.join(
+          ['{}={}\n'.format(k, v) for k, v in sorted(info_dict.iteritems())])
+      common.ZipWriteStr(target_files_zip, 'META/misc_info.txt', info_values)
+
+      FSTAB_TEMPLATE = "/dev/block/system {} ext4 ro,barrier=1 defaults"
+      if info_dict.get('system_root_image') == 'true':
+        fstab_values = FSTAB_TEMPLATE.format('/')
+      else:
+        fstab_values = FSTAB_TEMPLATE.format('/system')
+      common.ZipWriteStr(target_files_zip, fstab_path, fstab_values)
+
+      common.ZipWriteStr(
+          target_files_zip, 'META/file_contexts', 'file-contexts')
+    return target_files
+
+  def test_LoadInfoDict(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      loaded_dict = common.LoadInfoDict(target_files_zip)
+      self.assertEqual(3, loaded_dict['recovery_api_version'])
+      self.assertEqual(2, loaded_dict['fstab_version'])
+      self.assertIn('/', loaded_dict['fstab'])
+      self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_legacyRecoveryFstabPath(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      loaded_dict = common.LoadInfoDict(target_files_zip)
+      self.assertEqual(3, loaded_dict['recovery_api_version'])
+      self.assertEqual(2, loaded_dict['fstab_version'])
+      self.assertIn('/', loaded_dict['fstab'])
+      self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_dirInput(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    unzipped = common.UnzipTemp(target_files)
+    loaded_dict = common.LoadInfoDict(unzipped)
+    self.assertEqual(3, loaded_dict['recovery_api_version'])
+    self.assertEqual(2, loaded_dict['fstab_version'])
+    self.assertIn('/', loaded_dict['fstab'])
+    self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_dirInput_legacyRecoveryFstabPath(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    unzipped = common.UnzipTemp(target_files)
+    loaded_dict = common.LoadInfoDict(unzipped)
+    self.assertEqual(3, loaded_dict['recovery_api_version'])
+    self.assertEqual(2, loaded_dict['fstab_version'])
+    self.assertIn('/', loaded_dict['fstab'])
+    self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_systemRootImageFalse(self):
+    # Devices not using system-as-root nor recovery-as-boot. Non-A/B devices
+    # launched prior to P will likely have this config.
+    info_dict = copy.copy(self.INFO_DICT_DEFAULT)
+    del info_dict['no_recovery']
+    del info_dict['system_root_image']
+    del info_dict['recovery_as_boot']
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        info_dict,
+        'RECOVERY/RAMDISK/system/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      loaded_dict = common.LoadInfoDict(target_files_zip)
+      self.assertEqual(3, loaded_dict['recovery_api_version'])
+      self.assertEqual(2, loaded_dict['fstab_version'])
+      self.assertNotIn('/', loaded_dict['fstab'])
+      self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_recoveryAsBootFalse(self):
+    # Devices using system-as-root, but with standalone recovery image. Non-A/B
+    # devices launched since P will likely have this config.
+    info_dict = copy.copy(self.INFO_DICT_DEFAULT)
+    del info_dict['no_recovery']
+    del info_dict['recovery_as_boot']
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        info_dict,
+        'RECOVERY/RAMDISK/system/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      loaded_dict = common.LoadInfoDict(target_files_zip)
+      self.assertEqual(3, loaded_dict['recovery_api_version'])
+      self.assertEqual(2, loaded_dict['fstab_version'])
+      self.assertIn('/', loaded_dict['fstab'])
+      self.assertIn('/system', loaded_dict['fstab'])
+
+  def test_LoadInfoDict_noRecoveryTrue(self):
+    # Device doesn't have a recovery partition at all.
+    info_dict = copy.copy(self.INFO_DICT_DEFAULT)
+    del info_dict['recovery_as_boot']
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        info_dict,
+        'RECOVERY/RAMDISK/system/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      loaded_dict = common.LoadInfoDict(target_files_zip)
+      self.assertEqual(3, loaded_dict['recovery_api_version'])
+      self.assertEqual(2, loaded_dict['fstab_version'])
+      self.assertIsNone(loaded_dict['fstab'])
+
+  def test_LoadInfoDict_missingMetaMiscInfoTxt(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    common.ZipDelete(target_files, 'META/misc_info.txt')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      self.assertRaises(ValueError, common.LoadInfoDict, target_files_zip)
+
+  def test_LoadInfoDict_repacking(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    unzipped = common.UnzipTemp(target_files)
+    loaded_dict = common.LoadInfoDict(unzipped, True)
+    self.assertEqual(3, loaded_dict['recovery_api_version'])
+    self.assertEqual(2, loaded_dict['fstab_version'])
+    self.assertIn('/', loaded_dict['fstab'])
+    self.assertIn('/system', loaded_dict['fstab'])
+    self.assertEqual(
+        os.path.join(unzipped, 'ROOT'), loaded_dict['root_dir'])
+    self.assertEqual(
+        os.path.join(unzipped, 'META', 'root_filesystem_config.txt'),
+        loaded_dict['root_fs_config'])
+
+  def test_LoadInfoDict_repackingWithZipFileInput(self):
+    target_files = self._test_LoadInfoDict_createTargetFiles(
+        self.INFO_DICT_DEFAULT,
+        'BOOT/RAMDISK/system/etc/recovery.fstab')
+    with zipfile.ZipFile(target_files, 'r') as target_files_zip:
+      self.assertRaises(
+          AssertionError, common.LoadInfoDict, target_files_zip, True)
+
+
+class InstallRecoveryScriptFormatTest(test_utils.ReleaseToolsTestCase):
   """Checks the format of install-recovery.sh.
 
   Its format should match between common.py and validate_target_files.py.
@@ -706,5 +1083,235 @@ class InstallRecoveryScriptFormatTest(unittest.TestCase):
     validate_target_files.ValidateInstallRecoveryScript(self._tempdir,
                                                         self._info)
 
-  def tearDown(self):
-    common.Cleanup()
+
+class MockScriptWriter(object):
+  """A class that mocks edify_generator.EdifyGenerator.
+  """
+  def __init__(self, enable_comments=False):
+    self.lines = []
+    self.enable_comments = enable_comments
+  def Comment(self, comment):
+    if self.enable_comments:
+      self.lines.append("# {}".format(comment))
+  def AppendExtra(self, extra):
+    self.lines.append(extra)
+  def __str__(self):
+    return "\n".join(self.lines)
+
+
+class MockBlockDifference(object):
+  def __init__(self, partition, tgt, src=None):
+    self.partition = partition
+    self.tgt = tgt
+    self.src = src
+  def WriteScript(self, script, _, progress=None,
+                  write_verify_script=False):
+    if progress:
+      script.AppendExtra("progress({})".format(progress))
+    script.AppendExtra("patch({});".format(self.partition))
+    if write_verify_script:
+      self.WritePostInstallVerifyScript(script)
+  def WritePostInstallVerifyScript(self, script):
+    script.AppendExtra("verify({});".format(self.partition))
+
+
+class FakeSparseImage(object):
+  def __init__(self, size):
+    self.blocksize = 4096
+    self.total_blocks = size // 4096
+    assert size % 4096 == 0, "{} is not a multiple of 4096".format(size)
+
+
+class DynamicPartitionsDifferenceTest(test_utils.ReleaseToolsTestCase):
+  @staticmethod
+  def get_op_list(output_path):
+    with zipfile.ZipFile(output_path, 'r') as output_zip:
+      with output_zip.open("dynamic_partitions_op_list") as op_list:
+        return [line.strip() for line in op_list.readlines()
+                if not line.startswith("#")]
+
+  def setUp(self):
+    self.script = MockScriptWriter()
+    self.output_path = common.MakeTempFile(suffix='.zip')
+
+  def test_full(self):
+    target_info = common.LoadDictionaryFromLines("""
+dynamic_partition_list=system vendor
+super_partition_groups=group_foo
+super_group_foo_group_size={group_size}
+super_group_foo_partition_list=system vendor
+""".format(group_size=4 * GiB).split("\n"))
+    block_diffs = [MockBlockDifference("system", FakeSparseImage(3 * GiB)),
+                   MockBlockDifference("vendor", FakeSparseImage(1 * GiB))]
+
+    dp_diff = common.DynamicPartitionsDifference(target_info, block_diffs)
+    with zipfile.ZipFile(self.output_path, 'w') as output_zip:
+      dp_diff.WriteScript(self.script, output_zip, write_verify_script=True)
+
+    self.assertEqual(str(self.script).strip(), """
+assert(update_dynamic_partitions(package_extract_file("dynamic_partitions_op_list")));
+patch(vendor);
+verify(vendor);
+unmap_partition("vendor");
+patch(system);
+verify(system);
+unmap_partition("system");
+""".strip())
+
+    lines = self.get_op_list(self.output_path)
+
+    remove_all_groups = lines.index("remove_all_groups")
+    add_group = lines.index("add_group group_foo 4294967296")
+    add_vendor = lines.index("add vendor group_foo")
+    add_system = lines.index("add system group_foo")
+    resize_vendor = lines.index("resize vendor 1073741824")
+    resize_system = lines.index("resize system 3221225472")
+
+    self.assertLess(remove_all_groups, add_group,
+                    "Should add groups after removing all groups")
+    self.assertLess(add_group, min(add_vendor, add_system),
+                    "Should add partitions after adding group")
+    self.assertLess(add_system, resize_system,
+                    "Should resize system after adding it")
+    self.assertLess(add_vendor, resize_vendor,
+                    "Should resize vendor after adding it")
+
+  def test_inc_groups(self):
+    source_info = common.LoadDictionaryFromLines("""
+super_partition_groups=group_foo group_bar group_baz
+super_group_foo_group_size={group_foo_size}
+super_group_bar_group_size={group_bar_size}
+""".format(group_foo_size=4 * GiB, group_bar_size=3 * GiB).split("\n"))
+    target_info = common.LoadDictionaryFromLines("""
+super_partition_groups=group_foo group_baz group_qux
+super_group_foo_group_size={group_foo_size}
+super_group_baz_group_size={group_baz_size}
+super_group_qux_group_size={group_qux_size}
+""".format(group_foo_size=3 * GiB, group_baz_size=4 * GiB,
+           group_qux_size=1 * GiB).split("\n"))
+
+    dp_diff = common.DynamicPartitionsDifference(target_info,
+                                                 block_diffs=[],
+                                                 source_info_dict=source_info)
+    with zipfile.ZipFile(self.output_path, 'w') as output_zip:
+      dp_diff.WriteScript(self.script, output_zip, write_verify_script=True)
+
+    lines = self.get_op_list(self.output_path)
+
+    removed = lines.index("remove_group group_bar")
+    shrunk = lines.index("resize_group group_foo 3221225472")
+    grown = lines.index("resize_group group_baz 4294967296")
+    added = lines.index("add_group group_qux 1073741824")
+
+    self.assertLess(max(removed, shrunk) < min(grown, added),
+                    "ops that remove / shrink partitions must precede ops that "
+                    "grow / add partitions")
+
+  def test_incremental(self):
+    source_info = common.LoadDictionaryFromLines("""
+dynamic_partition_list=system vendor product product_services
+super_partition_groups=group_foo
+super_group_foo_group_size={group_foo_size}
+super_group_foo_partition_list=system vendor product product_services
+""".format(group_foo_size=4 * GiB).split("\n"))
+    target_info = common.LoadDictionaryFromLines("""
+dynamic_partition_list=system vendor product odm
+super_partition_groups=group_foo group_bar
+super_group_foo_group_size={group_foo_size}
+super_group_foo_partition_list=system vendor odm
+super_group_bar_group_size={group_bar_size}
+super_group_bar_partition_list=product
+""".format(group_foo_size=3 * GiB, group_bar_size=1 * GiB).split("\n"))
+
+    block_diffs = [MockBlockDifference("system", FakeSparseImage(1536 * MiB),
+                                       src=FakeSparseImage(1024 * MiB)),
+                   MockBlockDifference("vendor", FakeSparseImage(512 * MiB),
+                                       src=FakeSparseImage(1024 * MiB)),
+                   MockBlockDifference("product", FakeSparseImage(1024 * MiB),
+                                       src=FakeSparseImage(1024 * MiB)),
+                   MockBlockDifference("product_services", None,
+                                       src=FakeSparseImage(1024 * MiB)),
+                   MockBlockDifference("odm", FakeSparseImage(1024 * MiB),
+                                       src=None)]
+
+    dp_diff = common.DynamicPartitionsDifference(target_info, block_diffs,
+                                                 source_info_dict=source_info)
+    with zipfile.ZipFile(self.output_path, 'w') as output_zip:
+      dp_diff.WriteScript(self.script, output_zip, write_verify_script=True)
+
+    metadata_idx = self.script.lines.index(
+        'assert(update_dynamic_partitions(package_extract_file('
+        '"dynamic_partitions_op_list")));')
+    self.assertLess(self.script.lines.index('patch(vendor);'), metadata_idx)
+    self.assertLess(metadata_idx, self.script.lines.index('verify(vendor);'))
+    for p in ("product", "system", "odm"):
+      patch_idx = self.script.lines.index("patch({});".format(p))
+      verify_idx = self.script.lines.index("verify({});".format(p))
+      self.assertLess(metadata_idx, patch_idx,
+                      "Should patch {} after updating metadata".format(p))
+      self.assertLess(patch_idx, verify_idx,
+                      "Should verify {} after patching".format(p))
+
+    self.assertNotIn("patch(product_services);", self.script.lines)
+
+    lines = self.get_op_list(self.output_path)
+
+    remove = lines.index("remove product_services")
+    move_product_out = lines.index("move product default")
+    shrink = lines.index("resize vendor 536870912")
+    shrink_group = lines.index("resize_group group_foo 3221225472")
+    add_group_bar = lines.index("add_group group_bar 1073741824")
+    add_odm = lines.index("add odm group_foo")
+    grow_existing = lines.index("resize system 1610612736")
+    grow_added = lines.index("resize odm 1073741824")
+    move_product_in = lines.index("move product group_bar")
+
+    max_idx_move_partition_out_foo = max(remove, move_product_out, shrink)
+    min_idx_move_partition_in_foo = min(add_odm, grow_existing, grow_added)
+
+    self.assertLess(max_idx_move_partition_out_foo, shrink_group,
+                    "Must shrink group after partitions inside group are shrunk"
+                    " / removed")
+
+    self.assertLess(add_group_bar, move_product_in,
+                    "Must add partitions to group after group is added")
+
+    self.assertLess(max_idx_move_partition_out_foo,
+                    min_idx_move_partition_in_foo,
+                    "Must shrink partitions / remove partitions from group"
+                    "before adding / moving partitions into group")
+
+  def test_remove_partition(self):
+    source_info = common.LoadDictionaryFromLines("""
+blockimgdiff_versions=3,4
+use_dynamic_partitions=true
+dynamic_partition_list=foo
+super_partition_groups=group_foo
+super_group_foo_group_size={group_foo_size}
+super_group_foo_partition_list=foo
+""".format(group_foo_size=4 * GiB).split("\n"))
+    target_info = common.LoadDictionaryFromLines("""
+blockimgdiff_versions=3,4
+use_dynamic_partitions=true
+super_partition_groups=group_foo
+super_group_foo_group_size={group_foo_size}
+""".format(group_foo_size=4 * GiB).split("\n"))
+
+    common.OPTIONS.info_dict = target_info
+    common.OPTIONS.target_info_dict = target_info
+    common.OPTIONS.source_info_dict = source_info
+    common.OPTIONS.cache_size = 4 * 4096
+
+    block_diffs = [common.BlockDifference("foo", EmptyImage(),
+                                          src=DataImage("source", pad=True))]
+
+    dp_diff = common.DynamicPartitionsDifference(target_info, block_diffs,
+                                                 source_info_dict=source_info)
+    with zipfile.ZipFile(self.output_path, 'w') as output_zip:
+      dp_diff.WriteScript(self.script, output_zip, write_verify_script=True)
+
+    self.assertNotIn("block_image_update", str(self.script),
+                     "Removed partition should not be patched.")
+
+    lines = self.get_op_list(self.output_path)
+    self.assertEqual(lines, ["remove foo"])

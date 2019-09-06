@@ -17,8 +17,6 @@
 import copy
 import os
 import os.path
-import subprocess
-import unittest
 import zipfile
 
 import common
@@ -50,17 +48,25 @@ def construct_target_files(secondary=False):
             "POSTINSTALL_OPTIONAL_system=true",
         ]))
 
+    ab_partitions = [
+        ('IMAGES', 'boot'),
+        ('IMAGES', 'system'),
+        ('IMAGES', 'vendor'),
+        ('RADIO', 'bootloader'),
+        ('RADIO', 'modem'),
+    ]
     # META/ab_partitions.txt
-    ab_partitions = ['boot', 'system', 'vendor']
     target_files_zip.writestr(
         'META/ab_partitions.txt',
-        '\n'.join(ab_partitions))
+        '\n'.join([partition[1] for partition in ab_partitions]))
 
     # Create dummy images for each of them.
-    for partition in ab_partitions:
-      target_files_zip.writestr('IMAGES/' + partition + '.img',
-                                os.urandom(len(partition)))
+    for path, partition in ab_partitions:
+      target_files_zip.writestr(
+          '{}/{}.img'.format(path, partition),
+          os.urandom(len(partition)))
 
+    # system_other shouldn't appear in META/ab_partitions.txt.
     if secondary:
       target_files_zip.writestr('IMAGES/system_other.img',
                                 os.urandom(len("system_other")))
@@ -97,7 +103,7 @@ class MockScriptWriter(object):
     self.script.append(('AssertSomeThumbprint',) + args)
 
 
-class BuildInfoTest(unittest.TestCase):
+class BuildInfoTest(test_utils.ReleaseToolsTestCase):
 
   TEST_INFO_DICT = {
       'build.prop' : {
@@ -182,6 +188,16 @@ class BuildInfoTest(unittest.TestCase):
     self.assertRaises(KeyError,
                       lambda: target_info['build.prop']['ro.build.foo'])
 
+  def test___setitem__(self):
+    target_info = BuildInfo(copy.deepcopy(self.TEST_INFO_DICT), None)
+    self.assertEqual('value1', target_info['property1'])
+    target_info['property1'] = 'value2'
+    self.assertEqual('value2', target_info['property1'])
+
+    self.assertEqual('build-foo', target_info['build.prop']['ro.build.foo'])
+    target_info['build.prop']['ro.build.foo'] = 'build-bar'
+    self.assertEqual('build-bar', target_info['build.prop']['ro.build.foo'])
+
   def test_get(self):
     target_info = BuildInfo(self.TEST_INFO_DICT, None)
     self.assertEqual('value1', target_info.get('property1'))
@@ -200,6 +216,12 @@ class BuildInfoTest(unittest.TestCase):
     self.assertIsNone(target_info.get('build.prop').get('ro.build.foo'))
     self.assertRaises(KeyError,
                       lambda: target_info.get('build.prop')['ro.build.foo'])
+
+  def test_items(self):
+    target_info = BuildInfo(self.TEST_INFO_DICT, None)
+    items = target_info.items()
+    self.assertIn(('property1', 'value1'), items)
+    self.assertIn(('property2', 4096), items)
 
   def test_GetBuildProp(self):
     target_info = BuildInfo(self.TEST_INFO_DICT, None)
@@ -230,6 +252,23 @@ class BuildInfoTest(unittest.TestCase):
                          'ro.vendor.build.fingerprint'))
     self.assertRaises(common.ExternalError, target_info.GetVendorBuildProp,
                       'ro.build.nonexistent')
+
+  def test_vendor_fingerprint(self):
+    target_info = BuildInfo(self.TEST_INFO_DICT, None)
+    self.assertEqual('vendor-build-fingerprint',
+                     target_info.vendor_fingerprint)
+
+  def test_vendor_fingerprint_blacklisted(self):
+    target_info_dict = copy.deepcopy(self.TEST_INFO_DICT_USES_OEM_PROPS)
+    del target_info_dict['vendor.build.prop']['ro.vendor.build.fingerprint']
+    target_info = BuildInfo(target_info_dict, self.TEST_OEM_DICTS)
+    self.assertIsNone(target_info.vendor_fingerprint)
+
+  def test_vendor_fingerprint_without_vendor_build_prop(self):
+    target_info_dict = copy.deepcopy(self.TEST_INFO_DICT_USES_OEM_PROPS)
+    del target_info_dict['vendor.build.prop']
+    target_info = BuildInfo(target_info_dict, self.TEST_OEM_DICTS)
+    self.assertIsNone(target_info.vendor_fingerprint)
 
   def test_WriteMountOemScript(self):
     target_info = BuildInfo(self.TEST_INFO_DICT_USES_OEM_PROPS,
@@ -312,10 +351,7 @@ class BuildInfoTest(unittest.TestCase):
         script_writer.script)
 
 
-class LoadOemDictsTest(unittest.TestCase):
-
-  def tearDown(self):
-    common.Cleanup()
+class LoadOemDictsTest(test_utils.ReleaseToolsTestCase):
 
   def test_NoneDict(self):
     self.assertIsNone(_LoadOemDicts(None))
@@ -348,7 +384,7 @@ class LoadOemDictsTest(unittest.TestCase):
       self.assertEqual('{}'.format(i), oem_dict['ro.build.index'])
 
 
-class OtaFromTargetFilesTest(unittest.TestCase):
+class OtaFromTargetFilesTest(test_utils.ReleaseToolsTestCase):
 
   TEST_TARGET_INFO_DICT = {
       'build.prop' : {
@@ -379,6 +415,7 @@ class OtaFromTargetFilesTest(unittest.TestCase):
     # Reset the global options as in ota_from_target_files.py.
     common.OPTIONS.incremental_source = None
     common.OPTIONS.downgrade = False
+    common.OPTIONS.retrofit_dynamic_partitions = False
     common.OPTIONS.timestamp = False
     common.OPTIONS.wipe_user_data = False
     common.OPTIONS.no_signing = False
@@ -389,9 +426,6 @@ class OtaFromTargetFilesTest(unittest.TestCase):
 
     common.OPTIONS.search_path = test_utils.get_search_path()
     self.assertIsNotNone(common.OPTIONS.search_path)
-
-  def tearDown(self):
-    common.Cleanup()
 
   def test_GetPackageMetadata_abOta_full(self):
     target_info_dict = copy.deepcopy(self.TEST_TARGET_INFO_DICT)
@@ -484,6 +518,23 @@ class OtaFromTargetFilesTest(unittest.TestCase):
         },
         metadata)
 
+  def test_GetPackageMetadata_retrofitDynamicPartitions(self):
+    target_info = BuildInfo(self.TEST_TARGET_INFO_DICT, None)
+    common.OPTIONS.retrofit_dynamic_partitions = True
+    metadata = GetPackageMetadata(target_info)
+    self.assertDictEqual(
+        {
+            'ota-retrofit-dynamic-partitions' : 'yes',
+            'ota-type' : 'BLOCK',
+            'post-build' : 'build-fingerprint-target',
+            'post-build-incremental' : 'build-version-incremental-target',
+            'post-sdk-level' : '27',
+            'post-security-patch-level' : '2017-12-01',
+            'post-timestamp' : '1500000000',
+            'pre-device' : 'product-device',
+        },
+        metadata)
+
   @staticmethod
   def _test_GetPackageMetadata_swapBuildTimestamps(target_info, source_info):
     (target_info['build.prop']['ro.build.date.utc'],
@@ -542,6 +593,8 @@ class OtaFromTargetFilesTest(unittest.TestCase):
     self.assertIn('IMAGES/boot.img', namelist)
     self.assertIn('IMAGES/system.img', namelist)
     self.assertIn('IMAGES/vendor.img', namelist)
+    self.assertIn('RADIO/bootloader.img', namelist)
+    self.assertIn('RADIO/modem.img', namelist)
     self.assertIn(POSTINSTALL_CONFIG, namelist)
 
     self.assertNotIn('IMAGES/system_other.img', namelist)
@@ -559,10 +612,32 @@ class OtaFromTargetFilesTest(unittest.TestCase):
     self.assertIn('IMAGES/boot.img', namelist)
     self.assertIn('IMAGES/system.img', namelist)
     self.assertIn('IMAGES/vendor.img', namelist)
+    self.assertIn('RADIO/bootloader.img', namelist)
+    self.assertIn('RADIO/modem.img', namelist)
 
     self.assertNotIn('IMAGES/system_other.img', namelist)
     self.assertNotIn('IMAGES/system.map', namelist)
     self.assertNotIn(POSTINSTALL_CONFIG, namelist)
+
+  def test_GetTargetFilesZipForSecondaryImages_withoutRadioImages(self):
+    input_file = construct_target_files(secondary=True)
+    common.ZipDelete(input_file, 'RADIO/bootloader.img')
+    common.ZipDelete(input_file, 'RADIO/modem.img')
+    target_file = GetTargetFilesZipForSecondaryImages(input_file)
+
+    with zipfile.ZipFile(target_file) as verify_zip:
+      namelist = verify_zip.namelist()
+
+    self.assertIn('META/ab_partitions.txt', namelist)
+    self.assertIn('IMAGES/boot.img', namelist)
+    self.assertIn('IMAGES/system.img', namelist)
+    self.assertIn('IMAGES/vendor.img', namelist)
+    self.assertIn(POSTINSTALL_CONFIG, namelist)
+
+    self.assertNotIn('IMAGES/system_other.img', namelist)
+    self.assertNotIn('IMAGES/system.map', namelist)
+    self.assertNotIn('RADIO/bootloader.img', namelist)
+    self.assertNotIn('RADIO/modem.img', namelist)
 
   def test_GetTargetFilesZipWithoutPostinstallConfig(self):
     input_file = construct_target_files()
@@ -656,13 +731,10 @@ class TestPropertyFiles(PropertyFiles):
     )
 
 
-class PropertyFilesTest(unittest.TestCase):
+class PropertyFilesTest(test_utils.ReleaseToolsTestCase):
 
   def setUp(self):
     common.OPTIONS.no_signing = False
-
-  def tearDown(self):
-    common.Cleanup()
 
   @staticmethod
   def construct_zip_package(entries):
@@ -742,8 +814,7 @@ class PropertyFilesTest(unittest.TestCase):
     zip_file = self.construct_zip_package(entries)
     property_files = TestPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
       streaming_metadata = property_files.Finalize(zip_fp, len(raw_metadata))
     tokens = self._parse_property_files_string(streaming_metadata)
@@ -766,8 +837,7 @@ class PropertyFilesTest(unittest.TestCase):
     property_files = TestPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
       # First get the raw metadata string (i.e. without padding space).
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
       raw_length = len(raw_metadata)
 
@@ -801,8 +871,7 @@ class PropertyFilesTest(unittest.TestCase):
     property_files = TestPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
       # First get the raw metadata string (i.e. without padding space).
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
 
       # Should pass the test if verification passes.
@@ -827,6 +896,7 @@ class StreamingPropertyFilesTest(PropertyFilesTest):
         property_files.required)
     self.assertEqual(
         (
+            'care_map.pb',
             'care_map.txt',
             'compatibility.zip',
         ),
@@ -859,8 +929,7 @@ class StreamingPropertyFilesTest(PropertyFilesTest):
     zip_file = self.construct_zip_package(entries)
     property_files = StreamingPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
       streaming_metadata = property_files.Finalize(zip_fp, len(raw_metadata))
     tokens = self._parse_property_files_string(streaming_metadata)
@@ -883,8 +952,7 @@ class StreamingPropertyFilesTest(PropertyFilesTest):
     property_files = StreamingPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
       # First get the raw metadata string (i.e. without padding space).
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
 
       # Should pass the test if verification passes.
@@ -924,6 +992,7 @@ class AbOtaPropertyFilesTest(PropertyFilesTest):
         property_files.required)
     self.assertEqual(
         (
+            'care_map.pb',
             'care_map.txt',
             'compatibility.zip',
         ),
@@ -962,11 +1031,11 @@ class AbOtaPropertyFilesTest(PropertyFilesTest):
            '--signature_size', str(self.SIGNATURE_SIZE),
            '--metadata_hash_file', metadata_sig_file,
            '--payload_hash_file', payload_sig_file]
-    proc = common.Run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+    proc = common.Run(cmd)
     stdoutdata, _ = proc.communicate()
     self.assertEqual(
         0, proc.returncode,
-        'Failed to run brillo_update_payload: {}'.format(stdoutdata))
+        'Failed to run brillo_update_payload:\n{}'.format(stdoutdata))
 
     signed_metadata_sig_file = payload_signer.Sign(metadata_sig_file)
 
@@ -1019,8 +1088,7 @@ class AbOtaPropertyFilesTest(PropertyFilesTest):
     zip_file = self.construct_zip_package_withValidPayload(with_metadata=True)
     property_files = AbOtaPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
       property_files_string = property_files.Finalize(zip_fp, len(raw_metadata))
 
@@ -1035,8 +1103,7 @@ class AbOtaPropertyFilesTest(PropertyFilesTest):
     zip_file = self.construct_zip_package_withValidPayload(with_metadata=True)
     property_files = AbOtaPropertyFiles()
     with zipfile.ZipFile(zip_file, 'r') as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
 
       property_files.Verify(zip_fp, raw_metadata)
@@ -1069,8 +1136,7 @@ class NonAbOtaPropertyFilesTest(PropertyFilesTest):
     zip_file = self.construct_zip_package(entries)
     property_files = NonAbOtaPropertyFiles()
     with zipfile.ZipFile(zip_file) as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
       property_files_string = property_files.Finalize(zip_fp, len(raw_metadata))
     tokens = self._parse_property_files_string(property_files_string)
@@ -1087,14 +1153,13 @@ class NonAbOtaPropertyFilesTest(PropertyFilesTest):
     zip_file = self.construct_zip_package(entries)
     property_files = NonAbOtaPropertyFiles()
     with zipfile.ZipFile(zip_file) as zip_fp:
-      # pylint: disable=protected-access
-      raw_metadata = property_files._GetPropertyFilesString(
+      raw_metadata = property_files.GetPropertyFilesString(
           zip_fp, reserve_space=False)
 
       property_files.Verify(zip_fp, raw_metadata)
 
 
-class PayloadSignerTest(unittest.TestCase):
+class PayloadSignerTest(test_utils.ReleaseToolsTestCase):
 
   SIGFILE = 'sigfile.bin'
   SIGNED_SIGFILE = 'signed-sigfile.bin'
@@ -1110,9 +1175,6 @@ class PayloadSignerTest(unittest.TestCase):
         common.OPTIONS.package_key : None,
     }
 
-  def tearDown(self):
-    common.Cleanup()
-
   def _assertFilesEqual(self, file1, file2):
     with open(file1, 'rb') as fp1, open(file2, 'rb') as fp2:
       self.assertEqual(fp1.read(), fp2.read())
@@ -1120,6 +1182,7 @@ class PayloadSignerTest(unittest.TestCase):
   def test_init(self):
     payload_signer = PayloadSigner()
     self.assertEqual('openssl', payload_signer.signer)
+    self.assertEqual(256, payload_signer.key_size)
 
   def test_init_withPassword(self):
     common.OPTIONS.package_key = os.path.join(
@@ -1133,9 +1196,16 @@ class PayloadSignerTest(unittest.TestCase):
   def test_init_withExternalSigner(self):
     common.OPTIONS.payload_signer = 'abc'
     common.OPTIONS.payload_signer_args = ['arg1', 'arg2']
+    common.OPTIONS.payload_signer_key_size = '512'
     payload_signer = PayloadSigner()
     self.assertEqual('abc', payload_signer.signer)
     self.assertEqual(['arg1', 'arg2'], payload_signer.signer_args)
+    self.assertEqual(512, payload_signer.key_size)
+
+  def test_GetKeySizeInBytes_512Bytes(self):
+    signing_key = os.path.join(self.testdata_dir, 'testkey_RSA4096.key')
+    key_size = PayloadSigner._GetKeySizeInBytes(signing_key)
+    self.assertEqual(512, key_size)
 
   def test_Sign(self):
     payload_signer = PayloadSigner()
@@ -1173,7 +1243,7 @@ class PayloadSignerTest(unittest.TestCase):
     self._assertFilesEqual(verify_file, signed_file)
 
 
-class PayloadTest(unittest.TestCase):
+class PayloadTest(test_utils.ReleaseToolsTestCase):
 
   def setUp(self):
     self.testdata_dir = test_utils.get_testdata_dir()
@@ -1186,9 +1256,6 @@ class PayloadTest(unittest.TestCase):
     common.OPTIONS.key_passwords = {
         common.OPTIONS.package_key : None,
     }
-
-  def tearDown(self):
-    common.Cleanup()
 
   @staticmethod
   def _create_payload_full(secondary=False):
@@ -1227,7 +1294,7 @@ class PayloadTest(unittest.TestCase):
     target_file = construct_target_files()
     common.ZipDelete(target_file, 'IMAGES/vendor.img')
     payload = Payload()
-    self.assertRaises(AssertionError, payload.Generate, target_file)
+    self.assertRaises(common.ExternalError, payload.Generate, target_file)
 
   def test_Sign_full(self):
     payload = self._create_payload_full()
@@ -1275,7 +1342,7 @@ class PayloadTest(unittest.TestCase):
     payload = self._create_payload_full()
     payload_signer = PayloadSigner()
     payload_signer.signer_args.append('bad-option')
-    self.assertRaises(AssertionError, payload.Sign, payload_signer)
+    self.assertRaises(common.ExternalError, payload.Sign, payload_signer)
 
   def test_WriteToZip(self):
     payload = self._create_payload_full()

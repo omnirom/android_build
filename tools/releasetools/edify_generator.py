@@ -31,14 +31,6 @@ class EdifyGenerator(object):
     else:
       self.fstab = fstab
 
-  def MakeTemporary(self):
-    """Make a temporary script object whose commands can latter be
-    appended to the parent script with AppendScript().  Used when the
-    caller wants to generate script commands out-of-order."""
-    x = EdifyGenerator(self.version, self.info)
-    x.mounts = self.mounts
-    return x
-
   @property
   def required_cache(self):
     """Return the minimum cache size to apply the update."""
@@ -140,8 +132,8 @@ class EdifyGenerator(object):
     self.script.append(
         ('(!less_than_int(%s, getprop("ro.build.date.utc"))) || '
          'abort("E%d: Can\'t install this package (%s) over newer '
-         'build (" + getprop("ro.build.date") + ").");') % (timestamp,
-             common.ErrorCode.OLDER_BUILD, timestamp_text))
+         'build (" + getprop("ro.build.date") + ").");') % (
+             timestamp, common.ErrorCode.OLDER_BUILD, timestamp_text))
 
   def AssertDevice(self, device):
     """Assert that the device identifier is the given string."""
@@ -176,31 +168,32 @@ class EdifyGenerator(object):
     [0,1]."""
     self.script.append("set_progress(%f);" % (frac,))
 
-  def PatchCheck(self, filename, *sha1):
-    """Check that the given file has one of the
-    given *sha1 hashes, checking the version saved in cache if the
-    file does not match."""
-    self.script.append(
-        'apply_patch_check("%s"' % (filename,) +
-        "".join([', "%s"' % (i,) for i in sha1]) +
-        ') || abort("E%d: \\"%s\\" has unexpected contents.");' % (
-            common.ErrorCode.BAD_PATCH_FILE, filename))
+  def PatchCheck(self, filename, *sha1):  # pylint: disable=unused-argument
+    """Checks that the given partition has the desired checksum.
 
-  def Verify(self, filename):
-    """Check that the given file has one of the
-    given hashes (encoded in the filename)."""
-    self.script.append(
-        'apply_patch_check("{filename}") && '
-        'ui_print("    Verified.") || '
-        'ui_print("\\"{filename}\\" has unexpected contents.");'.format(
-            filename=filename))
+    The call to this function is being deprecated in favor of
+    PatchPartitionCheck(). It will try to parse and handle the old format,
+    unless the format is unknown.
+    """
+    tokens = filename.split(':')
+    assert len(tokens) == 6 and tokens[0] == 'EMMC', \
+        "Failed to handle unknown format. Use PatchPartitionCheck() instead."
+    source = '{}:{}:{}:{}'.format(tokens[0], tokens[1], tokens[2], tokens[3])
+    target = '{}:{}:{}:{}'.format(tokens[0], tokens[1], tokens[4], tokens[5])
+    self.PatchPartitionCheck(target, source)
 
-  def FileCheck(self, filename, *sha1):
-    """Check that the given file has one of the
-    given *sha1 hashes."""
-    self.script.append('assert(sha1_check(read_file("%s")' % (filename,) +
-                       "".join([', "%s"' % (i,) for i in sha1]) +
-                       '));')
+  def PatchPartitionCheck(self, target, source):
+    """Checks whether updater can patch the given partitions.
+
+    It checks the checksums of the given partitions. If none of them matches the
+    expected checksum, updater will additionally look for a backup on /cache.
+    """
+    self.script.append(self.WordWrap((
+        'patch_partition_check("{target}",\0"{source}") ||\n    abort('
+        '"E{code}: \\"{target}\\" or \\"{source}\\" has unexpected '
+        'contents.");').format(
+            target=target, source=source,
+            code=common.ErrorCode.BAD_PATCH_FILE)))
 
   def CacheFreeSpaceCheck(self, amount):
     """Check that there's at least 'amount' space that can be made
@@ -291,17 +284,41 @@ class EdifyGenerator(object):
   def ApplyPatch(self, srcfile, tgtfile, tgtsize, tgtsha1, *patchpairs):
     """Apply binary patches (in *patchpairs) to the given srcfile to
     produce tgtfile (which may be "-" to indicate overwriting the
-    source file."""
-    if len(patchpairs) % 2 != 0 or len(patchpairs) == 0:
-      raise ValueError("bad patches given to ApplyPatch")
-    cmd = ['apply_patch("%s",\0"%s",\0%s,\0%d'
-           % (srcfile, tgtfile, tgtsha1, tgtsize)]
-    for i in range(0, len(patchpairs), 2):
-      cmd.append(',\0%s,\0package_extract_file("%s")' % patchpairs[i:i+2])
-    cmd.append(') ||\n    abort("E%d: Failed to apply patch to %s");' % (
-        common.ErrorCode.APPLY_PATCH_FAILURE, srcfile))
-    cmd = "".join(cmd)
-    self.script.append(self.WordWrap(cmd))
+    source file.
+
+    This edify function is being deprecated in favor of PatchPartition(). It
+    will try to redirect calls to PatchPartition() if possible. On unknown /
+    invalid inputs, raises an exception.
+    """
+    tokens = srcfile.split(':')
+    assert (len(tokens) == 6 and tokens[0] == 'EMMC' and tgtfile == '-' and
+            len(patchpairs) == 2), \
+        "Failed to handle unknown format. Use PatchPartition() instead."
+
+    # Also sanity check the args.
+    assert tokens[3] == patchpairs[0], \
+        "Found mismatching values for source SHA-1: {} vs {}".format(
+            tokens[3], patchpairs[0])
+    assert int(tokens[4]) == tgtsize, \
+        "Found mismatching values for target size: {} vs {}".format(
+            tokens[4], tgtsize)
+    assert tokens[5] == tgtsha1, \
+        "Found mismatching values for target SHA-1: {} vs {}".format(
+            tokens[5], tgtsha1)
+
+    source = '{}:{}:{}:{}'.format(tokens[0], tokens[1], tokens[2], tokens[3])
+    target = '{}:{}:{}:{}'.format(tokens[0], tokens[1], tokens[4], tokens[5])
+    patch = patchpairs[1]
+    self.PatchPartition(target, source, patch)
+
+  def PatchPartition(self, target, source, patch):
+    """Applies the patch to the source partition and writes it to target."""
+    self.script.append(self.WordWrap((
+        'patch_partition("{target}",\0"{source}",\0'
+        'package_extract_file("{patch}")) ||\n'
+        '    abort("E{code}: Failed to apply patch to {source}");').format(
+            target=target, source=source, patch=patch,
+            code=common.ErrorCode.APPLY_PATCH_FAILURE)))
 
   def WriteRawImage(self, mount_point, fn, mapfn=None):
     """Write the given package file into the partition for the given

@@ -14,17 +14,18 @@
 # limitations under the License.
 #
 
-from __future__ import print_function
-
-import unittest
+import os
+from hashlib import sha1
 
 import common
-from blockimgdiff import (BlockImageDiff, EmptyImage, HeapItem, ImgdiffStats,
-                          Transfer)
+from blockimgdiff import (
+    BlockImageDiff, DataImage, EmptyImage, FileImage, HeapItem, ImgdiffStats,
+    Transfer)
 from rangelib import RangeSet
+from test_utils import ReleaseToolsTestCase
 
 
-class HealpItemTest(unittest.TestCase):
+class HealpItemTest(ReleaseToolsTestCase):
 
   class Item(object):
     def __init__(self, score):
@@ -54,7 +55,7 @@ class HealpItemTest(unittest.TestCase):
     self.assertFalse(item)
 
 
-class BlockImageDiffTest(unittest.TestCase):
+class BlockImageDiffTest(ReleaseToolsTestCase):
 
   def test_GenerateDigraphOrder(self):
     """Make sure GenerateDigraph preserves the order.
@@ -130,11 +131,11 @@ class BlockImageDiffTest(unittest.TestCase):
 
     # Sufficient cache to stash 5 blocks (size * 0.8 >= 5).
     common.OPTIONS.cache_size = 7 * 4096
-    self.assertEqual(0, block_image_diff.ReviseStashSize())
+    self.assertEqual((0, 5), block_image_diff.ReviseStashSize())
 
     # Insufficient cache to stash 5 blocks (size * 0.8 < 5).
     common.OPTIONS.cache_size = 6 * 4096
-    self.assertEqual(10, block_image_diff.ReviseStashSize())
+    self.assertEqual((10, 0), block_image_diff.ReviseStashSize())
 
   def test_ReviseStashSize_bug_33687949(self):
     """ReviseStashSize() should "free" the used stash _after_ the command.
@@ -172,7 +173,7 @@ class BlockImageDiffTest(unittest.TestCase):
 
     # Insufficient cache to stash 15 blocks (size * 0.8 < 15).
     common.OPTIONS.cache_size = 15 * 4096
-    self.assertEqual(15, block_image_diff.ReviseStashSize())
+    self.assertEqual((15, 5), block_image_diff.ReviseStashSize())
 
   def test_FileTypeSupportedByImgdiff(self):
     self.assertTrue(
@@ -203,8 +204,8 @@ class BlockImageDiffTest(unittest.TestCase):
 
     self.assertDictEqual(
         {
-            ImgdiffStats.USED_IMGDIFF : {"/system/app/app1.apk"},
-            ImgdiffStats.USED_IMGDIFF_LARGE_APK : {"/vendor/app/app2.apk"},
+            ImgdiffStats.USED_IMGDIFF: {"/system/app/app1.apk"},
+            ImgdiffStats.USED_IMGDIFF_LARGE_APK: {"/vendor/app/app2.apk"},
         },
         block_image_diff.imgdiff_stats.stats)
 
@@ -229,13 +230,6 @@ class BlockImageDiffTest(unittest.TestCase):
             "/system/app/app2.apk", RangeSet("10-15"),
             RangeSet("15-20 30 10-14")))
 
-    # At least one of the ranges has been modified.
-    src_ranges = RangeSet("0-5")
-    src_ranges.extra['trimmed'] = True
-    self.assertFalse(
-        block_image_diff.CanUseImgdiff(
-            "/vendor/app/app3.apk", RangeSet("10-15"), src_ranges))
-
     # At least one of the ranges is incomplete.
     src_ranges = RangeSet("0-5")
     src_ranges.extra['incomplete'] = True
@@ -246,14 +240,13 @@ class BlockImageDiffTest(unittest.TestCase):
     # The stats are correctly logged.
     self.assertDictEqual(
         {
-            ImgdiffStats.SKIPPED_NONMONOTONIC : {'/system/app/app2.apk'},
-            ImgdiffStats.SKIPPED_TRIMMED : {'/vendor/app/app3.apk'},
+            ImgdiffStats.SKIPPED_NONMONOTONIC: {'/system/app/app2.apk'},
             ImgdiffStats.SKIPPED_INCOMPLETE: {'/vendor/app/app4.apk'},
         },
         block_image_diff.imgdiff_stats.stats)
 
 
-class ImgdiffStatsTest(unittest.TestCase):
+class ImgdiffStatsTest(ReleaseToolsTestCase):
 
   def test_Log(self):
     imgdiff_stats = ImgdiffStats()
@@ -272,3 +265,45 @@ class ImgdiffStatsTest(unittest.TestCase):
 
     self.assertRaises(AssertionError, imgdiff_stats.Log, "/system/app/app1.apk",
                       "invalid reason")
+
+
+class DataImageTest(ReleaseToolsTestCase):
+  def test_read_range_set(self):
+    data = "file" + ('\0' * 4092)
+    image = DataImage(data)
+    self.assertEqual(data, "".join(image.ReadRangeSet(image.care_map)))
+
+
+class FileImageTest(ReleaseToolsTestCase):
+  def setUp(self):
+    self.file_path = common.MakeTempFile()
+    self.data = os.urandom(4096 * 4)
+    with open(self.file_path, 'w') as f:
+      f.write(self.data)
+    self.file = FileImage(self.file_path)
+
+  def test_totalsha1(self):
+    self.assertEqual(sha1(self.data).hexdigest(), self.file.TotalSha1())
+
+  def test_ranges(self):
+    blocksize = self.file.blocksize
+    for s in range(4):
+      for e in range(s, 4):
+        expected_data = self.data[s * blocksize : e * blocksize]
+
+        rs = RangeSet([s, e])
+        data = "".join(self.file.ReadRangeSet(rs))
+        self.assertEqual(expected_data, data)
+
+        sha1sum = self.file.RangeSha1(rs)
+        self.assertEqual(sha1(expected_data).hexdigest(), sha1sum)
+
+        tmpfile = common.MakeTempFile()
+        with open(tmpfile, 'w') as f:
+          self.file.WriteRangeDataToFd(rs, f)
+        with open(tmpfile, 'r') as f:
+          self.assertEqual(expected_data, f.read())
+
+  def test_read_all(self):
+    data = "".join(self.file.ReadRangeSet(self.file.care_map))
+    self.assertEqual(self.data, data)

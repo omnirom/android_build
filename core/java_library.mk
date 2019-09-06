@@ -50,6 +50,8 @@ else
 LOCAL_EMMA_INSTRUMENT := false
 endif # EMMA_INSTRUMENT
 
+my_dex_jar := $(common_javalib.jar)
+
 #################################
 include $(BUILD_SYSTEM)/java.mk
 #################################
@@ -57,19 +59,22 @@ include $(BUILD_SYSTEM)/java.mk
 ifeq ($(LOCAL_IS_STATIC_JAVA_LIBRARY),true)
 # There are some dependencies outside the build system that assume classes.jar
 # is available as javalib.jar so copy it there too.
-$(eval $(call copy-one-file,$(full_classes_proguard_jar),$(common_javalib.jar)))
+$(eval $(call copy-one-file,$(full_classes_pre_proguard_jar),$(common_javalib.jar)))
 
-$(eval $(call copy-one-file,$(full_classes_proguard_jar),$(LOCAL_BUILT_MODULE)))
+$(eval $(call copy-one-file,$(full_classes_pre_proguard_jar),$(LOCAL_BUILT_MODULE)))
 
 else # !LOCAL_IS_STATIC_JAVA_LIBRARY
 
 $(common_javalib.jar): PRIVATE_DEX_FILE := $(built_dex)
 $(common_javalib.jar): PRIVATE_SOURCE_ARCHIVE := $(full_classes_pre_proguard_jar)
-$(common_javalib.jar): PRIVATE_DONT_DELETE_JAR_DIRS := $(LOCAL_DONT_DELETE_JAR_DIRS)
+$(common_javalib.jar): $(MERGE_ZIPS) $(SOONG_ZIP) $(ZIP2ZIP)
 $(common_javalib.jar) : $(built_dex) $(java_resource_sources) | $(ZIPTIME) $(ZIPALIGN)
 	@echo "target Jar: $(PRIVATE_MODULE) ($@)"
-	$(call initialize-package-file,$(PRIVATE_SOURCE_ARCHIVE),$@.tmp)
-	$(call add-dex-to-package-arg,$@.tmp)
+	rm -rf $@.parts && mkdir -p $@.parts
+	$(call create-dex-jar,$@.parts/dex.zip,$(PRIVATE_DEX_FILE))
+	$(call extract-resources-jar,$@.parts/res.zip,$(PRIVATE_SOURCE_ARCHIVE))
+	$(MERGE_ZIPS) -j $@.tmp $@.parts/dex.zip $@.parts/res.zip
+	rm -rf $@.parts
 	$(hide) $(ZIPTIME) $@.tmp
 	$(call commit-change-for-toc,$@)
 ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
@@ -80,22 +85,13 @@ endif  # LOCAL_UNCOMPRESS_DEX
 .KATI_RESTAT: $(common_javalib.jar)
 
 ifdef LOCAL_DEX_PREOPT
-ifneq ($(dexpreopt_boot_jar_module),) # boot jar
-# boot jar's rules are defined in dex_preopt.mk
-dexpreopted_boot_jar := $(DEXPREOPT_BOOT_JAR_DIR_FULL_PATH)/$(dexpreopt_boot_jar_module)_nodex.jar
-$(eval $(call copy-one-file,$(dexpreopted_boot_jar),$(LOCAL_BUILT_MODULE)))
 
-# For libart boot jars, we don't have .odex files.
-else # ! boot jar
-$(built_odex): PRIVATE_MODULE := $(LOCAL_MODULE)
-# Use pattern rule - we may have multiple built odex files.
-$(built_odex) : $(dir $(LOCAL_BUILT_MODULE))% : $(common_javalib.jar)
-	@echo "Dexpreopt Jar: $(PRIVATE_MODULE) ($@)"
-	$(call dexpreopt-one-file,$<,$@)
-
-$(eval $(call dexpreopt-copy-jar,$(common_javalib.jar),$(LOCAL_BUILT_MODULE),$(LOCAL_DEX_PREOPT)))
-
-endif # ! boot jar
+$(LOCAL_BUILT_MODULE): PRIVATE_STRIP_SCRIPT := $(intermediates)/strip.sh
+$(LOCAL_BUILT_MODULE): $(intermediates)/strip.sh
+$(LOCAL_BUILT_MODULE): | $(DEXPREOPT_STRIP_DEPS)
+$(LOCAL_BUILT_MODULE): .KATI_DEPFILE := $(LOCAL_BUILT_MODULE).d
+$(LOCAL_BUILT_MODULE): $(common_javalib.jar)
+	$(PRIVATE_STRIP_SCRIPT) $< $@
 
 else # LOCAL_DEX_PREOPT
 $(eval $(call copy-one-file,$(common_javalib.jar),$(LOCAL_BUILT_MODULE)))

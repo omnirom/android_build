@@ -17,49 +17,24 @@ $(warning )
 $(error done)
 endif
 
-# Only use ANDROID_BUILD_SHELL to wrap around bash.
-# DO NOT use other shells such as zsh.
-ifdef ANDROID_BUILD_SHELL
-SHELL := $(ANDROID_BUILD_SHELL)
-else
-# Use bash, not whatever shell somebody has installed as /bin/sh
-# This is repeated from main.mk, since envsetup.sh runs this file
-# directly.
-SHELL := /bin/bash
+BUILD_SYSTEM :=$= build/make/core
+BUILD_SYSTEM_COMMON :=$= build/make/common
+
+include $(BUILD_SYSTEM_COMMON)/core.mk
+
+# Mark variables that should be coming as environment variables from soong_ui
+# as readonly
+.KATI_READONLY := OUT_DIR TMPDIR BUILD_DATETIME_FILE
+ifdef CALLED_FROM_SETUP
+  .KATI_READONLY := CALLED_FROM_SETUP
 endif
-
-# Utility variables.
-empty :=
-space := $(empty) $(empty)
-comma := ,
-# Note that make will eat the newline just before endef.
-define newline
-
-
-endef
-# The pound character "#"
-define pound
-#
-endef
-# Unfortunately you can't simply define backslash as \ or \\.
-backslash := \a
-backslash := $(patsubst %a,%,$(backslash))
-
-# this turns off the suffix rules built into make
-.SUFFIXES:
-
-# this turns off the RCS / SCCS implicit rules of GNU Make
-% : RCS/%,v
-% : RCS/%
-% : %,v
-% : s.%
-% : SCCS/s.%
-
-# If a rule fails, delete $@.
-.DELETE_ON_ERROR:
+ifdef KATI_PACKAGE_MK_DIR
+  .KATI_READONLY := KATI_PACKAGE_MK_DIR
+endif
 
 # Mark variables deprecated/obsolete
 CHANGES_URL := https://android.googlesource.com/platform/build/+/master/Changes.md
+.KATI_READONLY := CHANGES_URL
 $(KATI_obsolete_var PATH,Do not use PATH directly. See $(CHANGES_URL)#PATH)
 $(KATI_obsolete_var PYTHONPATH,Do not use PYTHONPATH directly. See $(CHANGES_URL)#PYTHONPATH)
 $(KATI_obsolete_var OUT,Use OUT_DIR instead. See $(CHANGES_URL)#OUT)
@@ -77,8 +52,50 @@ $(KATI_obsolete_var \
   ,See $(CHANGES_URL)#other_envsetup_variables)
 $(KATI_obsolete_var PRODUCT_COMPATIBILITY_MATRIX_LEVEL_OVERRIDE,Set FCM Version in device manifest instead. See $(CHANGES_URL)#PRODUCT_COMPATIBILITY_MATRIX_LEVEL_OVERRIDE)
 $(KATI_obsolete_var USE_CLANG_PLATFORM_BUILD,Clang is the only supported Android compiler. See $(CHANGES_URL)#USE_CLANG_PLATFORM_BUILD)
+$(KATI_obsolete_var BUILD_DROIDDOC,Droiddoc is only supported in Soong. See details on build/soong/java/droiddoc.go)
+$(KATI_obsolete_var BUILD_APIDIFF,Apidiff is only supported in Soong. See details on build/soong/java/droiddoc.go)
+$(KATI_obsolete_var \
+  DEFAULT_GCC_CPP_STD_VERSION \
+  HOST_GLOBAL_CFLAGS 2ND_HOST_GLOBAL_CFLAGS \
+  HOST_GLOBAL_CONLYFLAGS 2ND_HOST_GLOBAL_CONLYFLAGS \
+  HOST_GLOBAL_CPPFLAGS 2ND_HOST_GLOBAL_CPPFLAGS \
+  HOST_GLOBAL_LDFLAGS 2ND_HOST_GLOBAL_LDFLAGS \
+  HOST_GLOBAL_LLDFLAGS 2ND_HOST_GLOBAL_LLDFLAGS \
+  HOST_CLANG_SUPPORTED 2ND_HOST_CLANG_SUPPORTED \
+  HOST_CC 2ND_HOST_CC \
+  HOST_CXX 2ND_HOST_CXX \
+  HOST_CROSS_GLOBAL_CFLAGS 2ND_HOST_CROSS_GLOBAL_CFLAGS \
+  HOST_CROSS_GLOBAL_CONLYFLAGS 2ND_HOST_CROSS_GLOBAL_CONLYFLAGS \
+  HOST_CROSS_GLOBAL_CPPFLAGS 2ND_HOST_CROSS_GLOBAL_CPPFLAGS \
+  HOST_CROSS_GLOBAL_LDFLAGS 2ND_HOST_CROSS_GLOBAL_LDFLAGS \
+  HOST_CROSS_GLOBAL_LLDFLAGS 2ND_HOST_CROSS_GLOBAL_LLDFLAGS \
+  HOST_CROSS_CLANG_SUPPORTED 2ND_HOST_CROSS_CLANG_SUPPORTED \
+  HOST_CROSS_CC 2ND_HOST_CROSS_CC \
+  HOST_CROSS_CXX 2ND_HOST_CROSS_CXX \
+  TARGET_GLOBAL_CFLAGS 2ND_TARGET_GLOBAL_CFLAGS \
+  TARGET_GLOBAL_CONLYFLAGS 2ND_TARGET_GLOBAL_CONLYFLAGS \
+  TARGET_GLOBAL_CPPFLAGS 2ND_TARGET_GLOBAL_CPPFLAGS \
+  TARGET_GLOBAL_LDFLAGS 2ND_TARGET_GLOBAL_LDFLAGS \
+  TARGET_GLOBAL_LLDFLAGS 2ND_TARGET_GLOBAL_LLDFLAGS \
+  TARGET_CLANG_SUPPORTED 2ND_TARGET_CLANG_SUPPORTED \
+  TARGET_CC 2ND_TARGET_CC \
+  TARGET_CXX 2ND_TARGET_CXX \
+  TARGET_TOOLCHAIN_ROOT 2ND_TARGET_TOOLCHAIN_ROOT \
+  HOST_TOOLCHAIN_ROOT 2ND_HOST_TOOLCHAIN_ROOT \
+  HOST_CROSS_TOOLCHAIN_ROOT 2ND_HOST_CROSS_TOOLCHAIN_ROOT \
+  HOST_TOOLS_PREFIX 2ND_HOST_TOOLS_PREFIX \
+  HOST_CROSS_TOOLS_PREFIX 2ND_HOST_CROSS_TOOLS_PREFIX \
+  HOST_GCC_VERSION 2ND_HOST_GCC_VERSION \
+  HOST_CROSS_GCC_VERSION 2ND_HOST_CROSS_GCC_VERSION \
+  TARGET_NDK_GCC_VERSION 2ND_TARGET_NDK_GCC_VERSION \
+  GLOBAL_CFLAGS_NO_OVERRIDE GLOBAL_CPPFLAGS_NO_OVERRIDE \
+  ,GCC support has been removed. Use Clang instead)
+$(KATI_obsolete_var DIST_DIR dist_goal,Use dist-for-goals instead. See $(CHANGES_URL)#dist)
+$(KATI_obsolete_var TARGET_ANDROID_FILESYSTEM_CONFIG_H,Use TARGET_FS_CONFIG_GEN instead)
+$(KATI_deprecated_var USER,Use BUILD_USERNAME instead. See $(CHANGES_URL)#USER)
 
-CHANGES_URL :=
+# This is marked as obsolete in envsetup.mk after reading the BoardConfig.mk
+$(KATI_deprecate_export It is a global setting. See $(CHANGES_URL)#export_keyword)
 
 # Used to force goals to build.  Only use for conditionally defined goals.
 .PHONY: FORCE
@@ -86,22 +103,25 @@ FORCE:
 
 ORIGINAL_MAKECMDGOALS := $(MAKECMDGOALS)
 
-dist_goal := $(strip $(filter dist,$(MAKECMDGOALS)))
-MAKECMDGOALS := $(strip $(filter-out dist,$(MAKECMDGOALS)))
-
 UNAME := $(shell uname -sm)
 
 SRC_TARGET_DIR := $(TOPDIR)build/target
-SRC_API_DIR := $(TOPDIR)prebuilts/sdk/api
-SRC_SYSTEM_API_DIR := $(TOPDIR)prebuilts/sdk/system-api
-SRC_TEST_API_DIR := $(TOPDIR)prebuilts/sdk/test-api
 
 # Some specific paths to tools
 SRC_DROIDDOC_DIR := $(TOPDIR)build/make/tools/droiddoc
 
+# Mark some inputs as readonly
+ifdef TARGET_DEVICE_DIR
+  .KATI_READONLY := TARGET_DEVICE_DIR
+endif
+
 # Set up efficient math functions which are used in make.
 # Here since this file is included by envsetup as well as during build.
-include $(BUILD_SYSTEM)/math.mk
+include $(BUILD_SYSTEM_COMMON)/math.mk
+
+include $(BUILD_SYSTEM_COMMON)/strings.mk
+
+include $(BUILD_SYSTEM_COMMON)/json.mk
 
 # Various mappings to avoid hard-coding paths all over the place
 include $(BUILD_SYSTEM)/pathmap.mk
@@ -134,8 +154,6 @@ BUILD_MULTI_PREBUILT:= $(BUILD_SYSTEM)/multi_prebuilt.mk
 BUILD_JAVA_LIBRARY:= $(BUILD_SYSTEM)/java_library.mk
 BUILD_STATIC_JAVA_LIBRARY:= $(BUILD_SYSTEM)/static_java_library.mk
 BUILD_HOST_JAVA_LIBRARY:= $(BUILD_SYSTEM)/host_java_library.mk
-BUILD_DROIDDOC:= $(BUILD_SYSTEM)/droiddoc.mk
-BUILD_APIDIFF:= $(BUILD_SYSTEM)/apidiff.mk
 BUILD_COPY_HEADERS := $(BUILD_SYSTEM)/copy_headers.mk
 BUILD_NATIVE_TEST := $(BUILD_SYSTEM)/native_test.mk
 BUILD_NATIVE_BENCHMARK := $(BUILD_SYSTEM)/native_benchmark.mk
@@ -154,13 +172,6 @@ BUILD_HOST_DALVIK_STATIC_JAVA_LIBRARY := $(BUILD_SYSTEM)/host_dalvik_static_java
 
 BUILD_HOST_TEST_CONFIG := $(BUILD_SYSTEM)/host_test_config.mk
 BUILD_TARGET_TEST_CONFIG := $(BUILD_SYSTEM)/target_test_config.mk
-
-INSTRUMENTATION_TEST_CONFIG_TEMPLATE := $(BUILD_SYSTEM)/instrumentation_test_config_template.xml
-NATIVE_TEST_CONFIG_TEMPLATE := $(BUILD_SYSTEM)/native_test_config_template.xml
-EMPTY_TEST_CONFIG := $(BUILD_SYSTEM)/empty_test_config.xml
-
-# Tool to generate TradeFed test config file automatically.
-AUTOGEN_TEST_CONFIG_SCRIPT := build/make/tools/auto_gen_test_config.py
 
 # ###############################################################
 # Parse out any modifier targets.
@@ -194,11 +205,6 @@ ifdef TMPDIR
 JAVA_TMPDIR_ARG := -Djava.io.tmpdir=$(TMPDIR)
 else
 JAVA_TMPDIR_ARG :=
-endif
-
-# Default to remove the org.apache.http.legacy from bootclasspath
-ifeq ($(REMOVE_OAHL_FROM_BCP),)
-REMOVE_OAHL_FROM_BCP := true
 endif
 
 # ###############################################################
@@ -281,17 +287,7 @@ $(call validate-kernel-headers,$(TARGET_BOARD_KERNEL_HEADERS))
 TARGET_PRODUCT_KERNEL_HEADERS := $(strip $(wildcard $(PRODUCT_VENDOR_KERNEL_HEADERS)))
 TARGET_PRODUCT_KERNEL_HEADERS := $(patsubst %/,%,$(TARGET_PRODUCT_KERNEL_HEADERS))
 $(call validate-kernel-headers,$(TARGET_PRODUCT_KERNEL_HEADERS))
-
-# Clean up/verify variables defined by the board config file.
-TARGET_BOOTLOADER_BOARD_NAME := $(strip $(TARGET_BOOTLOADER_BOARD_NAME))
-TARGET_CPU_ABI := $(strip $(TARGET_CPU_ABI))
-ifeq ($(TARGET_CPU_ABI),)
-  $(error No TARGET_CPU_ABI defined by board config: $(board_config_mk))
-endif
-TARGET_CPU_ABI2 := $(strip $(TARGET_CPU_ABI2))
-
-BOARD_KERNEL_BASE := $(strip $(BOARD_KERNEL_BASE))
-BOARD_KERNEL_PAGESIZE := $(strip $(BOARD_KERNEL_PAGESIZE))
+.KATI_READONLY := TARGET_DEVICE_KERNEL_HEADERS TARGET_BOARD_KERNEL_HEADERS TARGET_PRODUCT_KERNEL_HEADERS
 
 # Commands to generate .toc file common to ELF .so files.
 define _gen_toc_command_for_elf
@@ -301,109 +297,19 @@ endef
 
 # Commands to generate .toc file from Darwin dynamic library.
 define _gen_toc_command_for_macho
-$(hide) otool -l $(1) | grep LC_ID_DYLIB -A 5 > $(2)
-$(hide) nm -gP $(1) | cut -f1-2 -d" " | (grep -v U$$ >> $(2) || true)
+$(hide) $(HOST_OTOOL) -l $(1) | grep LC_ID_DYLIB -A 5 > $(2)
+$(hide) $(HOST_NM) -gP $(1) | cut -f1-2 -d" " | (grep -v U$$ >> $(2) || true)
 endef
-
-combo_target := HOST_
-combo_2nd_arch_prefix :=
-include $(BUILD_SYSTEM)/combo/select.mk
-
-# Load the 2nd host arch if it's needed.
-ifdef HOST_2ND_ARCH
-combo_target := HOST_
-combo_2nd_arch_prefix := $(HOST_2ND_ARCH_VAR_PREFIX)
-include $(BUILD_SYSTEM)/combo/select.mk
-endif
-
-# Load the windows cross compiler under Linux
-ifdef HOST_CROSS_OS
-combo_target := HOST_CROSS_
-combo_2nd_arch_prefix :=
-include $(BUILD_SYSTEM)/combo/select.mk
-
-ifdef HOST_CROSS_2ND_ARCH
-combo_target := HOST_CROSS_
-combo_2nd_arch_prefix := $(HOST_CROSS_2ND_ARCH_VAR_PREFIX)
-include $(BUILD_SYSTEM)/combo/select.mk
-endif
-endif
-
-# on windows, the tools have .exe at the end, and we depend on the
-# host config stuff being done first
-
-combo_target := TARGET_
-combo_2nd_arch_prefix :=
-include $(BUILD_SYSTEM)/combo/select.mk
-
-# Load the 2nd target arch if it's needed.
-ifdef TARGET_2ND_ARCH
-combo_target := TARGET_
-combo_2nd_arch_prefix := $(TARGET_2ND_ARCH_VAR_PREFIX)
-include $(BUILD_SYSTEM)/combo/select.mk
-endif
 
 ifeq ($(CALLED_FROM_SETUP),true)
 include $(BUILD_SYSTEM)/ccache.mk
 include $(BUILD_SYSTEM)/goma.mk
-
-export CC_WRAPPER
-export CXX_WRAPPER
-export JAVAC_WRAPPER
 endif
 
 ifdef TARGET_PREFER_32_BIT
 TARGET_PREFER_32_BIT_APPS := true
 TARGET_PREFER_32_BIT_EXECUTABLES := true
 endif
-
-ifeq (,$(TARGET_SUPPORTS_32_BIT_APPS)$(TARGET_SUPPORTS_64_BIT_APPS))
-  TARGET_SUPPORTS_32_BIT_APPS := true
-endif
-
-# "ro.product.cpu.abilist32" and "ro.product.cpu.abilist64" are
-# comma separated lists of the 32 and 64 bit ABIs (in order of
-# preference) that the target supports. If TARGET_CPU_ABI_LIST_{32,64}_BIT
-# are defined by the board config, we use them. Else, we construct
-# these lists based on whether TARGET_IS_64_BIT is set.
-#
-# Note that this assumes that the 2ND_CPU_ABI for a 64 bit target
-# is always 32 bits. If this isn't the case, these variables should
-# be overriden in the board configuration.
-ifeq (,$(TARGET_CPU_ABI_LIST_64_BIT))
-  ifeq (true|true,$(TARGET_IS_64_BIT)|$(TARGET_SUPPORTS_64_BIT_APPS))
-    TARGET_CPU_ABI_LIST_64_BIT := $(TARGET_CPU_ABI) $(TARGET_CPU_ABI2)
-  endif
-endif
-
-ifeq (,$(TARGET_CPU_ABI_LIST_32_BIT))
-  ifneq (true,$(TARGET_IS_64_BIT))
-    TARGET_CPU_ABI_LIST_32_BIT := $(TARGET_CPU_ABI) $(TARGET_CPU_ABI2)
-  else
-    ifeq (true,$(TARGET_SUPPORTS_32_BIT_APPS))
-      # For a 64 bit target, assume that the 2ND_CPU_ABI
-      # is a 32 bit ABI.
-      TARGET_CPU_ABI_LIST_32_BIT := $(TARGET_2ND_CPU_ABI) $(TARGET_2ND_CPU_ABI2)
-    endif
-  endif
-endif
-
-# "ro.product.cpu.abilist" is a comma separated list of ABIs (in order
-# of preference) that the target supports. If a TARGET_CPU_ABI_LIST
-# is specified by the board configuration, we use that. If not, we
-# build a list out of the TARGET_CPU_ABIs specified by the config.
-ifeq (,$(TARGET_CPU_ABI_LIST))
-  ifeq ($(TARGET_IS_64_BIT)|$(TARGET_PREFER_32_BIT_APPS),true|true)
-    TARGET_CPU_ABI_LIST := $(TARGET_CPU_ABI_LIST_32_BIT) $(TARGET_CPU_ABI_LIST_64_BIT)
-  else
-    TARGET_CPU_ABI_LIST := $(TARGET_CPU_ABI_LIST_64_BIT) $(TARGET_CPU_ABI_LIST_32_BIT)
-  endif
-endif
-
-# Strip whitespace from the ABI list string.
-TARGET_CPU_ABI_LIST := $(subst $(space),$(comma),$(strip $(TARGET_CPU_ABI_LIST)))
-TARGET_CPU_ABI_LIST_32_BIT := $(subst $(space),$(comma),$(strip $(TARGET_CPU_ABI_LIST_32_BIT)))
-TARGET_CPU_ABI_LIST_64_BIT := $(subst $(space),$(comma),$(strip $(TARGET_CPU_ABI_LIST_64_BIT)))
 
 # GCC version selection
 TARGET_GCC_VERSION := 4.9
@@ -507,8 +413,8 @@ endif  # pdk or fusion
 ifdef PDK_FUSION_PLATFORM_ZIP
 TARGET_BUILD_PDK := true
 ifeq (,$(wildcard $(PDK_FUSION_PLATFORM_ZIP)))
-  ifneq (,$(wildcard $(dir $(PDK_FUSION_PLATFORM_ZIP))/pdk.mk))
-    PDK_FUSION_PLATFORM_DIR := $(dir $(PDK_FUSION_PLATFORM_ZIP))
+  ifneq (,$(wildcard $(patsubst %.zip,%,$(PDK_FUSION_PLATFORM_ZIP))/pdk.mk))
+    PDK_FUSION_PLATFORM_DIR := $(patsubst %.zip,%,$(PDK_FUSION_PLATFORM_ZIP))
     PDK_FUSION_PLATFORM_ZIP :=
   else
     $(error Cannot find file $(PDK_FUSION_PLATFORM_ZIP).)
@@ -542,6 +448,13 @@ ALLOW_MISSING_DEPENDENCIES := true
 endif
 .KATI_READONLY := ALLOW_MISSING_DEPENDENCIES
 
+TARGET_BUILD_APPS_USE_PREBUILT_SDK :=
+ifdef TARGET_BUILD_APPS
+  ifndef UNBUNDLED_BUILD_SDKS_FROM_SOURCE
+    TARGET_BUILD_APPS_USE_PREBUILT_SDK := true
+  endif
+endif
+
 prebuilt_sdk_tools := prebuilts/sdk/tools
 prebuilt_sdk_tools_bin := $(prebuilt_sdk_tools)/$(HOST_OS)/bin
 
@@ -549,8 +462,9 @@ prebuilt_sdk_tools_bin := $(prebuilt_sdk_tools)/$(HOST_OS)/bin
 prebuilt_build_tools := prebuilts/build-tools
 prebuilt_build_tools_wrappers := prebuilts/build-tools/common/bin
 prebuilt_build_tools_jars := prebuilts/build-tools/common/framework
+prebuilt_build_tools_bin_noasan := $(prebuilt_build_tools)/$(HOST_PREBUILT_TAG)/bin
 ifeq ($(filter address,$(SANITIZE_HOST)),)
-prebuilt_build_tools_bin := $(prebuilt_build_tools)/$(HOST_PREBUILT_TAG)/bin
+prebuilt_build_tools_bin := $(prebuilt_build_tools_bin_noasan)
 else
 prebuilt_build_tools_bin := $(prebuilt_build_tools)/$(HOST_PREBUILT_TAG)/asan/bin
 endif
@@ -559,14 +473,8 @@ USE_PREBUILT_SDK_TOOLS_IN_PLACE := true
 
 # Work around for b/68406220
 # This should match the soong version.
-ifndef USE_D8
-  USE_D8 := true
-endif
-
-# Default R8 behavior when USE_R8 is not specified.
-ifndef USE_R8
-  USE_R8 := false
-endif
+USE_D8 := true
+.KATI_READONLY := USE_D8
 
 #
 # Tools that are prebuilts for TARGET_BUILD_APPS
@@ -575,7 +483,6 @@ ifeq (,$(TARGET_BUILD_APPS)$(filter true,$(TARGET_BUILD_PDK)))
   AIDL := $(HOST_OUT_EXECUTABLES)/aidl
   AAPT := $(HOST_OUT_EXECUTABLES)/aapt
   AAPT2 := $(HOST_OUT_EXECUTABLES)/aapt2
-  DESUGAR := $(HOST_OUT_JAVA_LIBRARIES)/desugar.jar
   MAINDEXCLASSES := $(HOST_OUT_EXECUTABLES)/mainDexClasses
   SIGNAPK_JAR := $(HOST_OUT_JAVA_LIBRARIES)/signapk$(COMMON_JAVA_PACKAGE_SUFFIX)
   SIGNAPK_JNI_LIBRARY_PATH := $(HOST_OUT_SHARED_LIBRARIES)
@@ -585,7 +492,6 @@ else # TARGET_BUILD_APPS || TARGET_BUILD_PDK
   AIDL := $(prebuilt_build_tools_bin)/aidl
   AAPT := $(prebuilt_sdk_tools_bin)/aapt
   AAPT2 := $(prebuilt_sdk_tools_bin)/aapt2
-  DESUGAR := $(prebuilt_build_tools_jars)/desugar.jar
   MAINDEXCLASSES := $(prebuilt_sdk_tools)/mainDexClasses
   SIGNAPK_JAR := $(prebuilt_sdk_tools)/lib/signapk$(COMMON_JAVA_PACKAGE_SUFFIX)
   SIGNAPK_JNI_LIBRARY_PATH := $(prebuilt_sdk_tools)/$(HOST_OS)/lib64
@@ -608,6 +514,7 @@ ACP := $(prebuilt_build_tools_bin)/acp
 CKATI := $(prebuilt_build_tools_bin)/ckati
 DEPMOD := $(HOST_OUT_EXECUTABLES)/depmod
 FILESLIST := $(SOONG_HOST_OUT_EXECUTABLES)/fileslist
+HOST_INIT_VERIFIER := $(HOST_OUT_EXECUTABLES)/host_init_verifier
 MAKEPARALLEL := $(prebuilt_build_tools_bin)/makeparallel
 SOONG_JAVAC_WRAPPER := $(SOONG_HOST_OUT_EXECUTABLES)/soong_javac_wrapper
 SOONG_ZIP := $(SOONG_HOST_OUT_EXECUTABLES)/soong_zip
@@ -619,21 +526,13 @@ ZIPTIME := $(prebuilt_build_tools_bin)/ziptime
 # ---------------------------------------------------------------
 # Generic tools.
 
-ifneq ($(FLEX_EXEC),)
-LEX := $(FLEX_EXEC)
-else
-LEX := $(prebuilt_build_tools_bin)/flex
-endif
+LEX := $(prebuilt_build_tools_bin_noasan)/flex
 # The default PKGDATADIR built in the prebuilt bison is a relative path
 # prebuilts/build-tools/common/bison.
 # To run bison from elsewhere you need to set up enviromental variable
 # BISON_PKGDATADIR.
 BISON_PKGDATADIR := $(PWD)/prebuilts/build-tools/common/bison
-ifneq ($(BISON_EXEC),)
-BISON := $(BISON_EXEC)
-else
-BISON := $(prebuilt_build_tools_bin)/bison
-endif
+BISON := $(prebuilt_build_tools_bin_noasan)/bison
 YACC := $(BISON) -d
 BISON_DATA := $(wildcard $(BISON_PKGDATADIR)/* $(BISON_PKGDATADIR)/*/*)
 
@@ -647,10 +546,7 @@ else
 BREAKPAD_GENERATE_SYMBOLS := false
 endif
 PROTOC := $(HOST_OUT_EXECUTABLES)/aprotoc$(HOST_EXECUTABLE_SUFFIX)
-NANOPB_SRCS := external/nanopb-c/generator/protoc-gen-nanopb \
-    $(wildcard external/nanopb-c/generator/*.py \
-               external/nanopb-c/generator/google/*.py \
-               external/nanopb-c/generator/proto/*.py)
+NANOPB_SRCS := $(HOST_OUT_EXECUTABLES)/protoc-gen-nanopb
 VTSC := $(HOST_OUT_EXECUTABLES)/vtsc$(HOST_EXECUTABLE_SUFFIX)
 MKBOOTFS := $(HOST_OUT_EXECUTABLES)/mkbootfs$(HOST_EXECUTABLE_SUFFIX)
 MINIGZIP := $(HOST_OUT_EXECUTABLES)/minigzip$(HOST_EXECUTABLE_SUFFIX)
@@ -670,10 +566,10 @@ AVBTOOL := $(HOST_OUT_EXECUTABLES)/avbtool$(HOST_EXECUTABLE_SUFFIX)
 else
 AVBTOOL := $(BOARD_CUSTOM_AVBTOOL)
 endif
-APICHECK := $(HOST_OUT_EXECUTABLES)/apicheck$(HOST_EXECUTABLE_SUFFIX)
+APICHECK := $(HOST_OUT_JAVA_LIBRARIES)/metalava$(COMMON_JAVA_PACKAGE_SUFFIX)
 FS_GET_STATS := $(HOST_OUT_EXECUTABLES)/fs_get_stats$(HOST_EXECUTABLE_SUFFIX)
 MAKE_EXT4FS := $(HOST_OUT_EXECUTABLES)/mke2fs$(HOST_EXECUTABLE_SUFFIX)
-MKEXTUSERIMG := $(HOST_OUT_EXECUTABLES)/mkuserimg_mke2fs.sh
+MKEXTUSERIMG := $(HOST_OUT_EXECUTABLES)/mkuserimg_mke2fs
 MKE2FS_CONF := system/extras/ext4_utils/mke2fs.conf
 BLK_ALLOC_TO_BASE_FS := $(HOST_OUT_EXECUTABLES)/blk_alloc_to_base_fs$(HOST_EXECUTABLE_SUFFIX)
 MAKE_SQUASHFS := $(HOST_OUT_EXECUTABLES)/mksquashfs$(HOST_EXECUTABLE_SUFFIX)
@@ -689,13 +585,19 @@ JARJAR := $(HOST_OUT_JAVA_LIBRARIES)/jarjar.jar
 DATA_BINDING_COMPILER := $(HOST_OUT_JAVA_LIBRARIES)/databinding-compiler.jar
 FAT16COPY := build/make/tools/fat16copy.py
 CHECK_LINK_TYPE := build/make/tools/check_link_type.py
+CHECK_ELF_FILE := build/make/tools/check_elf_file.py
+LPMAKE := $(HOST_OUT_EXECUTABLES)/lpmake$(HOST_EXECUTABLE_SUFFIX)
+BUILD_SUPER_IMAGE := build/make/tools/releasetools/build_super_image.py
 
-PROGUARD := external/proguard/bin/proguard.sh
+PROGUARD_HOME := external/proguard
+PROGUARD := $(PROGUARD_HOME)/bin/proguard.sh
+PROGUARD_DEPS := $(PROGUARD) $(PROGUARD_HOME)/lib/proguard.jar
 JAVATAGS := build/make/tools/java-event-log-tags.py
 MERGETAGS := build/make/tools/merge-event-log-tags.py
 BUILD_IMAGE_SRCS := $(wildcard build/make/tools/releasetools/*.py)
 APPEND2SIMG := $(HOST_OUT_EXECUTABLES)/append2simg
 VERITY_SIGNER := $(HOST_OUT_EXECUTABLES)/verity_signer
+BUILD_VERITY_METADATA := $(HOST_OUT_EXECUTABLES)/build_verity_metadata.py
 BUILD_VERITY_TREE := $(HOST_OUT_EXECUTABLES)/build_verity_tree
 BOOT_SIGNER := $(HOST_OUT_EXECUTABLES)/boot_signer
 FUTILITY := $(HOST_OUT_EXECUTABLES)/futility-host
@@ -705,43 +607,21 @@ BRILLO_UPDATE_PAYLOAD := $(HOST_OUT_EXECUTABLES)/brillo_update_payload
 
 DEXDUMP := $(HOST_OUT_EXECUTABLES)/dexdump2$(BUILD_EXECUTABLE_SUFFIX)
 PROFMAN := $(HOST_OUT_EXECUTABLES)/profman
-HIDDENAPI := $(HOST_OUT_EXECUTABLES)/hiddenapi
-
-# relocation packer
-RELOCATION_PACKER := prebuilts/misc/$(BUILD_OS)-$(HOST_PREBUILT_ARCH)/relocation_packer/relocation_packer
 
 FINDBUGS_DIR := external/owasp/sanitizer/tools/findbugs/bin
 FINDBUGS := $(FINDBUGS_DIR)/findbugs
 
 JETIFIER := prebuilts/sdk/tools/jetifier/jetifier-standalone/bin/jetifier-standalone
 
-# Tool to merge AndroidManifest.xmls
-ANDROID_MANIFEST_MERGER_CLASSPATH := \
-    prebuilts/gradle-plugin/com/android/tools/build/manifest-merger/26.0.0-beta2/manifest-merger-26.0.0-beta2.jar \
-    prebuilts/gradle-plugin/com/android/tools/sdk-common/26.0.0-beta2/sdk-common-26.0.0-beta2.jar \
-    prebuilts/gradle-plugin/com/android/tools/common/26.0.0-beta2/common-26.0.0-beta2.jar \
-    prebuilts/misc/common/guava/guava-21.0.jar
-ANDROID_MANIFEST_MERGER := $(JAVA) \
-    -classpath $(subst $(space),:,$(strip $(ANDROID_MANIFEST_MERGER_CLASSPATH))) \
-    com.android.manifmerger.Merger
+EXTRACT_KERNEL := build/make/tools/extract_kernel.py
 
-COLUMN:= column
+USE_OPENJDK9 := true
 
 ifeq ($(EXPERIMENTAL_USE_OPENJDK9),)
-ifeq ($(RUN_ERROR_PRONE),true)
-USE_OPENJDK9 :=
-else
-USE_OPENJDK9 := true
-endif
-TARGET_OPENJDK9 :=
-else ifeq ($(EXPERIMENTAL_USE_OPENJDK9),false)
-USE_OPENJDK9 :=
 TARGET_OPENJDK9 :=
 else ifeq ($(EXPERIMENTAL_USE_OPENJDK9),1.8)
-USE_OPENJDK9 := true
 TARGET_OPENJDK9 :=
 else ifeq ($(EXPERIMENTAL_USE_OPENJDK9),true)
-USE_OPENJDK9 := true
 TARGET_OPENJDK9 := true
 endif
 
@@ -755,14 +635,7 @@ else
 MD5SUM:=md5sum
 endif
 
-APICHECK_CLASSPATH_ENTRIES := \
-    $(HOST_OUT_JAVA_LIBRARIES)/doclava$(COMMON_JAVA_PACKAGE_SUFFIX) \
-    $(HOST_OUT_JAVA_LIBRARIES)/jsilver$(COMMON_JAVA_PACKAGE_SUFFIX) \
-    $(HOST_JDK_TOOLS_JAR) \
-    )
-APICHECK_CLASSPATH := $(subst $(space),:,$(strip $(APICHECK_CLASSPATH_ENTRIES)))
-
-APICHECK_COMMAND := $(APICHECK) -JXmx1024m -J"classpath $(APICHECK_CLASSPATH)"
+APICHECK_COMMAND := $(JAVA) -Xmx4g -jar $(APICHECK) --no-banner --compatible-output=yes
 
 # Boolean variable determining if the whitelist for compatible properties is enabled
 PRODUCT_COMPATIBLE_PROPERTY := false
@@ -810,11 +683,15 @@ $(foreach req,$(requirements),$(eval \
 PRODUCT_FULL_TREBLE_OVERRIDE ?=
 $(foreach req,$(requirements),$(eval $(req)_OVERRIDE ?=))
 
+# TODO(b/114488870): disallow PRODUCT_FULL_TREBLE_OVERRIDE from being used.
 .KATI_READONLY := \
     PRODUCT_FULL_TREBLE_OVERRIDE \
     $(foreach req,$(requirements),$(req)_OVERRIDE) \
     $(requirements) \
     PRODUCT_FULL_TREBLE \
+
+$(KATI_obsolete_var $(foreach req,$(requirements),$(req)_OVERRIDE) \
+    ,This should be referenced without the _OVERRIDE suffix.)
 
 requirements :=
 
@@ -864,11 +741,6 @@ endif
 
 
 ifdef PRODUCT_SHIPPING_API_LEVEL
-  ifneq ($(call math_gt_or_eq,$(PRODUCT_SHIPPING_API_LEVEL),27),)
-    ifneq ($(TARGET_USES_MKE2FS),true)
-      $(error When PRODUCT_SHIPPING_API_LEVEL >= 27, TARGET_USES_MKE2FS must be true)
-    endif
-  endif
   ifneq ($(call numbers_less_than,$(PRODUCT_SHIPPING_API_LEVEL),$(BOARD_SYSTEMSDK_VERSIONS)),)
     $(error BOARD_SYSTEMSDK_VERSIONS ($(BOARD_SYSTEMSDK_VERSIONS)) must all be greater than or equal to PRODUCT_SHIPPING_API_LEVEL ($(PRODUCT_SHIPPING_API_LEVEL)))
   endif
@@ -878,10 +750,10 @@ ifdef PRODUCT_SHIPPING_API_LEVEL
         $(error When PRODUCT_SHIPPING_API_LEVEL >= 28, TARGET_USES_64_BIT_BINDER must be true)
       endif
     endif
-    ifeq ($(PRODUCT_FULL_TREBLE),true)
-      ifneq ($(BOARD_BUILD_SYSTEM_ROOT_IMAGE), true)
-        $(error When PRODUCT_SHIPPING_API_LEVEL >= 28, BOARD_BUILD_SYSTEM_ROOT_IMAGE must be true)
-      endif
+  endif
+  ifneq ($(call math_gt_or_eq,$(PRODUCT_SHIPPING_API_LEVEL),29),)
+    ifneq ($(BOARD_OTA_FRAMEWORK_VBMETA_VERSION_OVERRIDE),)
+      $(error When PRODUCT_SHIPPING_API_LEVEL >= 29, BOARD_OTA_FRAMEWORK_VBMETA_VERSION_OVERRIDE cannot be set)
     endif
   endif
 endif
@@ -893,6 +765,7 @@ ifdef PRODUCT_DEFAULT_DEV_CERTIFICATE
 else
   DEFAULT_SYSTEM_DEV_CERTIFICATE := build/target/product/security/testkey
 endif
+.KATI_READONLY := DEFAULT_SYSTEM_DEV_CERTIFICATE
 
 BUILD_NUMBER_FROM_FILE := $$(cat $(OUT_DIR)/build_number.txt)
 BUILD_DATETIME_FROM_FILE := $$(cat $(BUILD_DATETIME_FILE))
@@ -909,7 +782,7 @@ BUILD_DATETIME_FROM_FILE := $$(cat $(BUILD_DATETIME_FILE))
 # is made which breaks compatibility with the previous platform sepolicy version,
 # not just on every increase in PLATFORM_SDK_VERSION.  The minor version should
 # be reset to 0 on every bump of the PLATFORM_SDK_VERSION.
-sepolicy_major_vers := 28
+sepolicy_major_vers := 29
 sepolicy_minor_vers := 0
 
 ifneq ($(sepolicy_major_vers), $(PLATFORM_SDK_VERSION))
@@ -928,12 +801,198 @@ sepolicy_minor_vers :=
 # A list of SEPolicy versions, besides PLATFORM_SEPOLICY_VERSION, that the framework supports.
 PLATFORM_SEPOLICY_COMPAT_VERSIONS := \
     26.0 \
-    27.0
+    27.0 \
+    28.0 \
 
 .KATI_READONLY := \
     PLATFORM_SEPOLICY_COMPAT_VERSIONS \
     PLATFORM_SEPOLICY_VERSION \
     TOT_SEPOLICY_VERSION \
+
+ifeq ($(PRODUCT_RETROFIT_DYNAMIC_PARTITIONS),true)
+  ifneq ($(PRODUCT_USE_DYNAMIC_PARTITIONS),true)
+    $(error PRODUCT_USE_DYNAMIC_PARTITIONS must be true when PRODUCT_RETROFIT_DYNAMIC_PARTITIONS \
+        is set)
+  endif
+  ifdef PRODUCT_SHIPPING_API_LEVEL
+    ifeq (true,$(call math_gt_or_eq,$(PRODUCT_SHIPPING_API_LEVEL),29))
+      $(error Devices with shipping API level $(PRODUCT_SHIPPING_API_LEVEL) must not set \
+          PRODUCT_RETROFIT_DYNAMIC_PARTITIONS)
+    endif
+  endif
+endif
+
+ifeq ($(PRODUCT_USE_DYNAMIC_PARTITIONS),true)
+    ifeq ($(BOARD_BUILD_SYSTEM_ROOT_IMAGE),true)
+        $(error BOARD_BUILD_SYSTEM_ROOT_IMAGE cannot be true for devices with dynamic partitions)
+    endif
+    ifneq ($(PRODUCT_USE_DYNAMIC_PARTITION_SIZE),true)
+        $(error PRODUCT_USE_DYNAMIC_PARTITION_SIZE must be true for devices with dynamic partitions)
+    endif
+endif
+
+ifeq ($(PRODUCT_BUILD_SUPER_PARTITION),true)
+    ifneq ($(PRODUCT_USE_DYNAMIC_PARTITIONS),true)
+        $(error Can only build super partition for devices with dynamic partitions)
+    endif
+endif
+
+
+ifeq ($(PRODUCT_USE_DYNAMIC_PARTITION_SIZE),true)
+
+ifneq ($(BOARD_SYSTEMIMAGE_PARTITION_SIZE),)
+ifneq ($(BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE),)
+$(error Should not define BOARD_SYSTEMIMAGE_PARTITION_SIZE and \
+    BOARD_SYSTEMIMAGE_PARTITION_RESERVED_SIZE together)
+endif
+endif
+
+ifneq ($(BOARD_VENDORIMAGE_PARTITION_SIZE),)
+ifneq ($(BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE),)
+$(error Should not define BOARD_VENDORIMAGE_PARTITION_SIZE and \
+    BOARD_VENDORIMAGE_PARTITION_RESERVED_SIZE together)
+endif
+endif
+
+ifneq ($(BOARD_ODMIMAGE_PARTITION_SIZE),)
+ifneq ($(BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE),)
+$(error Should not define BOARD_ODMIMAGE_PARTITION_SIZE and \
+    BOARD_ODMIMAGE_PARTITION_RESERVED_SIZE together)
+endif
+endif
+
+ifneq ($(BOARD_PRODUCTIMAGE_PARTITION_SIZE),)
+ifneq ($(BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE),)
+$(error Should not define BOARD_PRODUCTIMAGE_PARTITION_SIZE and \
+    BOARD_PRODUCTIMAGE_PARTITION_RESERVED_SIZE together)
+endif
+endif
+
+ifneq ($(BOARD_PRODUCT_SERVICESIMAGE_PARTITION_SIZE),)
+ifneq ($(BOARD_PRODUCT_SERVICESIMAGE_PARTITION_RESERVED_SIZE),)
+$(error Should not define BOARD_PRODUCT_SERVICESIMAGE_PARTITION_SIZE and \
+    BOARD_PRODUCT_SERVICESIMAGE_PARTITION_RESERVED_SIZE together)
+endif
+endif
+
+endif # PRODUCT_USE_DYNAMIC_PARTITION_SIZE
+
+ifeq ($(PRODUCT_USE_DYNAMIC_PARTITIONS),true)
+
+# BOARD_SUPER_PARTITION_GROUPS defines a list of "updatable groups". Each updatable group is a
+# group of partitions that share the same pool of free spaces.
+# For each group in BOARD_SUPER_PARTITION_GROUPS, a BOARD_{GROUP}_SIZE and
+# BOARD_{GROUP}_PARTITION_PARTITION_LIST may be defined.
+#     - BOARD_{GROUP}_SIZE: The maximum sum of sizes of all partitions in the group.
+#       Must not be empty.
+#     - BOARD_{GROUP}_PARTITION_PARTITION_LIST: the list of partitions that belongs to this group.
+#       If empty, no partitions belong to this group, and the sum of sizes is effectively 0.
+$(foreach group,$(call to-upper,$(BOARD_SUPER_PARTITION_GROUPS)), \
+    $(eval BOARD_$(group)_PARTITION_LIST ?=) \
+    $(eval .KATI_READONLY := BOARD_$(group)_PARTITION_LIST) \
+)
+ifeq ($(PRODUCT_BUILD_SUPER_PARTITION),true)
+$(foreach group,$(call to-upper,$(BOARD_SUPER_PARTITION_GROUPS)), \
+    $(eval BOARD_$(group)_SIZE := $(strip $(BOARD_$(group)_SIZE))) \
+    $(if $(BOARD_$(group)_SIZE),,$(error BOARD_$(group)_SIZE must not be empty)) \
+    $(eval .KATI_READONLY := BOARD_$(group)_SIZE) \
+)
+endif # PRODUCT_BUILD_SUPER_PARTITION
+
+# BOARD_*_PARTITION_LIST: a list of the following tokens
+valid_super_partition_list := system vendor product product_services odm
+$(foreach group,$(call to-upper,$(BOARD_SUPER_PARTITION_GROUPS)), \
+    $(if $(filter-out $(valid_super_partition_list),$(BOARD_$(group)_PARTITION_LIST)), \
+        $(error BOARD_$(group)_PARTITION_LIST contains invalid partition name \
+            $(filter-out $(valid_super_partition_list),$(BOARD_$(group)_PARTITION_LIST)). \
+            Valid names are $(valid_super_partition_list))))
+valid_super_partition_list :=
+
+
+# Define BOARD_SUPER_PARTITION_PARTITION_LIST, the sum of all BOARD_*_PARTITION_LIST
+ifdef BOARD_SUPER_PARTITION_PARTITION_LIST
+$(error BOARD_SUPER_PARTITION_PARTITION_LIST should not be defined, but computed from \
+    BOARD_SUPER_PARTITION_GROUPS and BOARD_*_PARTITION_LIST)
+endif
+BOARD_SUPER_PARTITION_PARTITION_LIST := \
+    $(foreach group,$(call to-upper,$(BOARD_SUPER_PARTITION_GROUPS)), \
+        $(BOARD_$(group)_PARTITION_LIST))
+.KATI_READONLY := BOARD_SUPER_PARTITION_PARTITION_LIST
+
+endif # PRODUCT_USE_DYNAMIC_PARTITIONS
+
+ifeq ($(PRODUCT_BUILD_SUPER_PARTITION),true)
+
+ifneq ($(BOARD_SUPER_PARTITION_SIZE),)
+ifeq ($(PRODUCT_RETROFIT_DYNAMIC_PARTITIONS),true)
+
+# The metadata device must be specified manually for retrofitting.
+ifeq ($(BOARD_SUPER_PARTITION_METADATA_DEVICE),)
+$(error Must specify BOARD_SUPER_PARTITION_METADATA_DEVICE if PRODUCT_RETROFIT_DYNAMIC_PARTITIONS=true.)
+endif
+
+# The super partition block device list must be specified manually for retrofitting.
+ifeq ($(BOARD_SUPER_PARTITION_BLOCK_DEVICES),)
+$(error Must specify BOARD_SUPER_PARTITION_BLOCK_DEVICES if PRODUCT_RETROFIT_DYNAMIC_PARTITIONS=true.)
+endif
+
+# The metadata device must be included in the super partition block device list.
+ifeq (,$(filter $(BOARD_SUPER_PARTITION_METADATA_DEVICE),$(BOARD_SUPER_PARTITION_BLOCK_DEVICES)))
+$(error BOARD_SUPER_PARTITION_METADATA_DEVICE is not listed in BOARD_SUPER_PARTITION_BLOCK_DEVICES.)
+endif
+
+# The metadata device must be supplied to init via the kernel command-line.
+INTERNAL_KERNEL_CMDLINE += androidboot.super_partition=$(BOARD_SUPER_PARTITION_METADATA_DEVICE)
+
+BOARD_BUILD_RETROFIT_DYNAMIC_PARTITIONS_OTA_PACKAGE := true
+
+# If "vendor" is listed as one of the dynamic partitions but without its image available (e.g. an
+# AOSP target built without vendor image), don't build the retrofit full OTA package. Because we
+# won't be able to build meaningful super_* images for retrofitting purpose.
+ifneq (,$(filter vendor,$(BOARD_SUPER_PARTITION_PARTITION_LIST)))
+ifndef BUILDING_VENDOR_IMAGE
+ifndef BOARD_PREBUILT_VENDORIMAGE
+BOARD_BUILD_RETROFIT_DYNAMIC_PARTITIONS_OTA_PACKAGE :=
+endif # BOARD_PREBUILT_VENDORIMAGE
+endif # BUILDING_VENDOR_IMAGE
+endif # BOARD_SUPER_PARTITION_PARTITION_LIST
+
+else # PRODUCT_RETROFIT_DYNAMIC_PARTITIONS
+
+# For normal devices, we populate BOARD_SUPER_PARTITION_BLOCK_DEVICES so the
+# build can handle both cases consistently.
+ifeq ($(BOARD_SUPER_PARTITION_METADATA_DEVICE),)
+BOARD_SUPER_PARTITION_METADATA_DEVICE := super
+endif
+
+ifeq ($(BOARD_SUPER_PARTITION_BLOCK_DEVICES),)
+BOARD_SUPER_PARTITION_BLOCK_DEVICES := $(BOARD_SUPER_PARTITION_METADATA_DEVICE)
+endif
+
+# If only one super block device, default to super partition size.
+ifeq ($(word 2,$(BOARD_SUPER_PARTITION_BLOCK_DEVICES)),)
+BOARD_SUPER_PARTITION_$(call to-upper,$(strip $(BOARD_SUPER_PARTITION_BLOCK_DEVICES)))_DEVICE_SIZE ?= \
+    $(BOARD_SUPER_PARTITION_SIZE)
+endif
+
+ifneq ($(BOARD_SUPER_PARTITION_METADATA_DEVICE),super)
+INTERNAL_KERNEL_CMDLINE += androidboot.super_partition=$(BOARD_SUPER_PARTITION_METADATA_DEVICE)
+endif
+BOARD_BUILD_RETROFIT_DYNAMIC_PARTITIONS_OTA_PACKAGE :=
+
+endif # PRODUCT_RETROFIT_DYNAMIC_PARTITIONS
+endif # BOARD_SUPER_PARTITION_SIZE
+.KATI_READONLY := BOARD_SUPER_PARTITION_BLOCK_DEVICES
+.KATI_READONLY := BOARD_SUPER_PARTITION_METADATA_DEVICE
+.KATI_READONLY := BOARD_BUILD_RETROFIT_DYNAMIC_PARTITIONS_OTA_PACKAGE
+
+$(foreach device,$(call to-upper,$(BOARD_SUPER_PARTITION_BLOCK_DEVICES)), \
+    $(eval BOARD_SUPER_PARTITION_$(device)_DEVICE_SIZE := $(strip $(BOARD_SUPER_PARTITION_$(device)_DEVICE_SIZE))) \
+    $(if $(BOARD_SUPER_PARTITION_$(device)_DEVICE_SIZE),, \
+        $(error BOARD_SUPER_PARTITION_$(device)_DEVICE_SIZE must not be empty)) \
+    $(eval .KATI_READONLY := BOARD_SUPER_PARTITION_$(device)_DEVICE_SIZE))
+
+endif # PRODUCT_BUILD_SUPER_PARTITION
 
 # ###############################################################
 # Set up final options.
@@ -963,11 +1022,13 @@ endif
 first_non_empty_of_three = $(if $(1),$(1),$(if $(2),$(2),$(3)))
 DEX2OAT_TARGET_ARCH := $(TARGET_ARCH)
 DEX2OAT_TARGET_CPU_VARIANT := $(call first_non_empty_of_three,$(TARGET_CPU_VARIANT),$(TARGET_ARCH_VARIANT),default)
+DEX2OAT_TARGET_CPU_VARIANT_RUNTIME := $(call first_non_empty_of_three,$(TARGET_CPU_VARIANT_RUNTIME),$(TARGET_ARCH_VARIANT),default)
 DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := default
 
 ifdef TARGET_2ND_ARCH
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_ARCH := $(TARGET_2ND_ARCH)
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT := $(call first_non_empty_of_three,$(TARGET_2ND_CPU_VARIANT),$(TARGET_2ND_ARCH_VARIANT),default)
+$(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_CPU_VARIANT_RUNTIME := $(call first_non_empty_of_three,$(TARGET_2ND_CPU_VARIANT_RUNTIME),$(TARGET_2ND_ARCH_VARIANT),default)
 $(TARGET_2ND_ARCH_VAR_PREFIX)DEX2OAT_TARGET_INSTRUCTION_SET_FEATURES := default
 endif
 
@@ -986,6 +1047,29 @@ else
 SUPPORT_LIBRARY_ROOT := frameworks/support
 endif
 
+get-sdk-version = $(if $(findstring _,$(1)),$(subst core_,,$(subst system_,,$(subst test_,,$(1)))),$(1))
+get-sdk-api = $(if $(findstring _,$(1)),$(patsubst %_$(call get-sdk-version,$(1)),%,$(1)),public)
+get-prebuilt-sdk-dir = $(HISTORICAL_SDK_VERSIONS_ROOT)/$(call get-sdk-version,$(1))/$(call get-sdk-api,$(1))
+
+# Resolve LOCAL_SDK_VERSION to prebuilt module name, e.g.:
+# 23 -> sdk_public_23_android
+# system_current -> sdk_system_current_android
+# $(1): An sdk version (LOCAL_SDK_VERSION)
+# $(2): optional library name (default: android)
+define resolve-prebuilt-sdk-module
+$(if $(findstring _,$(1)),\
+  sdk_$(1)_$(or $(2),android),\
+  sdk_public_$(1)_$(or $(2),android))
+endef
+
+# Resolve LOCAL_SDK_VERSION to prebuilt android.jar
+# $(1): LOCAL_SDK_VERSION
+resolve-prebuilt-sdk-jar-path = $(call get-prebuilt-sdk-dir,$(1))/android.jar
+
+# Resolve LOCAL_SDK_VERSION to prebuilt framework.aidl
+# $(1): An sdk version (LOCAL_SDK_VERSION)
+resolve-prebuilt-sdk-aidl-path = $(call get-prebuilt-sdk-dir,$(call get-sdk-version,$(1)))/framework.aidl
+
 # Historical SDK version N is stored in $(HISTORICAL_SDK_VERSIONS_ROOT)/N.
 # The 'current' version is whatever this source tree is.
 #
@@ -1002,39 +1086,32 @@ $(shell function sgrax() { \
     ( sgrax $(1) | sort -g ) )
 endef
 
-TARGET_AVAILABLE_SDK_VERSIONS := $(call numerically_sort,\
-    $(patsubst $(HISTORICAL_SDK_VERSIONS_ROOT)/%/android.jar,%, \
-    $(wildcard $(HISTORICAL_SDK_VERSIONS_ROOT)/*/android.jar)))
-
-TARGET_AVAILABLE_SDK_VERSIONS := $(addprefix system_,$(call numerically_sort,\
-    $(patsubst $(HISTORICAL_SDK_VERSIONS_ROOT)/%/android_system.jar,%, \
-    $(wildcard $(HISTORICAL_SDK_VERSIONS_ROOT)/*/android_system.jar)))) \
-    $(TARGET_AVAILABLE_SDK_VERSIONS)
-
-# We don't have prebuilt test_current and core_current SDK yet.
-TARGET_AVAILABLE_SDK_VERSIONS := test_current core_current $(TARGET_AVAILABLE_SDK_VERSIONS)
+# This produces a list like "current/core current/public current/system 4/public"
+TARGET_AVAILABLE_SDK_VERSIONS := $(wildcard $(HISTORICAL_SDK_VERSIONS_ROOT)/*/*/android.jar)
+TARGET_AVAILABLE_SDK_VERSIONS := $(patsubst $(HISTORICAL_SDK_VERSIONS_ROOT)/%/android.jar,%,$(TARGET_AVAILABLE_SDK_VERSIONS))
+# Strips and reorganizes the "public", "core" and "system" subdirs.
+TARGET_AVAILABLE_SDK_VERSIONS := $(subst /public,,$(TARGET_AVAILABLE_SDK_VERSIONS))
+TARGET_AVAILABLE_SDK_VERSIONS := $(patsubst %/core,core_%,$(TARGET_AVAILABLE_SDK_VERSIONS))
+TARGET_AVAILABLE_SDK_VERSIONS := $(patsubst %/system,system_%,$(TARGET_AVAILABLE_SDK_VERSIONS))
+# No prebuilt for test_current.
+TARGET_AVAILABLE_SDK_VERSIONS += test_current
+TARGET_AVAIALBLE_SDK_VERSIONS := $(call numerically_sort,$(TARGET_AVAILABLE_SDK_VERSIONS))
 
 TARGET_SDK_VERSIONS_WITHOUT_JAVA_18_SUPPORT := $(call numbers_less_than,24,$(TARGET_AVAILABLE_SDK_VERSIONS))
 TARGET_SDK_VERSIONS_WITHOUT_JAVA_19_SUPPORT := $(call numbers_less_than,27,$(TARGET_AVAILABLE_SDK_VERSIONS))
 
-INTERNAL_PLATFORM_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/public_api.txt
-INTERNAL_PLATFORM_DEX_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/public-dex.txt
+ifndef INTERNAL_PLATFORM_PRIVATE_API_FILE
 INTERNAL_PLATFORM_PRIVATE_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/private.txt
+endif
+ifndef INTERNAL_PLATFORM_PRIVATE_DEX_API_FILE
 INTERNAL_PLATFORM_PRIVATE_DEX_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/private-dex.txt
-INTERNAL_PLATFORM_REMOVED_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/removed.txt
-INTERNAL_PLATFORM_REMOVED_DEX_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/removed-dex.txt
-INTERNAL_PLATFORM_SYSTEM_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/system-api.txt
+endif
+ifndef INTERNAL_PLATFORM_SYSTEM_PRIVATE_API_FILE
 INTERNAL_PLATFORM_SYSTEM_PRIVATE_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/system-private.txt
+endif
+ifndef INTERNAL_PLATFORM_SYSTEM_PRIVATE_DEX_API_FILE
 INTERNAL_PLATFORM_SYSTEM_PRIVATE_DEX_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/system-private-dex.txt
-INTERNAL_PLATFORM_SYSTEM_REMOVED_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/system-removed.txt
-INTERNAL_PLATFORM_SYSTEM_EXACT_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/system-exact.txt
-INTERNAL_PLATFORM_TEST_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/test-api.txt
-INTERNAL_PLATFORM_TEST_REMOVED_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/test-removed.txt
-INTERNAL_PLATFORM_TEST_EXACT_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/test-exact.txt
-
-INTERNAL_PLATFORM_HIDDENAPI_LIGHT_GREYLIST := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/hiddenapi-light-greylist.txt
-INTERNAL_PLATFORM_HIDDENAPI_DARK_GREYLIST := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/hiddenapi-dark-greylist.txt
-INTERNAL_PLATFORM_HIDDENAPI_BLACKLIST := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/hiddenapi-blacklist.txt
+endif
 
 # Missing optional uses-libraries so that the platform doesn't create build rules that depend on
 # them. See setup_one_odex.mk.
@@ -1082,9 +1159,13 @@ dont_bother_goals := out \
     bptimage-nodeps \
     vnod vendorimage-nodeps \
     pnod productimage-nodeps \
+    psnod productservicesimage-nodeps \
+    onod odmimage-nodeps \
     systemotherimage-nodeps \
     ramdisk-nodeps \
+    ramdisk_debug-nodeps \
     bootimage-nodeps \
+    bootimage_debug-nodeps \
     recoveryimage-nodeps \
     vbmetaimage-nodeps \
     product-graph dump-products
@@ -1095,6 +1176,11 @@ include $(BUILD_SYSTEM)/soong_config.mk
 endif
 
 # Rules for QCOM targets
-include $(TOPDIR)vendor/omni/build/core/qcom_target.mk
+-include vendor/omni/build/core/qcom_target.mk
+
+-include external/linux-kselftest/android/kselftest_test_list.mk
+-include external/ltp/android/ltp_package_list.mk
+DEFAULT_DATA_OUT_MODULES := ltp $(ltp_packages) $(kselftest_modules)
+.KATI_READONLY := DEFAULT_DATA_OUT_MODULES
 
 include $(BUILD_SYSTEM)/dumpvar.mk

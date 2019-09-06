@@ -22,10 +22,16 @@ java_library_host {
     manifest: "SignApk.mf",
     static_libs: [
         "apksig",
-        "bouncycastle",
-        "bouncycastle-bcpkix",
-        "conscrypt",
+        "bouncycastle-unbundled",
+        "bouncycastle-bcpkix-unbundled",
+        "conscrypt-nojarjar",
     ],
 
     required: ["libconscrypt_openjdk_jni"],
+
+    // The post-build signing tools need signapk.jar (and its shared libraries,
+    // handled in their own Android.bp files)
+    dist: {
+        targets: ["droidcore"],
+    },
 }

@@ -13,9 +13,8 @@
 #
 
 my_jni_shared_libraries := \
-    $(addprefix $($(my_2nd_arch_prefix)TARGET_OUT_INTERMEDIATE_LIBRARIES)/, \
-      $(addsuffix .so, \
-          $(LOCAL_JNI_SHARED_LIBRARIES)))
+    $(foreach lib,$(LOCAL_JNI_SHARED_LIBRARIES), \
+      $(call intermediates-dir-for,SHARED_LIBRARIES,$(lib),,,$(my_2nd_arch_prefix))/$(lib).so)
 
 # App-specific lib path.
 my_app_lib_path := $(dir $(LOCAL_INSTALLED_MODULE))lib/$(TARGET_$(my_2nd_arch_prefix)ARCH)
@@ -52,11 +51,13 @@ my_jni_filenames := $(notdir $(my_jni_shared_libraries))
 my_shared_library_path := $(call get_non_asan_path,\
   $($(my_2nd_arch_prefix)TARGET_OUT$(partition_tag)_SHARED_LIBRARIES))
 # Do not use order-only dependency, because we want to rebuild the image if an jni is updated.
-$(LOCAL_INSTALLED_MODULE) : $(addprefix $(my_shared_library_path)/, $(my_jni_filenames))
+my_installed_library := $(addprefix $(my_shared_library_path)/, $(my_jni_filenames))
+$(LOCAL_INSTALLED_MODULE) : $(my_installed_library)
+ALL_MODULES.$(LOCAL_MODULE).INSTALLED += $(my_installed_library)
 
 # Create symlink in the app specific lib path
 # Skip creating this symlink when running the second part of a target sanitization build.
-ifndef SANITIZE_TARGET
+ifeq ($(filter address,$(SANITIZE_TARGET)),)
 ifdef LOCAL_POST_INSTALL_CMD
 # Add a shell command separator
 LOCAL_POST_INSTALL_CMD += ;
@@ -97,7 +98,9 @@ else # not my_embed_jni
 $(foreach lib, $(my_prebuilt_jni_libs), \
     $(eval $(call copy-one-file, $(lib), $(my_app_lib_path)/$(notdir $(lib)))))
 
-$(LOCAL_INSTALLED_MODULE) : $(addprefix $(my_app_lib_path)/, $(notdir $(my_prebuilt_jni_libs)))
+my_installed_library := $(addprefix $(my_app_lib_path)/, $(notdir $(my_prebuilt_jni_libs)))
+$(LOCAL_INSTALLED_MODULE) : $(my_installed_library)
+ALL_MODULES.$(LOCAL_MODULE).INSTALLED += $(my_installed_library)
 endif  # my_embed_jni
 endif  # inner my_prebuilt_jni_libs
 endif  # outer my_prebuilt_jni_libs
@@ -110,12 +113,12 @@ my_link_type := app:sdk
 my_warn_types := native:platform $(my_warn_ndk_types)
 my_allowed_types := $(my_allowed_ndk_types)
     ifneq (,$(filter true,$(LOCAL_VENDOR_MODULE) $(LOCAL_ODM_MODULE) $(LOCAL_PROPRIETARY_MODULE)))
-        my_allowed_types += native:vendor native:vndk
+        my_allowed_types += native:vendor native:vndk native:platform_vndk
     endif
 else
 my_link_type := app:platform
 my_warn_types := $(my_warn_ndk_types)
-my_allowed_types := $(my_allowed_ndk_types) native:platform native:vendor native:vndk native:vndk_private
+my_allowed_types := $(my_allowed_ndk_types) native:platform native:vendor native:vndk native:vndk_private native:platform_vndk
 endif
 
 my_link_deps := $(addprefix SHARED_LIBRARIES:,$(LOCAL_JNI_SHARED_LIBRARIES))

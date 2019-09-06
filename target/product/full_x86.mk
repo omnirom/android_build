@@ -32,9 +32,12 @@ ifdef NET_ETH0_STARTONBOOT
 endif
 
 # Ensure we package the BIOS files too.
-PRODUCT_PACKAGES += \
+PRODUCT_HOST_PACKAGES += \
 	bios.bin \
 	vgabios-cirrus.bin \
+
+# Enable dynamic partition size
+PRODUCT_USE_DYNAMIC_PARTITION_SIZE := true
 
 # Overrides
 PRODUCT_NAME := full_x86

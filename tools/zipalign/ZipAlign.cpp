@@ -102,7 +102,7 @@ static int copyAndAlign(ZipFile* pZin, ZipFile* pZout, int alignment, bool zopfl
              * file position in the new file will be equal to the file
              * position in the original.
              */
-            long newOffset = pEntry->getFileOffset() + bias;
+            off_t newOffset = pEntry->getFileOffset() + bias;
             padding = (alignTo - (newOffset % alignTo)) % alignTo;
 
             //printf("--- %s: orig at %ld(+%d) len=%ld, adding pad=%d\n",
@@ -111,7 +111,7 @@ static int copyAndAlign(ZipFile* pZin, ZipFile* pZout, int alignment, bool zopfl
             status = pZout->add(pZin, pEntry, padding, &pNewEntry);
         }
 
-        if (status != NO_ERROR)
+        if (status != OK)
             return 1;
         bias += padding;
         //printf(" added '%s' at %ld (pad=%d)\n",
@@ -146,13 +146,13 @@ static int process(const char* inFileName, const char* outFileName,
         return 1;
     }
 
-    if (zin.open(inFileName, ZipFile::kOpenReadOnly) != NO_ERROR) {
+    if (zin.open(inFileName, ZipFile::kOpenReadOnly) != OK) {
         fprintf(stderr, "Unable to open '%s' as zip archive\n", inFileName);
         return 1;
     }
     if (zout.open(outFileName,
             ZipFile::kOpenReadWrite|ZipFile::kOpenCreate|ZipFile::kOpenTruncate)
-        != NO_ERROR)
+        != OK)
     {
         fprintf(stderr, "Unable to open '%s' as zip archive\n", outFileName);
         return 1;
@@ -178,7 +178,7 @@ static int verify(const char* fileName, int alignment, bool verbose,
     if (verbose)
         printf("Verifying alignment of %s (%d)...\n", fileName, alignment);
 
-    if (zipFile.open(fileName, ZipFile::kOpenReadOnly) != NO_ERROR) {
+    if (zipFile.open(fileName, ZipFile::kOpenReadOnly) != OK) {
         fprintf(stderr, "Unable to open '%s' for verification\n", fileName);
         return 1;
     }
@@ -190,23 +190,23 @@ static int verify(const char* fileName, int alignment, bool verbose,
         pEntry = zipFile.getEntryByIndex(i);
         if (pEntry->isCompressed()) {
             if (verbose) {
-                printf("%8ld %s (OK - compressed)\n",
-                    (long) pEntry->getFileOffset(), pEntry->getFileName());
+                printf("%8jd %s (OK - compressed)\n",
+                    (intmax_t) pEntry->getFileOffset(), pEntry->getFileName());
             }
         } else {
-            long offset = pEntry->getFileOffset();
+            off_t offset = pEntry->getFileOffset();
             const int alignTo = getAlignment(pageAlignSharedLibs, alignment, pEntry);
             if ((offset % alignTo) != 0) {
                 if (verbose) {
-                    printf("%8ld %s (BAD - %ld)\n",
-                        (long) offset, pEntry->getFileName(),
-                        offset % alignTo);
+                    printf("%8jd %s (BAD - %jd)\n",
+                        (intmax_t) offset, pEntry->getFileName(),
+                        (intmax_t) (offset % alignTo));
                 }
                 foundBad = true;
             } else {
                 if (verbose) {
-                    printf("%8ld %s (OK)\n",
-                        (long) offset, pEntry->getFileName());
+                    printf("%8jd %s (OK)\n",
+                        (intmax_t) offset, pEntry->getFileName());
                 }
             }
         }

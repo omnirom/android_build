@@ -68,15 +68,11 @@ full_classes_header_jarjar := $(intermediates.COMMON)/classes-header-jarjar.jar
 full_classes_header_jar := $(intermediates.COMMON)/classes-header.jar
 full_classes_compiled_jar := $(intermediates.COMMON)/classes-full-debug.jar
 full_classes_processed_jar := $(intermediates.COMMON)/classes-processed.jar
-full_classes_desugar_jar := $(intermediates.COMMON)/classes-desugar.jar
 full_classes_jarjar_jar := $(intermediates.COMMON)/classes-jarjar.jar
-full_classes_proguard_jar := $(intermediates.COMMON)/classes-proguard.jar
 full_classes_combined_jar := $(intermediates.COMMON)/classes-combined.jar
 built_dex_intermediate := $(intermediates.COMMON)/dex/classes.dex
-built_dex_hiddenapi := $(intermediates.COMMON)/dex-hiddenapi/classes.dex
 full_classes_stubs_jar := $(intermediates.COMMON)/stubs.jar
 java_source_list_file := $(intermediates.COMMON)/java-source-list
-
 
 ifeq ($(LOCAL_MODULE_CLASS)$(LOCAL_SRC_FILES)$(LOCAL_STATIC_JAVA_LIBRARIES)$(LOCAL_SOURCE_FILES_ALL_GENERATED),APPS)
 # If this is an apk without any Java code (e.g. framework-res), we should skip compiling Java.
@@ -90,11 +86,9 @@ endif
 LOCAL_INTERMEDIATE_TARGETS += \
     $(full_classes_turbine_jar) \
     $(full_classes_compiled_jar) \
-    $(full_classes_desugar_jar) \
     $(full_classes_jarjar_jar) \
     $(full_classes_jar) \
     $(full_classes_combined_jar) \
-    $(full_classes_proguard_jar) \
     $(built_dex_intermediate) \
     $(built_dex) \
     $(full_classes_stubs_jar) \
@@ -112,11 +106,11 @@ ifneq ($(strip $(aidl_sources)),)
 
 aidl_preprocess_import :=
 ifdef LOCAL_SDK_VERSION
-ifneq ($(filter current system_current test_current core_current, $(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS)),)
+ifneq ($(filter current system_current test_current core_current, $(LOCAL_SDK_VERSION)$(TARGET_BUILD_APPS_USE_PREBUILT_SDK)),)
   # LOCAL_SDK_VERSION is current and no TARGET_BUILD_APPS
-  aidl_preprocess_import := $(TARGET_OUT_COMMON_INTERMEDIATES)/framework.aidl
+  aidl_preprocess_import := $(FRAMEWORK_AIDL)
 else
-  aidl_preprocess_import := $(HISTORICAL_SDK_VERSIONS_ROOT)/$(LOCAL_SDK_VERSION)/framework.aidl
+  aidl_preprocess_import := $(call resolve-prebuilt-sdk-aidl-path,$(LOCAL_SDK_VERSION))
 endif # not current or system_current
 else
 # build against the platform.
@@ -130,7 +124,7 @@ $(foreach java,$(aidl_java_sources), \
 
 $(aidl_java_sources) : $(LOCAL_ADDITIONAL_DEPENDENCIES) $(aidl_preprocess_import)
 
-$(aidl_java_sources): PRIVATE_AIDL_FLAGS := -b $(addprefix -p,$(aidl_preprocess_import)) -I$(LOCAL_PATH) -I$(LOCAL_PATH)/src $(addprefix -I,$(LOCAL_AIDL_INCLUDES))
+$(aidl_java_sources): PRIVATE_AIDL_FLAGS := $(addprefix -p,$(aidl_preprocess_import)) -I$(LOCAL_PATH) -I$(LOCAL_PATH)/src $(addprefix -I,$(LOCAL_AIDL_INCLUDES))
 $(aidl_java_sources): PRIVATE_MODULE := $(LOCAL_MODULE)
 
 endif
@@ -172,6 +166,7 @@ java_sources := $(addprefix $(LOCAL_PATH)/, $(filter %.java,$(LOCAL_SRC_FILES)))
                 $(filter %.java,$(LOCAL_GENERATED_SOURCES))
 java_intermediate_sources := $(addprefix $(TARGET_OUT_COMMON_INTERMEDIATES)/, $(filter %.java,$(LOCAL_INTERMEDIATE_SOURCES)))
 all_java_sources := $(java_sources) $(java_intermediate_sources)
+ALL_MODULES.$(my_register_name).SRCS := $(ALL_MODULES.$(my_register_name).SRCS) $(all_java_sources)
 
 include $(BUILD_SYSTEM)/java_common.mk
 
@@ -224,11 +219,6 @@ $(full_classes_compiled_jar): PRIVATE_WARNINGS_ENABLE := $(LOCAL_WARNINGS_ENABLE
 # This intentionally depends on java_sources, not all_java_sources.
 # Deps for generated source files must be handled separately,
 # via deps on the target that generates the sources.
-
-# If error prone is enabled then add LOCAL_ERROR_PRONE_FLAGS to LOCAL_JAVACFLAGS
-ifeq ($(RUN_ERROR_PRONE),true)
-LOCAL_JAVACFLAGS += $(LOCAL_ERROR_PRONE_FLAGS)
-endif
 
 # For user / userdebug builds, strip the local variable table and the local variable
 # type table. This has no bearing on stack traces, but will leave less information
@@ -311,6 +301,7 @@ $(full_classes_compiled_jar): \
 
 javac-check : $(full_classes_compiled_jar)
 javac-check-$(LOCAL_MODULE) : $(full_classes_compiled_jar)
+.PHONY: javac-check-$(LOCAL_MODULE)
 
 $(full_classes_combined_jar): PRIVATE_DONT_DELETE_JAR_META_INF := $(LOCAL_DONT_DELETE_JAR_META_INF)
 $(full_classes_combined_jar): $(full_classes_compiled_jar) \
@@ -372,23 +363,7 @@ ifdef TARGET_OPENJDK9
 LOCAL_DX_FLAGS := $(filter-out --multi-dex,$(LOCAL_DX_FLAGS)) --multi-dex
 endif
 
-ifneq ($(USE_D8_DESUGAR),true)
-my_desugaring :=
-ifndef LOCAL_IS_STATIC_JAVA_LIBRARY
-my_desugaring := true
-$(full_classes_desugar_jar): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
-$(full_classes_desugar_jar): $(LOCAL_FULL_CLASSES_JACOCO_JAR) $(full_java_header_libs) $(DESUGAR)
-	$(desugar-classes-jar)
-endif
-else
-my_desugaring :=
-endif
-
-ifndef my_desugaring
-full_classes_desugar_jar := $(LOCAL_FULL_CLASSES_JACOCO_JAR)
-endif
-
-full_classes_pre_proguard_jar := $(full_classes_desugar_jar)
+full_classes_pre_proguard_jar := $(LOCAL_FULL_CLASSES_JACOCO_JAR)
 
 # Keep a copy of the jar just before proguard processing.
 $(eval $(call copy-one-file,$(full_classes_pre_proguard_jar),$(intermediates.COMMON)/classes-pre-proguard.jar))
@@ -400,9 +375,10 @@ ifneq ($(filter-out full custom obfuscation optimization,$(LOCAL_PROGUARD_ENABLE
     $(error invalid value for LOCAL_PROGUARD_ENABLED: $(LOCAL_PROGUARD_ENABLED))
 endif
 proguard_dictionary := $(intermediates.COMMON)/proguard_dictionary
+proguard_configuration := $(intermediates.COMMON)/proguard_configuration
 
 # When an app contains references to APIs that are not in the SDK specified by
-# its LOCAL_SDK_VERSION for example added by support library or by runtime 
+# its LOCAL_SDK_VERSION for example added by support library or by runtime
 # classes added by desugar, we artifically raise the "SDK version" "linked" by
 # ProGuard, to
 # - suppress ProGuard warnings of referencing symbols unknown to the lower SDK version.
@@ -412,21 +388,23 @@ my_proguard_sdk_raise :=
 ifdef LOCAL_SDK_VERSION
 ifdef TARGET_BUILD_APPS
 ifeq (,$(filter current system_current test_current core_current, $(LOCAL_SDK_VERSION)))
-  my_proguard_sdk_raise := $(call java-lib-header-files, sdk_vcurrent)
+  my_proguard_sdk_raise := $(call java-lib-header-files, $(call resolve-prebuilt-sdk-module,current))
 endif
 else
   # For platform build, we can't just raise to the "current" SDK,
   # that would break apps that use APIs removed from the current SDK.
   my_proguard_sdk_raise := $(call java-lib-header-files,$(TARGET_DEFAULT_BOOTCLASSPATH_LIBRARIES) $(TARGET_DEFAULT_JAVA_LIBRARIES))
 endif
+ifdef BOARD_SYSTEMSDK_VERSIONS
+ifneq (,$(filter true,$(LOCAL_VENDOR_MODULE) $(LOCAL_ODM_MODULE) $(LOCAL_PROPRIETARY_MODULE)))
+  # But for vendor or odm apks, don't raise SDK as the apks are required to
+  # use SDK APIs only
+  my_proguard_sdk_raise :=
+endif
+endif
 endif
 
-ifeq ($(USE_R8),true)
-proguard_jars_prefix := -libraryjars
-else
-proguard_jars_prefix := -systemjars
-endif
-legacy_proguard_flags := $(addprefix $(proguard_jars_prefix) ,$(my_proguard_sdk_raise) \
+legacy_proguard_flags := $(addprefix -libraryjars ,$(my_proguard_sdk_raise) \
   $(filter-out $(my_proguard_sdk_raise), \
     $(full_java_bootclasspath_libs) \
     $(full_shared_java_header_libs)))
@@ -435,6 +413,7 @@ legacy_proguard_lib_deps := $(my_proguard_sdk_raise) \
   $(filter-out $(my_proguard_sdk_raise),$(full_shared_java_header_libs))
 
 legacy_proguard_flags += -printmapping $(proguard_dictionary)
+legacy_proguard_flags += -printconfiguration $(proguard_configuration)
 
 common_proguard_flags := -forceprocessing
 
@@ -443,7 +422,7 @@ ifneq ($(LOCAL_INSTRUMENTATION_FOR)$(filter tests,$(LOCAL_MODULE_TAGS)),)
 common_proguard_flags += -dontshrink # don't shrink tests by default
 endif # test package
 ifneq ($(LOCAL_PROGUARD_ENABLED),custom)
-  ifdef LOCAL_USE_AAPT2
+  ifeq ($(LOCAL_USE_AAPT2),true)
     common_proguard_flag_files += $(foreach l,$(LOCAL_STATIC_ANDROID_LIBRARIES),\
         $(call intermediates-dir-for,JAVA_LIBRARIES,$(l),,COMMON)/export_proguard_flags)
   endif
@@ -479,21 +458,20 @@ legacy_proguard_flags := -injars  $(link_instr_classes_jar) \
     -applymapping $(link_instr_intermediates_dir.COMMON)/proguard_dictionary \
     -verbose \
     $(legacy_proguard_flags)
+legacy_proguard_lib_deps += \
+  $(link_instr_classes_jar) \
+  $(link_instr_intermediates_dir.COMMON)/proguard_options \
+  $(link_instr_intermediates_dir.COMMON)/proguard_dictionary \
 
 # Sometimes (test + main app) uses different keep rules from the main app -
 # apply the main app's dictionary anyway.
 legacy_proguard_flags += -ignorewarnings
 
-# Make sure we run Proguard on the main app first
-$(full_classes_proguard_jar) : $(link_instr_intermediates_dir.COMMON)/proguard.classes.jar
-
 endif # no obfuscation
 endif # LOCAL_INSTRUMENTATION_FOR
 
 proguard_flag_files := $(addprefix $(LOCAL_PATH)/, $(LOCAL_PROGUARD_FLAG_FILES))
-ifeq ($(USE_R8),true)
 proguard_flag_files += $(addprefix $(LOCAL_PATH)/, $(LOCAL_R8_FLAG_FILES))
-endif # USE_R8
 LOCAL_PROGUARD_FLAGS += $(addprefix -include , $(proguard_flag_files))
 
 ifdef LOCAL_TEST_MODULE_TO_PROGUARD_WITH
@@ -503,65 +481,34 @@ extra_input_jar :=
 endif
 
 ifneq ($(filter obfuscation,$(LOCAL_PROGUARD_ENABLED)),)
-ifneq ($(USE_R8),true)
-  $(full_classes_proguard_jar): .KATI_IMPLICIT_OUTPUTS := $(proguard_dictionary)
-else
-  $(built_dex_intermediate): .KATI_IMPLICIT_OUTPUTS := $(proguard_dictionary)
+  $(built_dex_intermediate): .KATI_IMPLICIT_OUTPUTS := $(proguard_dictionary) $(proguard_configuration)
 endif
-endif
-
-# If R8 is not enabled run Proguard.
-ifneq ($(USE_R8),true)
-# Changes to these dependencies need to be replicated below when using R8
-# instead of Proguard + dx.
-$(full_classes_proguard_jar): PRIVATE_EXTRA_INPUT_JAR := $(extra_input_jar)
-$(full_classes_proguard_jar): PRIVATE_PROGUARD_FLAGS := $(legacy_proguard_flags) $(common_proguard_flags) $(LOCAL_PROGUARD_FLAGS)
-$(full_classes_proguard_jar) : $(full_classes_pre_proguard_jar) $(extra_input_jar) $(my_proguard_sdk_raise) $(common_proguard_flag_files) $(proguard_flag_files) $(legacy_proguard_lib_deps) | $(PROGUARD)
-	$(call transform-jar-to-proguard)
-else # !USE_R8
-# Running R8 instead of Proguard, proguarded jar is actually the pre-Proguarded jar.
-full_classes_proguard_jar := $(full_classes_pre_proguard_jar)
-endif # !USE_R8
 
 else  # LOCAL_PROGUARD_ENABLED not defined
 proguard_flag_files :=
-full_classes_proguard_jar := $(full_classes_pre_proguard_jar)
 endif # LOCAL_PROGUARD_ENABLED defined
 
 ifneq ($(LOCAL_IS_STATIC_JAVA_LIBRARY),true)
 $(built_dex_intermediate): PRIVATE_DX_FLAGS := $(LOCAL_DX_FLAGS)
 
-my_r8 :=
 ifdef LOCAL_PROGUARD_ENABLED
-ifeq ($(USE_R8),true)
-# These are the dependencies for the proguarded jar when running
-# Proguard + dx. They are used for the generated dex when using R8, as
-# R8 does Proguard + dx
-my_r8 := true
-$(built_dex_intermediate): PRIVATE_EXTRA_INPUT_JAR := $(extra_input_jar)
-$(built_dex_intermediate): PRIVATE_PROGUARD_FLAGS := $(legacy_proguard_flags) $(common_proguard_flags) $(LOCAL_PROGUARD_FLAGS)
-$(built_dex_intermediate) : $(full_classes_proguard_jar) $(extra_input_jar) $(my_support_library_sdk_raise) $(common_proguard_flag_files) $(proguard_flag_files) $(legacy_proguard_lib_deps) $(R8_COMPAT_PROGUARD)
+  $(built_dex_intermediate): PRIVATE_EXTRA_INPUT_JAR := $(extra_input_jar)
+  $(built_dex_intermediate): PRIVATE_PROGUARD_FLAGS := $(legacy_proguard_flags) $(common_proguard_flags) $(LOCAL_PROGUARD_FLAGS)
+  $(built_dex_intermediate): PRIVATE_PROGUARD_DICTIONARY := $(proguard_dictionary)
+  $(built_dex_intermediate) : $(full_classes_pre_proguard_jar) $(extra_input_jar) $(my_proguard_sdk_raise) $(common_proguard_flag_files) $(proguard_flag_files) $(legacy_proguard_lib_deps) $(R8_COMPAT_PROGUARD)
 	$(transform-jar-to-dex-r8)
-endif # USE_R8
-endif # LOCAL_PROGUARD_ENABLED
-
-ifndef my_r8
-$(built_dex_intermediate): $(full_classes_proguard_jar) $(DX) $(ZIP2ZIP)
-ifneq ($(USE_D8_DESUGAR),true)
+else # !LOCAL_PROGUARD_ENABLED
+  $(built_dex_intermediate): PRIVATE_D8_LIBS := $(full_java_bootclasspath_libs) $(full_shared_java_header_libs)
+  $(built_dex_intermediate): $(full_java_bootclasspath_libs) $(full_shared_java_header_libs)
+  $(built_dex_intermediate): $(full_classes_pre_proguard_jar) $(DX) $(ZIP2ZIP)
 	$(transform-classes.jar-to-dex)
-else
-	$(transform-classes-d8.jar-to-dex)
-endif
 endif
 
-ifneq ($(filter $(LOCAL_MODULE),$(PRODUCT_BOOT_JARS)),) # is_boot_jar
-  $(eval $(call hiddenapi-copy-dex-files,$(built_dex_intermediate),$(built_dex_hiddenapi)))
-  built_dex_copy_from := $(built_dex_hiddenapi)
-else # !is_boot_jar
-  built_dex_copy_from := $(built_dex_intermediate)
-endif # is_boot_jar
+ifneq ($(filter $(LOCAL_MODULE),$(PRODUCT_BOOT_JARS)),)
+  $(call pretty-error,Modules in PRODUCT_BOOT_JARS must be defined in Android.bp files)
+endif
 
-$(built_dex): $(built_dex_copy_from)
+$(built_dex): $(built_dex_intermediate)
 	@echo Copying: $@
 	$(hide) mkdir -p $(dir $@)
 	$(hide) rm -f $(dir $@)/classes*.dex
@@ -587,6 +534,7 @@ ALL_FINDBUGS_FILES += $(findbugs_xml)
 findbugs_html := $(PRODUCT_OUT)/findbugs/$(LOCAL_MODULE).html
 $(findbugs_html) : PRIVATE_XML_FILE := $(findbugs_xml)
 $(LOCAL_MODULE)-findbugs : $(findbugs_html)
+.PHONY: $(LOCAL_MODULE)-findbugs
 $(findbugs_html) : $(findbugs_xml)
 	@mkdir -p $(dir $@)
 	@echo ConvertXmlToText: $@
@@ -597,20 +545,6 @@ $(LOCAL_MODULE)-findbugs : $(findbugs_html)
 
 endif  # full_classes_jar is defined
 
-ifneq (,$(filter-out current system_current test_current core_current, $(LOCAL_SDK_VERSION)))
-  my_default_app_target_sdk := $(call get-numeric-sdk-version,$(LOCAL_SDK_VERSION))
-  my_sdk_version := $(call get-numeric-sdk-version,$(LOCAL_SDK_VERSION))
-else
-  my_default_app_target_sdk := $(DEFAULT_APP_TARGET_SDK)
-  my_sdk_version := $(PLATFORM_SDK_VERSION)
-endif
-
-ifdef LOCAL_MIN_SDK_VERSION
-  my_min_sdk_version := $(LOCAL_MIN_SDK_VERSION)
-else
-  my_min_sdk_version := $(call codename-or-sdk-to-sdk,$(my_default_app_target_sdk))
-endif
-
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_DEFAULT_APP_TARGET_SDK := $(my_default_app_target_sdk)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_SDK_VERSION := $(my_sdk_version)
-$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_MIN_SDK_VERSION := $(my_min_sdk_version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_DEFAULT_APP_TARGET_SDK := $(call module-target-sdk-version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_SDK_VERSION := $(call module-sdk-version)
+$(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_MIN_SDK_VERSION := $(call codename-or-sdk-to-sdk,$(call module-min-sdk-version))

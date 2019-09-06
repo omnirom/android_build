@@ -35,7 +35,6 @@ test_tools := $(HOST_OUT_JAVA_LIBRARIES)/hosttestlib.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/compatibility-host-util-tests.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/compatibility-common-util-tests.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/compatibility-tradefed-tests.jar \
-  $(HOST_OUT_JAVA_LIBRARIES)/host-libprotobuf-java-full.jar \
   $(HOST_OUT_JAVA_LIBRARIES)/$(test_suite_tradefed).jar \
   $(HOST_OUT_JAVA_LIBRARIES)/$(test_suite_tradefed)-tests.jar \
   $(HOST_OUT_EXECUTABLES)/$(test_suite_tradefed) \
@@ -52,6 +51,7 @@ $(compatibility_zip): PRIVATE_DYNAMIC_CONFIG := $(test_suite_dynamic_config)
 $(compatibility_zip): $(test_artifacts) $(test_tools) $(test_suite_prebuilt_tools) $(test_suite_dynamic_config) $(SOONG_ZIP) | $(ADB) $(ACP)
 # Make dir structure
 	$(hide) mkdir -p $(PRIVATE_OUT_DIR)/tools $(PRIVATE_OUT_DIR)/testcases
+	$(hide) echo $(BUILD_NUMBER_FROM_FILE) > $(PRIVATE_OUT_DIR)/tools/version.txt
 # Copy tools
 	$(hide) $(ACP) -fp $(PRIVATE_TOOLS) $(PRIVATE_OUT_DIR)/tools
 	$(if $(PRIVATE_DYNAMIC_CONFIG),$(hide) $(ACP) -fp $(PRIVATE_DYNAMIC_CONFIG) $(PRIVATE_OUT_DIR)/testcases/$(PRIVATE_SUITE_NAME).dynamic)

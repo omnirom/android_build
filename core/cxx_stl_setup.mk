@@ -13,11 +13,6 @@ ifeq ($(strip $(LOCAL_CXX_STL)),default)
             ifneq (,$(BUILD_HOST_static))
                 my_cxx_stl := libc++_static
             endif
-
-            ifeq ($($(my_prefix)OS),windows)
-                # libc++ is not supported on mingw.
-                my_cxx_stl := libstdc++
-            endif
         endif
     else
         my_cxx_stl := ndk
@@ -36,14 +31,6 @@ else
         # the two options use different names for the STLs.
         $(error $(LOCAL_PATH): $(LOCAL_MODULE): Must use LOCAL_NDK_STL_VARIANT rather than LOCAL_CXX_STL for NDK binaries)
     endif
-    ifdef LOCAL_IS_HOST_MODULE
-        ifeq ($($(my_prefix)OS),windows)
-            ifneq ($(filter $(my_cxx_stl),libc++ libc++_static),)
-                # libc++ is not supported on mingw.
-                my_cxx_stl := libstdc++
-            endif
-        endif
-    endif
 endif
 
 # Yes, this is actually what the clang driver does.
@@ -51,10 +38,6 @@ linux_dynamic_gcclibs := -lgcc_s -lgcc -lc -lgcc_s -lgcc
 linux_static_gcclibs := -Wl,--start-group -lgcc -lgcc_eh -lc -Wl,--end-group
 darwin_dynamic_gcclibs := -lc -lSystem
 darwin_static_gcclibs := NO_STATIC_HOST_BINARIES_ON_DARWIN
-windows_dynamic_gcclibs := \
-    -lmsvcr110 -lmingw32 -lgcc -lmoldname -lmingwex -lmsvcrt -ladvapi32 \
-    -lshell32 -luser32 -lkernel32 -lmingw32 -lgcc -lmoldname -lmingwex -lmsvcrt
-windows_static_gcclibs := NO_STATIC_HOST_BINARIES_ON_WINDOWS
 
 my_link_type := dynamic
 ifdef LOCAL_IS_HOST_MODULE
@@ -113,11 +96,7 @@ ifneq ($(filter $(my_cxx_stl),libc++ libc++_static),)
 else ifeq ($(my_cxx_stl),ndk)
     # Using an NDK STL. Handled in binary.mk.
 else ifeq ($(my_cxx_stl),libstdc++)
-    ifndef LOCAL_IS_HOST_MODULE
-        $(error $(LOCAL_PATH): $(LOCAL_MODULE): libstdc++ is not supported for device modules)
-    else ifneq ($($(my_prefix)OS),windows)
-        $(error $(LOCAL_PATH): $(LOCAL_MODULE): libstdc++ is not supported on $($(my_prefix)OS))
-    endif
+    $(error $(LOCAL_PATH): $(LOCAL_MODULE): libstdc++ is not supported)
 else ifeq ($(my_cxx_stl),none)
     ifdef LOCAL_IS_HOST_MODULE
         my_cppflags += -nostdinc++

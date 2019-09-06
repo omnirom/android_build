@@ -14,6 +14,11 @@ ifeq ($(LOCAL_MODULE_CLASS),GYP)
   notice_file :=
 endif
 
+ifeq ($(LOCAL_MODULE_CLASS),FAKE)
+  # We ignore NOTICE files for modules of type FAKE.
+  notice_file :=
+endif
+
 # Soong generates stub libraries that don't need NOTICE files
 ifdef LOCAL_NO_NOTICE_FILE
   ifneq ($(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK))
@@ -33,7 +38,13 @@ else
 endif
 endif
 
+installed_notice_file :=
+
 ifdef notice_file
+
+ifdef my_register_name
+ALL_MODULES.$(my_register_name).NOTICES := $(ALL_MODULES.$(my_register_name).NOTICES) $(notice_file)
+endif
 
 # This relies on the name of the directory in PRODUCT_OUT matching where
 # it's installed on the target - i.e. system, data, etc.  This does
@@ -62,11 +73,16 @@ else
       endif
       module_installed_filename := \
           $(patsubst $(PRODUCT_OUT)/%,%,$($(my_prefix)OUT_JAVA_LIBRARIES))/$(module_leaf)
+    else ifeq ($(LOCAL_MODULE_CLASS),ETC)
+      # ETC modules may be uninstallable, yet still have a NOTICE file. e.g. apex components
+      module_installed_filename :=
     else
       $(error Cannot determine where to install NOTICE file for $(LOCAL_MODULE))
     endif # JAVA_LIBRARIES
   endif # STATIC_LIBRARIES
 endif
+
+ifdef module_installed_filename
 
 # In case it's actually a host file
 module_installed_filename := $(patsubst $(HOST_OUT)/%,%,$(module_installed_filename))
@@ -101,15 +117,13 @@ $(LOCAL_BUILT_MODULE): | $(installed_notice_file)
 endif  # JAVA_LIBRARIES
 endif  # TARGET_BUILD_APPS
 
-else
-# NOTICE file does not exist
-installed_notice_file :=
-endif
+endif  # module_installed_filename
+endif  # notice_file
 
 # Create a predictable, phony target to build this notice file.
 # Define it even if the notice file doesn't exist so that other
 # modules can depend on it.
 notice_target := NOTICE-$(if \
-    $(LOCAL_IS_HOST_MODULE),HOST,TARGET)-$(LOCAL_MODULE_CLASS)-$(LOCAL_MODULE)
+    $(LOCAL_IS_HOST_MODULE),HOST$(if $(my_host_cross),_CROSS,),TARGET)-$(LOCAL_MODULE_CLASS)-$(LOCAL_MODULE)
 .PHONY: $(notice_target)
 $(notice_target): $(installed_notice_file)

@@ -14,19 +14,11 @@
 # limitations under the License.
 #
 
-# minimal configuration for audio policy.
-PRODUCT_COPY_FILES += \
-    frameworks/av/services/audiopolicy/config/audio_policy_configuration_generic.xml:system/etc/audio_policy_configuration.xml \
-    frameworks/av/services/audiopolicy/config/primary_audio_policy_configuration.xml:system/etc/primary_audio_policy_configuration.xml \
-    frameworks/av/services/audiopolicy/config/r_submix_audio_policy_configuration.xml:system/etc/r_submix_audio_policy_configuration.xml \
-    frameworks/av/services/audiopolicy/config/audio_policy_volumes.xml:system/etc/audio_policy_volumes.xml \
-    frameworks/av/services/audiopolicy/config/default_volume_tables.xml:system/etc/default_volume_tables.xml \
+ifdef NET_ETH0_STARTONBOOT
+  PRODUCT_PROPERTY_OVERRIDES += net.eth0.startonboot=1
+endif
 
-# NFC:
-#   Provide default libnfc-nci.conf file for devices that does not have one in
-#   vendor/etc because aosp system image (of aosp_$arch products) is going to
-#   be used as GSI.
-#   May need to remove the following for newly launched devices in P since this
-#   NFC configuration file should be in vendor/etc, instead of system/etc
-PRODUCT_COPY_FILES += \
-    device/generic/common/nfc/libnfc-nci.conf:system/etc/libnfc-nci.conf
+# Ensure we package the BIOS files too.
+PRODUCT_HOST_PACKAGES += \
+	bios.bin \
+	vgabios-cirrus.bin \

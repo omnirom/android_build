@@ -41,14 +41,14 @@ using namespace android;
 status_t ZipEntry::initFromCDE(FILE* fp)
 {
     status_t result;
-    long posn;
+    long posn; // NOLINT(google-runtime-int), for ftell/fseek
     bool hasDD;
 
     //ALOGV("initFromCDE ---\n");
 
     /* read the CDE */
     result = mCDE.read(fp);
-    if (result != NO_ERROR) {
+    if (result != OK) {
         ALOGD("mCDE.read failed\n");
         return result;
     }
@@ -64,7 +64,7 @@ status_t ZipEntry::initFromCDE(FILE* fp)
     }
 
     result = mLFH.read(fp);
-    if (result != NO_ERROR) {
+    if (result != OK) {
         ALOGD("mLFH.read failed\n");
         return result;
     }
@@ -103,7 +103,7 @@ status_t ZipEntry::initFromCDE(FILE* fp)
      * can defer worrying about that to when we're extracting data.
      */
 
-    return NO_ERROR;
+    return OK;
 }
 
 /*
@@ -189,7 +189,7 @@ status_t ZipEntry::initFromExternal(const ZipEntry* pEntry)
             mLFH.mExtraFieldLength+1);
     }
 
-    return NO_ERROR;
+    return OK;
 }
 
 /*
@@ -225,7 +225,7 @@ status_t ZipEntry::addPadding(int padding)
         mLFH.mExtraFieldLength = padding;
     }
 
-    return NO_ERROR;
+    return OK;
 }
 
 /*
@@ -258,8 +258,8 @@ void ZipEntry::copyCDEtoLFH(void)
 /*
  * Set some information about a file after we add it.
  */
-void ZipEntry::setDataInfo(long uncompLen, long compLen, uint32_t crc32,
-    int compressionMethod)
+void ZipEntry::setDataInfo(uint32_t uncompLen, uint32_t compLen, uint32_t crc32,
+    uint32_t compressionMethod)
 {
     mCDE.mCompressionMethod = compressionMethod;
     mCDE.mCRC32 = crc32;
@@ -367,7 +367,7 @@ void ZipEntry::setModWhen(time_t when)
     struct tm* ptm;
 
     /* round up to an even number of seconds */
-    even = (time_t)(((unsigned long)(when) + 1) & (~1));
+    even = (when & 1) ? (when + 1) : when;
 
     /* expand */
 #if !defined(_WIN32)
@@ -403,7 +403,7 @@ void ZipEntry::setModWhen(time_t when)
  */
 status_t ZipEntry::LocalFileHeader::read(FILE* fp)
 {
-    status_t result = NO_ERROR;
+    status_t result = OK;
     uint8_t buf[kLFHLen];
 
     assert(mFileName == NULL);
@@ -499,7 +499,7 @@ status_t ZipEntry::LocalFileHeader::write(FILE* fp)
             return UNKNOWN_ERROR;
     }
 
-    return NO_ERROR;
+    return OK;
 }
 
 
@@ -537,7 +537,7 @@ void ZipEntry::LocalFileHeader::dump(void) const
  */
 status_t ZipEntry::CentralDirEntry::read(FILE* fp)
 {
-    status_t result = NO_ERROR;
+    status_t result = OK;
     uint8_t buf[kCDELen];
 
     /* no re-use */
@@ -669,7 +669,7 @@ status_t ZipEntry::CentralDirEntry::write(FILE* fp)
             return UNKNOWN_ERROR;
     }
 
-    return NO_ERROR;
+    return OK;
 }
 
 /*

@@ -33,24 +33,9 @@ PRODUCT_PACKAGES += \
 PRODUCT_PACKAGES += \
     ext \
 
-# Why are we pulling in expat, which is used in frameworks, only, it seem?
-PRODUCT_PACKAGES += \
-    libexpat \
-
-# Libcore.
-PRODUCT_PACKAGES += \
-    libjavacore \
-    libopenjdk \
-
-# Libcore ICU. TODO: Try to figure out if/why we need them explicitly.
-PRODUCT_PACKAGES += \
-    libicui18n \
-    libicuuc \
-
-# ART.
-PRODUCT_PACKAGES += art-runtime
-# ART/dex helpers.
-PRODUCT_PACKAGES += art-tools
+# Android Runtime APEX module.
+PRODUCT_PACKAGES += com.android.runtime
+PRODUCT_HOST_PACKAGES += com.android.runtime
 
 # Certificates.
 PRODUCT_PACKAGES += \
@@ -69,7 +54,7 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     dalvik.vm.dexopt.secondary=true \
     dalvik.vm.appimageformat=lz4
 
-PRODUCT_PROPERTY_OVERRIDES += \
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     ro.dalvik.vm.native.bridge=0
 
 # Different dexopt types for different package update/install times.
@@ -94,6 +79,21 @@ PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
     pm.dexopt.inactive=verify \
     pm.dexopt.shared=speed
 
+# Enable resolution of startup const strings.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    dalvik.vm.dex2oat-resolve-startup-strings=true
+
+# Specify default block size of 512K to enable parallel image decompression.
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    dalvik.vm.dex2oat-max-image-block-size=524288
+
 # Enable minidebuginfo generation unless overridden.
 PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    dalvik.vm.minidebuginfo=true \
     dalvik.vm.dex2oat-minidebuginfo=true
+
+# Disable iorapd by default
+PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
+    ro.iorapd.enable=false
+
+PRODUCT_USES_ART := true
