@@ -35,6 +35,7 @@ _vendor_owner_allowed_list := \
         nvidia \
         nxp \
         nxpsw \
+        omni \
         qcom \
         qti \
         samsung \
@@ -54,8 +55,8 @@ ifneq (,$(_restrictions))
 ifneq (,$(VENDOR_PRODUCT_RESTRICT_VENDOR_FILES))
 $(error Error: cannot set both PRODUCT_RESTRICT_VENDOR_FILES and VENDOR_PRODUCT_RESTRICT_VENDOR_FILES)
 endif
-_vendor_exception_path_prefix :=
-_vendor_exception_modules :=
+_vendor_exception_path_prefix := $(patsubst %, vendor/%/%, $(VENDOR_EXCEPTION_PATHS))
+_vendor_exception_modules := $(VENDOR_EXCEPTION_MODULES)
 else
 _restrictions := $(VENDOR_PRODUCT_RESTRICT_VENDOR_FILES)
 _vendor_exception_path_prefix := $(patsubst %, vendor/%/%, $(VENDOR_EXCEPTION_PATHS))
