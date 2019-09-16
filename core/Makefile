@@ -309,7 +309,12 @@ BUILD_VERSION_TAGS += $(BUILD_KEYS)
 BUILD_VERSION_TAGS := $(subst $(space),$(comma),$(sort $(BUILD_VERSION_TAGS)))
 
 # A human-readable string that descibes this build in detail.
-build_desc := $(TARGET_PRODUCT)-$(TARGET_BUILD_VARIANT) $(PLATFORM_VERSION) $(BUILD_ID) $(BUILD_NUMBER_FROM_FILE) $(BUILD_VERSION_TAGS)
+ifeq (,$(strip $(OMNI_PRIVATE_BUILD_DESC)))
+  build_desc := $(OMNI_PRIVATE_BUILD_DESC)
+else
+  build_desc := $(TARGET_PRODUCT)-$(TARGET_BUILD_VARIANT) $(PLATFORM_VERSION) $(BUILD_ID) $(BUILD_NUMBER_FROM_FILE) $(BUILD_VERSION_TAGS)
+endif
+
 $(intermediate_system_build_prop): PRIVATE_BUILD_DESC := $(build_desc)
 
 # The string used to uniquely identify the combined build and product; used by the OTA server.
@@ -319,7 +324,11 @@ ifeq (,$(strip $(BUILD_FINGERPRINT)))
   else
     BF_BUILD_NUMBER := $(file <$(BUILD_NUMBER_FILE))
   endif
-  BUILD_FINGERPRINT := $(PRODUCT_BRAND)/$(TARGET_PRODUCT)/$(TARGET_DEVICE):$(PLATFORM_VERSION)/$(BUILD_ID)/$(BF_BUILD_NUMBER):$(TARGET_BUILD_VARIANT)/$(BUILD_VERSION_TAGS)
+  ifeq (,$(strip $(OMNI_BUILD_FINGERPRINT)))
+    BUILD_FINGERPRINT := $(OMNI_BUILD_FINGERPRINT)
+  else
+    BUILD_FINGERPRINT := $(PRODUCT_BRAND)/$(TARGET_PRODUCT)/$(TARGET_DEVICE):$(PLATFORM_VERSION)/$(BUILD_ID)/$(BF_BUILD_NUMBER):$(TARGET_BUILD_VARIANT)/$(BUILD_VERSION_TAGS)
+  endif
 endif
 # unset it for safety.
 BF_BUILD_NUMBER :=
