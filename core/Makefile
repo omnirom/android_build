@@ -579,7 +579,7 @@ product_prop_files := $(wildcard $(TARGET_DEVICE_DIR)/product.prop)
 endif
 
 FINAL_PRODUCT_PROPERTIES += \
-    $(call collapse-pairs, $(PRODUCT_PRODUCT_PROPERTIES) $(ADDITIONAL_PRODUCT_PROPERTIES))
+    $(call collapse-pairs, $(OMNI_PRODUCT_PROPERTIES) $(PRODUCT_PRODUCT_PROPERTIES) $(ADDITIONAL_PRODUCT_PROPERTIES))
 FINAL_PRODUCT_PROPERTIES := $(call uniq-pairs-by-first-component, \
     $(FINAL_PRODUCT_PROPERTIES),=)
 
