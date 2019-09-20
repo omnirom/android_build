@@ -168,11 +168,7 @@ $(call add_json_list, ProductHiddenAPIStubsTest,         $(PRODUCT_HIDDENAPI_STU
 
 $(call add_json_list, TargetFSConfigGen,                 $(TARGET_FS_CONFIG_GEN))
 
-#omni
-$(call add_json_bool, Healthd_enable_op_fastchg,             $(filter true,$(HEALTHD_ENABLE_OP_FASTCHG_CHECK)))
-
 $(call add_json_map, VendorVars)
-
 $(foreach namespace,$(SOONG_CONFIG_NAMESPACES),\
   $(call add_json_map, $(namespace))\
   $(foreach key,$(SOONG_CONFIG_$(namespace)),\
