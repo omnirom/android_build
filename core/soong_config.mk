@@ -180,9 +180,11 @@ $(foreach namespace,$(SOONG_CONFIG_NAMESPACES),\
   $(call end_json_map))
 $(call end_json_map)
 
+include vendor/omni/build/soong/soong_config.mk
+
 $(call json_end)
 
-include vendor/omni/build/soong/soong_config.mk
+
 
 
 $(file >$(SOONG_VARIABLES).tmp,$(json_contents))
