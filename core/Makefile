@@ -309,7 +309,7 @@ BUILD_VERSION_TAGS += $(BUILD_KEYS)
 BUILD_VERSION_TAGS := $(subst $(space),$(comma),$(sort $(BUILD_VERSION_TAGS)))
 
 # A human-readable string that descibes this build in detail.
-ifeq (,$(strip $(OMNI_PRIVATE_BUILD_DESC)))
+ifneq (,$(strip $(OMNI_PRIVATE_BUILD_DESC)))
   build_desc := $(OMNI_PRIVATE_BUILD_DESC)
 else
   build_desc := $(TARGET_PRODUCT)-$(TARGET_BUILD_VARIANT) $(PLATFORM_VERSION) $(BUILD_ID) $(BUILD_NUMBER_FROM_FILE) $(BUILD_VERSION_TAGS)

@@ -51,7 +51,11 @@ echo "# ro.build.product is obsolete; use ro.product.device"
 echo "ro.build.product=$TARGET_DEVICE"
 
 echo "# Do not try to parse description or thumbprint"
-echo "ro.build.description=$PRIVATE_BUILD_DESC"
+if [ -n "$OMNI_PRIVATE_BUILD_DESC" ] ; then
+   echo "ro.build.description=$OMNI_BUILD_DESC"
+else
+   echo "ro.build.description=$PRIVATE_BUILD_DESC"
+fi
 if [ -n "$BUILD_THUMBPRINT" ] ; then
   echo "ro.build.thumbprint=$BUILD_THUMBPRINT"
 fi
