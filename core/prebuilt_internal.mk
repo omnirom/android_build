@@ -224,7 +224,7 @@ my_dex_jar := $(my_prebuilt_src_file)
 # This is a target shared library, i.e. a jar with classes.dex.
 
 ifneq ($(filter $(LOCAL_MODULE),$(PRODUCT_BOOT_JARS)),)
-  $(call pretty-error,Modules in PRODUCT_BOOT_JARS must be defined in Android.bp files)
+#  $(call pretty-error,Modules in PRODUCT_BOOT_JARS must be defined in Android.bp files)
 endif
 
 #######################################
