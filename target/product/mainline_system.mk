@@ -97,6 +97,8 @@ PRODUCT_PACKAGES_DEBUG += \
     tinycap \
     tinymix \
     tinypcminfo \
+
+PRODUCT_PACKAGES += \
     update_engine_client \
 
 PRODUCT_HOST_PACKAGES += \
