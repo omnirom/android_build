@@ -52,7 +52,7 @@ echo "ro.build.product=$TARGET_DEVICE"
 
 echo "# Do not try to parse description or thumbprint"
 if [ -n "$OMNI_PRIVATE_BUILD_DESC" ] ; then
-   echo "ro.build.description=$OMNI_BUILD_DESC"
+   echo "ro.build.description=$OMNI_PRIVATE_BUILD_DESC"
 else
    echo "ro.build.description=$PRIVATE_BUILD_DESC"
 fi
