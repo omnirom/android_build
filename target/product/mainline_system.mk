@@ -29,7 +29,6 @@ PRODUCT_PACKAGES += \
 
 # Applications
 PRODUCT_PACKAGES += \
-    LiveWallpapersPicker \
     PartnerBookmarksProvider \
     PresencePolling \
     RcsService \
