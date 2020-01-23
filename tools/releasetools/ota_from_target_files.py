@@ -984,6 +984,10 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   CopyInstallTools(output_zip)
 
+  script.UnpackPackageFile("install/backupHelper.sh", "/tmp/backupHelper.sh")
+  script.AppendExtra("run_program(\"/sbin/chown\", \"0:0\", \"/tmp/backupHelper.sh\");")
+  script.AppendExtra("run_program(\"/sbin/chmod\", \"755\", \"/tmp/backupHelper.sh\");")
+
   if target_info.get("system_root_image") == "true":
     sysmount = "/"
   else:
