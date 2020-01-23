@@ -243,6 +243,11 @@ class EdifyGenerator(object):
     destination directory."""
     self.script.append('package_extract_dir("%s", "%s");' % (src, dst))
 
+  def UnpackPackageFile(self, src, dst):
+    """Unpack a given file from the OTA package to the given
+    destination file path."""
+    self.script.append('package_extract_file("%s", "%s");' % (src, dst))
+
   def Comment(self, comment):
     """Write a comment into the update script."""
     self.script.append("")
