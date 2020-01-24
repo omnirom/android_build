@@ -51,7 +51,7 @@ def main(argv):
     with open(os.path.join(output_dir, "SYSTEM", *fn.split("/")), "wb") as f:
       f.write(data)
 
-  common.MakeRecoveryPatch(input_dir, output_sink, recovery_img, boot_img)
+  #common.MakeRecoveryPatch(input_dir, output_sink, recovery_img, boot_img)
 
 
 if __name__ == '__main__':
