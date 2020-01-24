@@ -157,8 +157,8 @@ def AddSystem(output_zip, recovery_img=None, boot_img=None):
   if (OPTIONS.rebuild_recovery and recovery_img is not None and
       boot_img is not None):
     logger.info("Building new recovery patch")
-    common.MakeRecoveryPatch(OPTIONS.input_tmp, output_sink, recovery_img,
-                             boot_img, info_dict=OPTIONS.info_dict)
+    #common.MakeRecoveryPatch(OPTIONS.input_tmp, output_sink, recovery_img,
+    #                         boot_img, info_dict=OPTIONS.info_dict)
 
   block_list = OutputFile(output_zip, OPTIONS.input_tmp, "IMAGES", "system.map")
   CreateImage(OPTIONS.input_tmp, OPTIONS.info_dict, "system", img,
