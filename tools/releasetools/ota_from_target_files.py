@@ -806,9 +806,41 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   script.AppendExtra("ifelse(is_mounted(\"/system\"), unmount(\"/system\"));")
   device_specific.FullOTA_InstallBegin()
 
+<<<<<<< HEAD   (0552a8 build: add TARGET_RECOVERY_UI_FONT)
   # All other partitions as well as the data wipe use 10% of the progress, and
   # the update of the system partition takes the remaining progress.
   system_progress = 0.9 - (len(block_diff_dict) - 1) * 0.1
+=======
+  script.Print("#######################################");
+  script.Print("# _____            __  __  ______     #");
+  script.Print("#/\  __`\  /'\_/`\/\ \/\ \/\__  _\    #");
+  script.Print("#\ \ \/\ \/\  ``  \ \ ` \ \/_/\ \/    #");
+  script.Print("# \ \ \ \ \ \ \__\ \ \ . ` \ \ \ \    #");
+  script.Print("#  \ \ \_\ \ \ \_/\ \ \ \`\ \ \_\ \__ #");
+  script.Print("#   \ \_____\ \_\, \_\ \_\ \_\/\_____\#");
+  script.Print("#    \/_____/\/_/ \/_/\/_/\/_/\/_____/#");
+  script.Print("#                                     #");
+  script.Print("#######################################");
+
+  if target_info.get("system_root_image") == "true":
+    if script.fstab["/system_root"]:
+       script.Print("system mounts on /system_root");
+       sysmount = "/system_root"
+    else:
+       script.Print("system mounts on /");
+       sysmount = "/"
+  else:
+    sysmount = "/system"
+
+  if OPTIONS.backuptool:
+    script.Print("Backup");
+    script.Mount(sysmount);
+    script.RunBackup("backup", sysmount)
+    script.Unmount(sysmount);
+
+  system_progress = 0.75
+
+>>>>>>> CHANGE (d81940 build: check the fstab for the system_root mountpoint)
   if OPTIONS.wipe_user_data:
     system_progress -= 0.1
   progress_dict = {partition: 0.1 for partition in block_diff_dict}
