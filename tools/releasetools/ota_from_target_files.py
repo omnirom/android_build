@@ -975,7 +975,12 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
   script.Print("#######################################");
 
   if target_info.get("system_root_image") == "true":
-    sysmount = "/system_root"
+    if script.fstab["/system_root"]:
+       script.Print("system mounts on /system_root");
+       sysmount = "/system_root"
+    else:
+       script.Print("system mounts on /");
+       sysmount = "/"
   else:
     sysmount = "/system"
 
