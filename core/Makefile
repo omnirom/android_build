@@ -300,7 +300,7 @@ endif
 # non-default dev keys (usually private keys from a vendor directory).
 # Both of these tags will be removed and replaced with "release-keys"
 # when the target-files is signed in a post-build step.
-ifneq ($(filter $(ROM_BUILDTYPE), WEEKLY GAPPS),)
+ifneq ($(filter $(ROM_BUILDTYPE), WEEKLY GAPPS MICROG),)
 BUILD_KEYS := release-keys
 else
 ifeq ($(DEFAULT_SYSTEM_DEV_CERTIFICATE),build/target/product/security/testkey)
