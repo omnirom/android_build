@@ -22,15 +22,10 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/media_product.mk)
 
 # /product packages
 PRODUCT_PACKAGES += \
-    Browser2 \
-    Calendar \
     Camera2 \
     Contacts \
-    DeskClock \
-    Gallery2 \
     LatinIME \
     Launcher3QuickStep \
-    Music \
     OneTimeInitializer \
     Provision \
     Settings \
@@ -39,6 +34,13 @@ PRODUCT_PACKAGES += \
     SystemUI \
     WallpaperCropper \
     frameworks-base-overlays
+
+#PRODUCT_PACKAGES += \
+    Browser2 \
+    Calendar \
+    DeskClock \
+    Gallery2 \
+    Music
 
 PRODUCT_PACKAGES_DEBUG += \
     frameworks-base-overlays-debug
