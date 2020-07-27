@@ -28,4 +28,4 @@
 PRODUCT_PACKAGES += \
     q-developer-gsi.avbpubkey \
     r-developer-gsi.avbpubkey \
-    s-developer-gsi.avbpubkey 
+    s-developer-gsi.avbpubkey \
