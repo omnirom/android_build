@@ -154,6 +154,8 @@ else
   endif
 endif
 
+# Include Omni Fingerprint
+include vendor/omni/build/fingerprint.mk
 
 # Bring in standard build system definitions.
 include $(BUILD_SYSTEM)/definitions.mk
