@@ -53,4 +53,7 @@ if [ -n "$BUILD_THUMBPRINT" ] ; then
   echo "ro.build.thumbprint=$BUILD_THUMBPRINT"
 fi
 
+# Omni properties
+echo "ro.omni.device=$OMNI_DEVICE"
+
 echo "# end build properties"
