@@ -4779,7 +4779,7 @@ endif
 ifeq ($(TARGET_OTA_ALLOW_NON_AB),true)
 ifneq ($(INSTALLED_RECOVERYIMAGE_TARGET),)
 	$(hide) PATH=$(INTERNAL_USERIMAGES_BINARY_PATHS):$$PATH MKBOOTIMG=$(MKBOOTIMG) \
-	    $(MAKE_RECOVERY_PATCH) $(zip_root) $(zip_root)
+	#    $(MAKE_RECOVERY_PATCH) $(zip_root) $(zip_root)
 endif
 endif
 ifeq ($(AB_OTA_UPDATER),true)
