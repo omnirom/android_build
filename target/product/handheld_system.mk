@@ -35,6 +35,7 @@ PRODUCT_PACKAGES += \
     BasicDreams \
     BlockedNumberProvider \
     Bluetooth \
+    com.android.bluetooth.updatable \
     BluetoothMidiService \
     BookmarkProvider \
     BuiltInPrintService \
