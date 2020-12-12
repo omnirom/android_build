@@ -609,6 +609,9 @@ $(INSTALLED_PRODUCT_BUILD_PROP_TARGET): $(BUILDINFO_COMMON_SH) $(POST_PROCESS_PR
 	        echo "ro.build.characteristics=$(TARGET_AAPT_CHARACTERISTICS)" >> $@;
 	$(hide) $(foreach line,$(FINAL_PRODUCT_PROPERTIES), \
 	    echo "$(line)" >> $@;)
+ifeq ($(AB_OTA_UPDATER),true)
+	$(hide) echo ro.build.ab_update=true >> $@
+endif
 	$(hide) $(POST_PROCESS_PROPS) $@
 
 # ----------------------------------------------------------------
