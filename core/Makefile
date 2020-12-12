@@ -592,7 +592,10 @@ $(INSTALLED_PRODUCT_BUILD_PROP_TARGET): $(BUILDINFO_COMMON_SH) $(POST_PROCESS_PR
 	@echo Target product buildinfo: $@
 	@mkdir -p $(dir $@)
 	$(hide) echo > $@
-	$(hide) $(call generate-common-build-props,product,$@)
+ifeq ($(AB_OTA_UPDATER),true)
+	$(hide) echo ro.build.ab_update=true >> $@
+endif
+        $(hide) $(call generate-common-build-props,product,$@)
 	$(hide) $(foreach file,$(product_prop_files), \
 	    if [ -f "$(file)" ]; then \
 	        echo Target product properties from: "$(file)"; \
