@@ -831,12 +831,12 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   CheckVintfIfTrebleEnabled(OPTIONS.input_tmp, target_info)
 
-  boot_img = common.GetBootableImage(
-      "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
-  common.CheckSize(boot_img.data, "boot.img", target_info)
-  common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
+ # boot_img = common.GetBootableImage(
+ #     "boot.img", "boot.img", OPTIONS.input_tmp, "BOOT")
+ # common.CheckSize(boot_img.data, "boot.img", target_info)
+ # common.ZipWriteStr(output_zip, "boot.img", boot_img.data)
 
-  script.WriteRawImage("/boot", "boot.img")
+ # script.WriteRawImage("/boot", "boot.img")
 
   script.ShowProgress(0.1, 10)
   device_specific.FullOTA_InstallEnd()
@@ -1936,14 +1936,15 @@ def GenerateAbOtaPackage(target_file, output_file, source_file=None):
 def GenerateNonAbOtaPackage(target_file, output_file, source_file=None):
   """Generates a non-A/B OTA package."""
   # Sanity check the loaded info dicts first.
-  if OPTIONS.info_dict.get("no_recovery") == "true":
-    raise common.ExternalError(
-        "--- target build has specified no recovery ---")
+  #if OPTIONS.info_dict.get("no_recovery") == "true":
+  #  raise common.ExternalError(
+  #      "--- target build has specified no recovery ---")
 
   # Non-A/B OTAs rely on /cache partition to store temporary files.
   cache_size = OPTIONS.info_dict.get("cache_size")
   if cache_size is None:
     logger.warning("--- can't determine the cache partition size ---")
+    cache_size = 8 * 4096
   OPTIONS.cache_size = cache_size
 
   if OPTIONS.extra_script is not None:
