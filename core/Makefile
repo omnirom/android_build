@@ -1981,6 +1981,9 @@ else
 recovery_resources_common := $(recovery_resources_common)-xhdpi
 endif
 
+ifneq ($(TARGET_RECOVERY_UI_FONT),)
+recovery_font := $(TARGET_RECOVERY_UI_FONT)
+else
 # Select the 18x32 font on high-density devices (xhdpi and up); and the 12x22 font on other devices.
 # Note that the font selected here can be overridden for a particular device by putting a font.png
 # in its private recovery resources.
@@ -1989,7 +1992,7 @@ recovery_font := $(call include-path-for, recovery)/fonts/18x32.png
 else
 recovery_font := $(call include-path-for, recovery)/fonts/12x22.png
 endif
-
+endif
 
 # We will only generate the recovery background text images if the variable
 # TARGET_RECOVERY_UI_SCREEN_WIDTH is defined. For devices with xxxhdpi and xxhdpi, we set the
