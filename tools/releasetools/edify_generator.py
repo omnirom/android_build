@@ -159,6 +159,13 @@ class EdifyGenerator(object):
       self.script.append(('run_program("%s/system/bin/backuptool.sh", "%s", "%s/system");' % (
         mount_point, command, mount_point)))
 
+  def RunMount(self, mount_point):
+    """Assuming that the called recovery has mount in /sbin, we call
+    that mount binary to mount the partition, assuming the partition
+    is in fstab"""
+    self.script.append(('run_program("/sbin/mount", "%s");' % (mount_point)))
+    self.mounts.add(mount_point)
+
   def ShowProgress(self, frac, dur):
     """Update the progress bar, advancing it over 'frac' over the next
     'dur' seconds.  'dur' may be zero to advance it via SetProgress
