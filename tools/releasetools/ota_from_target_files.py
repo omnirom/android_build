@@ -842,8 +842,11 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   if OPTIONS.backuptool:
     script.Print("Backup");
-    script.Mount(sysmount);
+    script.Print("backup: mounting partition")
+    script.RunMount(sysmount);
+    script.Print("backup: starting backup")
     script.RunBackup("backup", sysmount)
+    script.Print("backup: unmounting partition")
     script.Unmount(sysmount);
 
   system_progress = 0.75
@@ -877,8 +880,11 @@ else if get_stage("%(bcb_dev)s") == "3/3" then
 
   if OPTIONS.backuptool:
     script.ShowProgress(0.02, 10)
-    script.Mount(sysmount);
+    script.Print("restore: mounting partition")
+    script.RunMount(sysmount);
+    script.Print("restore: starting restore")
     script.RunBackup("restore", sysmount)
+    script.Print("restore: unmounting partition")
     script.Unmount(sysmount);
 
   script.ShowProgress(0.05, 5)
