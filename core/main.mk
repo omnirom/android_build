@@ -115,6 +115,9 @@ endif
 
 $(KATI_obsolete_var ADDITIONAL_BUILD_PROPERTIES, Please use ADDITIONAL_SYSTEM_PROPERTIES)
 
+# Include Omni Fingerprint
+include vendor/omni/build/fingerprint.mk
+
 # Bring in standard build system definitions.
 include $(BUILD_SYSTEM)/definitions.mk
 
