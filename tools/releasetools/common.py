@@ -1133,7 +1133,7 @@ def _FindAndLoadRecoveryFstab(info_dict, input_file, read_helper):
   # cases, since it may load the info_dict from an old build (e.g. when
   # generating incremental OTAs from that build).
   system_root_image = info_dict.get('system_root_image') == 'true'
-  if info_dict.get('no_recovery') != 'true':
+  if info_dict.get('no_recovery') == 'true':
     recovery_fstab_path = 'RECOVERY/RAMDISK/system/etc/recovery.fstab'
     if isinstance(input_file, zipfile.ZipFile):
       if recovery_fstab_path not in input_file.namelist():
