@@ -4286,9 +4286,9 @@ else
         build_ota_package := false
       endif
     endif # INSTALLED_BOOTIMAGE_TARGET == ""
-    ifeq ($(recovery_fstab),)
-      build_ota_package := false
-    endif
+#    ifeq ($(recovery_fstab),)
+#      build_ota_package := false
+#    endif
   endif # PRODUCT_BUILD_GENERIC_OTA_PACKAGE
 
   # Set build_otatools_package, and allow opt-out below.
