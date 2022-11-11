@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "02ae3add_c9e6d6ef",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1000026
+      },
+      "writtenOn": "2022-11-11T21:33:38Z",
+      "side": 1,
+      "message": "can you please check if its really twice in system/etc and product/etc?",
+      "revId": "c0c63f19e41166619f46f4bde9609cf4e35f9e9f",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55"
+    }
+  ]
+}
