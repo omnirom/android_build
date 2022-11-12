@@ -34,7 +34,7 @@ define generate-common-build-props
     echo "# from generate-common-build-props" >> $(2);\
     echo "# These properties identify this partition image." >> $(2);\
     echo "####################################" >> $(2);\
-    $(if $(filter bootimage odm product system system_ext vendor,$(1)),\
+    $(if $(filter system,$(1)),\
         echo "ro.product.$(1).brand=$(PRODUCT_SYSTEM_BRAND)" >> $(2);\
         echo "ro.product.$(1).device=$(PRODUCT_SYSTEM_DEVICE)" >> $(2);\
         echo "ro.product.$(1).manufacturer=$(PRODUCT_SYSTEM_MANUFACTURER)" >> $(2);\
@@ -103,8 +103,7 @@ $(2): $(POST_PROCESS_PROPS) $(INTERNAL_BUILD_ID_MAKEFILE) $(3) $(6)
 	$(hide) mkdir -p $$(dir $$@)
 	$(hide) rm -f $$@ && touch $$@
 ifneq ($(strip $(7)), true)
-	$(hide) $(PRODUCT_BUILD_PROP_OVERRIDES) \
-	        $$(call generate-common-build-props,$(call to-lower,$(strip $(1))),$$@)
+	$(hide) $$(call generate-common-build-props,$(call to-lower,$(strip $(1))),$$@)
 endif
 	$(hide) $(foreach file,$(strip $(3)),\
 	    if [ -f "$(file)" ]; then\
