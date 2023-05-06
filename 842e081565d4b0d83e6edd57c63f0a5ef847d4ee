@@ -1,0 +1,21 @@
+{
+  "comments": [
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "f9a953d0_e30a9753",
+        "filename": "/PATCHSET_LEVEL",
+        "patchSetId": 1
+      },
+      "lineNbr": 0,
+      "author": {
+        "id": 1002991
+      },
+      "writtenOn": "2023-05-06T05:48:56Z",
+      "side": 1,
+      "message": "This is required to build target target-files-package for p7 series",
+      "revId": "842e081565d4b0d83e6edd57c63f0a5ef847d4ee",
+      "serverId": "56841c99-7c94-43d4-bf0b-cb4707e66d55"
+    }
+  ]
+}
