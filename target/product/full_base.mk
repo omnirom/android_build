@@ -25,7 +25,6 @@ PRODUCT_PACKAGES := \
 
 PRODUCT_PACKAGES += \
     LiveWallpapersPicker \
-    PhotoTable \
     preinstalled-packages-platform-full-base.xml
 
 # Net:
