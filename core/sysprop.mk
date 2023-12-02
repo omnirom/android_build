@@ -395,6 +395,7 @@ _prop_files_ := $(if $(TARGET_PRODUCT_PROP),\
 # Order matters here. When there are duplicates, the last one wins.
 # TODO(b/117892318): don't allow duplicates so that the ordering doesn't matter
 _prop_vars_ := \
+    OMNI_PRODUCT_PROPERTIES \
     ADDITIONAL_PRODUCT_PROPERTIES \
     PRODUCT_PRODUCT_PROPERTIES
 
