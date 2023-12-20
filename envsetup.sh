@@ -874,7 +874,7 @@ function lunch()
       echo "Hint: next time you can simply run 'lunch $selection'"
     fi
 
-    local prebuilt_kernel=$(get_build_var TARGET_PREBUILT_KERNEL)
+    local prebuilt_kernel=$(get_build_var TARGET_USES_KERNEL_PLATFORM)
     if [ -z "$prebuilt_kernel" ]; then
       export INLINE_KERNEL_BUILDING=true
     else
