@@ -32,6 +32,7 @@ PRODUCT_PACKAGES += \
     initial-package-stopped-states-aosp.xml \
     messaging \
     preinstalled-packages-platform-aosp-product.xml \
+    ThemePicker \
     WallpaperPicker \
 
 # Telephony:

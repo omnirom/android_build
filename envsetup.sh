@@ -56,14 +56,14 @@ cat <<EOF
 Run "m help" for help with the build system itself.
 
 Invoke ". build/envsetup.sh" from your shell to add the following functions to your environment:
-- lunch:      lunch <product_name>-<build_variant>
+- lunch:      lunch <product_name>-<release_type>-<build_variant>
               Selects <product_name> as the product to build, and <build_variant> as the variant to
               build, and stores those selections in the environment to be read by subsequent
               invocations of 'm' etc.
 - tapas:      tapas [<App1> <App2> ...] [arm|x86|arm64|x86_64] [eng|userdebug|user]
               Sets up the build environment for building unbundled apps (APKs).
-- banchan:    banchan <module1> [<module2> ...] [arm|x86|arm64|x86_64|arm64_only|x86_64only] \
-                      [eng|userdebug|user]
+- banchan:    banchan <module1> [<module2> ...] \
+                      [arm|x86|arm64|riscv64|x86_64|arm64_only|x86_64only] [eng|userdebug|user]
               Sets up the build environment for building unbundled modules (APEXes).
 - croot:      Changes directory to the top of the tree, or a subdirectory thereof.
 - m:          Makes from the top of the tree.
@@ -211,6 +211,7 @@ function check_product()
         return
     fi
         TARGET_PRODUCT=$1 \
+        TARGET_RELEASE= \
         TARGET_BUILD_VARIANT= \
         TARGET_BUILD_TYPE= \
         TARGET_BUILD_APPS= \
@@ -318,7 +319,7 @@ function set_lunch_paths()
     # would prevent exporting type info from those packages.
     #
     # http://b/266688086
-    export ANDROID_PYTHONPATH=$T/development/python-packages/adb:$T/development/python-packages:
+    export ANDROID_PYTHONPATH=$T/development/python-packages/adb:$T/development/python-packages/gdbrunner:$T/development/python-packages:
     if [ -n $VENDOR_PYTHONPATH ]; then
         ANDROID_PYTHONPATH=$ANDROID_PYTHONPATH$VENDOR_PYTHONPATH
     fi
@@ -490,7 +491,7 @@ function addcompletions()
 
 function multitree_lunch_help()
 {
-    echo "usage: lunch PRODUCT-VARIANT" 1>&2
+    echo "usage: lunch PRODUCT-RELEASE-VARIANT" 1>&2
     echo "    Set up android build environment based on a product short name and variant" 1>&2
     echo 1>&2
     echo "lunch COMBO_FILE VARIANT" 1>&2
@@ -732,7 +733,7 @@ function print_lunch_menu()
 {
     local uname=$(uname)
     local choices
-    choices=$(TARGET_BUILD_APPS= TARGET_PRODUCT= TARGET_BUILD_VARIANT= get_build_var COMMON_LUNCH_CHOICES 2>/dev/null)
+    choices=$(TARGET_BUILD_APPS= TARGET_PRODUCT= TARGET_RELEASE= TARGET_BUILD_VARIANT= get_build_var COMMON_LUNCH_CHOICES 2>/dev/null)
     local ret=$?
 
     echo
@@ -778,8 +779,8 @@ function lunch()
         answer=$1
     else
         print_lunch_menu
-        echo "Which would you like? [aosp_arm-eng]"
-        echo -n "Pick from common choices above (e.g. 13) or specify your own (e.g. aosp_barbet-eng): "
+        echo "Which would you like? [aosp_arm-trunk_staging-eng]"
+        echo -n "Pick from common choices above (e.g. 13) or specify your own (e.g. aosp_barbet-trunk_staging-eng): "
         read answer
         used_lunch_menu=1
     fi
@@ -788,7 +789,7 @@ function lunch()
 
     if [ -z "$answer" ]
     then
-        selection=aosp_arm-eng
+        selection=aosp_arm-trunk_staging-eng
     elif (echo -n $answer | grep -q -e "^[0-9][0-9]*$")
     then
         local choices=($(TARGET_BUILD_APPS= get_build_var COMMON_LUNCH_CHOICES))
@@ -808,26 +809,22 @@ function lunch()
 
     export TARGET_BUILD_APPS=
 
-    local product variant_and_version variant version
-    product=${selection%%-*} # Trim everything after first dash
-    variant_and_version=${selection#*-} # Trim everything up to first dash
-    if [ "$variant_and_version" != "$selection" ]; then
-        variant=${variant_and_version%%-*}
-        if [ "$variant" != "$variant_and_version" ]; then
-            version=${variant_and_version#*-}
-        fi
-    fi
+    # This must be <product>-<release>-<variant>
+    local product release variant
+    # Split string on the '-' character.
+    IFS="-" read -r product release variant <<< "$selection"
 
-    if [ -z "$product" ]
+    if [[ -z "$product" ]] || [[ -z "$release" ]] || [[ -z "$variant" ]]
     then
         echo
         echo "Invalid lunch combo: $selection"
+        echo "Valid combos must be of the form <product>-<release>-<variant>"
         return 1
     fi
 
     TARGET_PRODUCT=$product \
     TARGET_BUILD_VARIANT=$variant \
-    TARGET_PLATFORM_VERSION=$version \
+    TARGET_RELEASE=$release \
     build_build_var_cache
     if [ $? -ne 0 ]
     then
@@ -864,11 +861,22 @@ function lunch()
     fi
     export CUSTOM_BUILD
 
-    export TARGET_PRODUCT=$product
-    export TARGET_BUILD_VARIANT=$variant
-    export TARGET_PLATFORM_VERSION=$(get_build_var TARGET_PLATFORM_VERSION)
+    export TARGET_PRODUCT=$(get_build_var TARGET_PRODUCT)
+    export TARGET_BUILD_VARIANT=$(get_build_var TARGET_BUILD_VARIANT)
+    export TARGET_RELEASE=$release
+    # Note this is the string "release", not the value of the variable.
     export TARGET_BUILD_TYPE=release
 
+    [[ -n "${ANDROID_QUIET_BUILD:-}" ]] || echo
+
+    set_stuff_for_environment
+    [[ -n "${ANDROID_QUIET_BUILD:-}" ]] || printconfig
+
+    if [ "${TARGET_BUILD_VARIANT}" = "userdebug" ] && [[  -z "${ANDROID_QUIET_BUILD}" ]]; then
+      echo
+      echo "Want FASTER LOCAL BUILDS? Use -eng instead of -userdebug (however for" \
+        "performance benchmarking continue to use userdebug)"
+    fi
     if [ $used_lunch_menu -eq 1 ]; then
       echo
       echo "Hint: next time you can simply run 'lunch $selection'"
@@ -881,10 +889,6 @@ function lunch()
       unset INLINE_KERNEL_BUILDING
     fi
 
-    [[ -n "${ANDROID_QUIET_BUILD:-}" ]] || echo
-
-    set_stuff_for_environment
-    [[ -n "${ANDROID_QUIET_BUILD:-}" ]] || printconfig
     destroy_build_var_cache
 
     if [[ -n "${CHECK_MU_CONFIG:-}" ]]; then
@@ -915,6 +919,8 @@ function tapas()
 {
     local showHelp="$(echo $* | xargs -n 1 echo | \grep -E '^(help)$' | xargs)"
     local arch="$(echo $* | xargs -n 1 echo | \grep -E '^(arm|x86|arm64|x86_64)$' | xargs)"
+    # TODO(b/307975293): Expand tapas to take release arguments (and update hmm() usage).
+    local release="trunk_staging"
     local variant="$(echo $* | xargs -n 1 echo | \grep -E '^(user|userdebug|eng)$' | xargs)"
     local density="$(echo $* | xargs -n 1 echo | \grep -E '^(ldpi|mdpi|tvdpi|hdpi|xhdpi|xxhdpi|xxxhdpi|alldpi)$' | xargs)"
     local keys="$(echo $* | xargs -n 1 echo | \grep -E '^(devkeys)$' | xargs)"
@@ -928,6 +934,10 @@ function tapas()
 
     if [ $(echo $arch | wc -w) -gt 1 ]; then
         echo "tapas: Error: Multiple build archs supplied: $arch"
+        return
+    fi
+    if [ $(echo $release | wc -w) -gt 1 ]; then
+        echo "tapas: Error: Multiple build releases supplied: $release"
         return
     fi
     if [ $(echo $variant | wc -w) -gt 1 ]; then
@@ -964,6 +974,7 @@ function tapas()
     fi
 
     export TARGET_PRODUCT=$product
+    export TARGET_RELEASE=$release
     export TARGET_BUILD_VARIANT=$variant
     export TARGET_BUILD_DENSITY=$density
     export TARGET_BUILD_TYPE=release
@@ -980,9 +991,11 @@ function tapas()
 function banchan()
 {
     local showHelp="$(echo $* | xargs -n 1 echo | \grep -E '^(help)$' | xargs)"
-    local product="$(echo $* | xargs -n 1 echo | \grep -E '^(.*_)?(arm|x86|arm64|x86_64|arm64only|x86_64only)$' | xargs)"
+    local product="$(echo $* | xargs -n 1 echo | \grep -E '^(.*_)?(arm|x86|arm64|riscv64|x86_64|arm64only|x86_64only)$' | xargs)"
+    # TODO: Expand banchan to take release arguments (and update hmm() usage).
+    local release="trunk_staging"
     local variant="$(echo $* | xargs -n 1 echo | \grep -E '^(user|userdebug|eng)$' | xargs)"
-    local apps="$(echo $* | xargs -n 1 echo | \grep -E -v '^(user|userdebug|eng|(.*_)?(arm|x86|arm64|x86_64))$' | xargs)"
+    local apps="$(echo $* | xargs -n 1 echo | \grep -E -v '^(user|userdebug|eng|(.*_)?(arm|x86|arm64|riscv64|x86_64))$' | xargs)"
 
     if [ "$showHelp" != "" ]; then
       $(gettop)/build/make/banchanHelp.sh
@@ -993,6 +1006,10 @@ function banchan()
         product=arm64
     elif [ $(echo $product | wc -w) -gt 1 ]; then
         echo "banchan: Error: Multiple build archs or products supplied: $products"
+        return
+    fi
+    if [ $(echo $release | wc -w) -gt 1 ]; then
+        echo "banchan: Error: Multiple build releases supplied: $release"
         return
     fi
     if [ $(echo $variant | wc -w) -gt 1 ]; then
@@ -1008,6 +1025,7 @@ function banchan()
       arm)    product=module_arm;;
       x86)    product=module_x86;;
       arm64)  product=module_arm64;;
+      riscv64) product=module_riscv64;;
       x86_64) product=module_x86_64;;
       arm64only)  product=module_arm64only;;
       x86_64only) product=module_x86_64only;;
@@ -1017,6 +1035,7 @@ function banchan()
     fi
 
     export TARGET_PRODUCT=$product
+    export TARGET_RELEASE=$release
     export TARGET_BUILD_VARIANT=$variant
     export TARGET_BUILD_DENSITY=alldpi
     export TARGET_BUILD_TYPE=release
@@ -1102,6 +1121,10 @@ function cproj()
     echo "can't find Android.mk"
 }
 
+function adb() {
+   command adb "${@}"
+}
+
 # simplified version of ps; output in the form
 # <pid> <procname>
 function qpid() {
@@ -1130,12 +1153,12 @@ function qpid() {
 #
 # Easy way to make system.img/etc writable
 function syswrite() {
-  adb wait-for-device && adb root || return 1
+  adb wait-for-device && adb root && adb wait-for-device || return 1
   if [[ $(adb disable-verity | grep -i "reboot") ]]; then
       echo "rebooting"
-      adb reboot && adb wait-for-device && adb root || return 1
+      adb reboot && adb wait-for-device && adb root && adb wait-for-device || return 1
   fi
-  adb wait-for-device && adb remount || return 1
+  adb remount || return 1
 }
 
 # coredump_setup - enable core dumps globally for any process
@@ -1383,53 +1406,6 @@ esac
 function getprebuilt
 {
     get_abs_build_var ANDROID_PREBUILTS
-}
-
-function tracedmdump()
-{
-    local T=$(gettop)
-    if [ ! "$T" ]; then
-        echo "Couldn't locate the top of the tree.  Try setting TOP."
-        return
-    fi
-    local prebuiltdir=$(getprebuilt)
-    local arch=$(gettargetarch)
-    local KERNEL=$T/prebuilts/qemu-kernel/$arch/vmlinux-qemu
-
-    local TRACE=$1
-    if [ ! "$TRACE" ] ; then
-        echo "usage:  tracedmdump  tracename"
-        return
-    fi
-
-    if [ ! -r "$KERNEL" ] ; then
-        echo "Error: cannot find kernel: '$KERNEL'"
-        return
-    fi
-
-    local BASETRACE=$(basename $TRACE)
-    if [ "$BASETRACE" = "$TRACE" ] ; then
-        TRACE=$ANDROID_PRODUCT_OUT/traces/$TRACE
-    fi
-
-    echo "post-processing traces..."
-    rm -f $TRACE/qtrace.dexlist
-    post_trace $TRACE
-    if [ $? -ne 0 ]; then
-        echo "***"
-        echo "*** Error: malformed trace.  Did you remember to exit the emulator?"
-        echo "***"
-        return
-    fi
-    echo "generating dexlist output..."
-    /bin/ls $ANDROID_PRODUCT_OUT/system/framework/*.jar $ANDROID_PRODUCT_OUT/system/app/*.apk $ANDROID_PRODUCT_OUT/data/app/*.apk 2>/dev/null | xargs dexlist > $TRACE/qtrace.dexlist
-    echo "generating dmtrace data..."
-    q2dm -r $ANDROID_PRODUCT_OUT/symbols $TRACE $KERNEL $TRACE/dmtrace || return
-    echo "generating html file..."
-    dmtracedump -h $TRACE/dmtrace >| $TRACE/dmtrace.html || return
-    echo "done, see $TRACE/dmtrace.html for details"
-    echo "or run:"
-    echo "    traceview $TRACE/dmtrace"
 }
 
 # communicate with a running device or emulator, set up necessary state,
@@ -1683,8 +1659,8 @@ function allmod() {
 # Return the Bazel label of a Soong module if it is converted with bp2build.
 function bmod()
 (
-    if [ $# -ne 1 ]; then
-        echo "usage: bmod <module>" >&2
+    if [ $# -eq 0 ]; then
+        echo "usage: bmod <module 1> <module 2> ... <module n>" >&2
         return 1
     fi
 
@@ -1701,19 +1677,24 @@ function bmod()
       return 1
     fi
 
-    local target_label=$(python3 -c "import json
-module = '$1'
+    modules=()
+    for m in "$@"; do
+        modules+=("\"$m\",")
+    done
+    local res=$(python3 -c "import json
+modules = [${modules[*]}]
 converted_json='$converted_json'
 bp2build_converted_map = json.load(open(converted_json))
-if module not in bp2build_converted_map:
-    exit(1)
-print(bp2build_converted_map[module] + ':' + module)")
+for module in modules:
+    if module not in bp2build_converted_map:
+        print(module + ' is not converted to Bazel.')
+    else:
+        print(bp2build_converted_map[module] + ':' + module)")
 
-    if [ -z "${target_label}" ]; then
-      echo "$1 is not converted to Bazel." >&2
-      return 1
-    else
-      echo "${target_label}"
+    echo "${res}"
+    unconverted_count=$(echo "${res}" | grep -c "not converted to Bazel")
+    if [[ ${unconverted_count} -ne 0 ]]; then
+        return 1
     fi
 )
 
@@ -2076,6 +2057,11 @@ function source_vendorsetup() {
             fi
         done
     done
+
+    if [[ "${PWD}" == /google/cog/* ]]; then
+        f="build/make/cogsetup.sh"
+        echo "including $f"; . "$T/$f"
+    fi
 }
 
 function showcommands() {
@@ -2112,6 +2098,16 @@ function avbtool() {
         m avbtool
     fi
     "$ANDROID_SOONG_HOST_OUT"/bin/avbtool $@
+}
+
+function overrideflags() {
+    local T="$(gettop)"
+    (\cd "${T}" && build/make/tools/overrideflags.sh "$@")
+}
+
+function aninja() {
+    local T="$(gettop)"
+    (\cd "${T}" && prebuilts/build-tools/linux-x86/bin/ninja -f out/combined-${TARGET_PRODUCT}.ninja "$@")
 }
 
 validate_current_shell
