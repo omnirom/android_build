@@ -211,7 +211,7 @@ function check_product()
         return
     fi
         TARGET_PRODUCT=$1 \
-        TARGET_RELEASE= \
+        TARGET_RELEASE=$2 \
         TARGET_BUILD_VARIANT= \
         TARGET_BUILD_TYPE= \
         TARGET_BUILD_APPS= \
@@ -833,7 +833,7 @@ function lunch()
         pushd $T > /dev/null
         vendor/omni/build/tools/roomservice.py $product
         popd > /dev/null
-        check_product $product
+        check_product $product $release
     else
         T=$(gettop)
         pushd $T > /dev/null
