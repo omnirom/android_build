@@ -32,8 +32,7 @@ PRODUCT_PACKAGES += \
     initial-package-stopped-states-aosp.xml \
     messaging \
     PhotoTable \
-    preinstalled-packages-platform-aosp-product.xml \
-    ThemePicker \
+    preinstalled-packages-platform-aosp-product.xml
 
 # Telephony:
 #   Provide a APN configuration to GSI product
