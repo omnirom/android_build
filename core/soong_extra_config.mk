@@ -46,6 +46,7 @@ $(call add_json_list, PRODUCT_PROPERTY_OVERRIDES,        $(call collapse-prop-pa
 
 $(call add_json_list, OMNI_PRODUCT_PROPERTIES,      $(call collapse-prop-pairs,OMNI_PRODUCT_PROPERTIES))
 $(call add_json_list, PRODUCT_BUILD_PROP_OVERRIDES,      $(call collapse-prop-pairs,PRODUCT_BUILD_PROP_OVERRIDES))
+$(call add_json_list, ROM_BUILDTYPE,      $(call collapse-prop-pairs,ROM_BUILDTYPE))
 
 $(call add_json_str, BootloaderBoardName, $(TARGET_BOOTLOADER_BOARD_NAME))
 
