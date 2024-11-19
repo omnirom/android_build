@@ -16,6 +16,24 @@
       "message": "OneTimeInitializer ?",
       "revId": "e5c1e8112b077b33c45bb418de388009f1799ec2",
       "serverId": "ed425d63-8d31-4f40-b4e0-dc35cc52d350"
+    },
+    {
+      "unresolved": false,
+      "key": {
+        "uuid": "7da2a383_bd34c517",
+        "filename": "target/product/handheld_product.mk",
+        "patchSetId": 1
+      },
+      "lineNbr": 28,
+      "author": {
+        "id": 1000001
+      },
+      "writtenOn": "2024-11-19T13:17:11Z",
+      "side": 1,
+      "message": "guess we can just remove that yes",
+      "parentUuid": "414f69f0_c2df7931",
+      "revId": "e5c1e8112b077b33c45bb418de388009f1799ec2",
+      "serverId": "ed425d63-8d31-4f40-b4e0-dc35cc52d350"
     }
   ]
 }
