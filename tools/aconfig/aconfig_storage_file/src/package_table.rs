@@ -20,10 +20,11 @@
 use crate::{get_bucket_index, read_str_from_bytes, read_u32_from_bytes, read_u8_from_bytes};
 use crate::{AconfigStorageError, StorageFileType};
 use anyhow::anyhow;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 
 /// Package table header struct
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct PackageTableHeader {
     pub version: u32,
     pub container: String,
@@ -92,7 +93,7 @@ impl PackageTableHeader {
 }
 
 /// Package table node struct
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct PackageTableNode {
     pub package_name: String,
     pub package_id: u32,
@@ -146,12 +147,12 @@ impl PackageTableNode {
     /// construction side (aconfig binary) and consumption side (flag read lib)
     /// use the same method of hashing
     pub fn find_bucket_index(package: &str, num_buckets: u32) -> u32 {
-        get_bucket_index(&package, num_buckets)
+        get_bucket_index(package.as_bytes(), num_buckets)
     }
 }
 
 /// Package table struct
-#[derive(PartialEq)]
+#[derive(PartialEq, Serialize, Deserialize)]
 pub struct PackageTable {
     pub header: PackageTableHeader,
     pub buckets: Vec<Option<u32>>,

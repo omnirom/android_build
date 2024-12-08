@@ -237,6 +237,7 @@ else
   .KATI_READONLY := TARGET_DEVICE_DIR
 endif
 
+$(call dump-phase-start,BOARD,,,, build/make/core/board_config.mk)
 ifndef RBC_PRODUCT_CONFIG
 include $(board_config_mk)
 else
@@ -261,6 +262,7 @@ else
 
   include $(OUT_DIR)/rbc/rbc_board_config_results.mk
 endif
+$(call dump-phase-end, build/make/core/board_config.mk)
 
 ifneq (,$(and $(TARGET_ARCH),$(TARGET_ARCH_SUITE)))
   $(error $(board_config_mk) erroneously sets both TARGET_ARCH and TARGET_ARCH_SUITE)
@@ -923,7 +925,9 @@ endif
 ###########################################
 # Ensure consistency among TARGET_RECOVERY_UPDATER_LIBS, AB_OTA_UPDATER, and PRODUCT_OTA_FORCE_NON_AB_PACKAGE.
 TARGET_RECOVERY_UPDATER_LIBS ?=
-AB_OTA_UPDATER ?=
+ifeq ($(AB_OTA_UPDATER),)
+AB_OTA_UPDATER := true
+endif
 .KATI_READONLY := TARGET_RECOVERY_UPDATER_LIBS AB_OTA_UPDATER
 
 # Ensure that if PRODUCT_OTA_FORCE_NON_AB_PACKAGE == true, then AB_OTA_UPDATER must be true

@@ -34,6 +34,31 @@ python_binary_host {
 }
 
 python_library_host {
+    name: "compliance_metadata",
+    srcs: [
+        "compliance_metadata.py",
+    ],
+}
+
+python_binary_host {
+    name: "gen_sbom",
+    srcs: [
+        "gen_sbom.py",
+    ],
+    version: {
+        py3: {
+            embedded_launcher: true,
+        },
+    },
+    libs: [
+        "compliance_metadata",
+        "metadata_file_proto_py",
+        "libprotobuf-python",
+        "sbom_lib",
+    ],
+}
+
+python_library_host {
     name: "sbom_lib",
     srcs: [
         "sbom_data.py",
@@ -90,5 +115,19 @@ python_binary_host {
     },
     libs: [
         "sbom_lib",
+    ],
+}
+
+python_binary_host {
+    name: "gen_notice_xml",
+    srcs: [
+        "gen_notice_xml.py",
+    ],
+    version: {
+        py3: {
+            embedded_launcher: true,
+        },
+    },
+    libs: [
     ],
 }
