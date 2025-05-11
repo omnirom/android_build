@@ -192,6 +192,34 @@ product_copy_files_ignored :=
 unique_product_copy_files_pairs :=
 unique_product_copy_files_destinations :=
 
+
+# Returns a list of EXTRA_INSTALL_ZIPS trios whose primary file is contained within $(1)
+# The trios will contain the primary installed file : the directory to unzip the zip to : the zip
+define relevant-extra-install-zips
+$(strip $(foreach p,$(EXTRA_INSTALL_ZIPS), \
+  $(if $(filter $(call word-colon,1,$(p)),$(1)), \
+    $(p))))
+endef
+
+# Writes a text file that contains all of the files that will be inside a partition.
+# All the file paths will be relative to the partition's staging directory.
+# It will also take into account files inside zips listed in EXTRA_INSTALL_ZIPS.
+#
+# Arguments:
+#   $(1): Output file
+#   $(2): The partition's staging directory
+#   $(3): Files to include in the partition
+define write-partition-file-list
+$(1): PRIVATE_FILES := $(subst $(2)/,,$(filter $(2)/%,$(3)))
+$(1): PRIVATE_EXTRA_INSTALL_ZIPS := $(call relevant-extra-install-zips,$(filter $(2)/%,$(3)))
+$(1): $$(HOST_OUT_EXECUTABLES)/extra_install_zips_file_list $(foreach p,$(call relevant-extra-install-zips,$(filter $(2)/%,$(3))),$(call word-colon,3,$(p)))
+	@echo Writing $$@
+	rm -f $$@
+	echo -n > $$@
+	$$(foreach f,$$(PRIVATE_FILES),echo "$$(f)" >> $$@$$(newline))
+	$$(HOST_OUT_EXECUTABLES)/extra_install_zips_file_list $(2) $$(PRIVATE_EXTRA_INSTALL_ZIPS) >> $$@
+endef
+
 # -----------------------------------------------------------------
 # Returns the max allowed size for an image suitable for hash verification
 # (e.g., boot.img, recovery.img, etc).
@@ -692,7 +720,7 @@ endif
 
 BOARD_KERNEL_MODULE_DIRS += top
 
-# Default to not generating modules.dep for kernel modules on system
+# Default to not generating modules.load for kernel modules on system
 # side. We should only load these modules if they are depended by vendor
 # side modules.
 ifeq ($(BOARD_SYSTEM_KERNEL_MODULES_LOAD),)
@@ -844,6 +872,7 @@ SOONG_CONV := $(sort $(SOONG_CONV))
 SOONG_CONV_DATA := $(call intermediates-dir-for,PACKAGING,soong_conversion)/soong_conv_data
 $(SOONG_CONV_DATA):
 	@rm -f $@
+	@touch $@ # This file must be present even if SOONG_CONV is empty.
 	@$(foreach s,$(SOONG_CONV),echo "$(s),$(SOONG_CONV.$(s).TYPE),$(sort $(SOONG_CONV.$(s).PROBLEMS)),$(sort $(filter-out $(SOONG_ALREADY_CONV),$(SOONG_CONV.$(s).DEPS))),$(sort $(SOONG_CONV.$(s).MAKEFILES)),$(sort $(SOONG_CONV.$(s).INSTALLED))" >>$@;)
 
 $(call declare-1p-target,$(SOONG_CONV_DATA),build)
@@ -1267,6 +1296,10 @@ boototapackage_16k: $(BUILT_BOOT_OTA_PACKAGE_16K)
 
 endif
 
+
+ramdisk_intermediates :=$= $(call intermediates-dir-for,PACKAGING,ramdisk)
+$(eval $(call write-partition-file-list,$(ramdisk_intermediates)/file_list.txt,$(TARGET_RAMDISK_OUT),$(INTERNAL_RAMDISK_FILES)))
+
 # The value of RAMDISK_NODE_LIST is defined in system/core/rootdir/Android.bp.
 # This file contains /dev nodes description added to the generic ramdisk
 
@@ -1564,6 +1597,7 @@ $(INSTALLED_INIT_BOOT_IMAGE_TARGET): $(AVBTOOL) $(BOARD_AVB_INIT_BOOT_KEY_PATH)
 	$(AVBTOOL) add_hash_footer \
            --image $@ \
 	   $(call get-partition-size-argument,$(BOARD_INIT_BOOT_IMAGE_PARTITION_SIZE)) \
+	   --salt $$(sha256sum $(BUILD_NUMBER_FILE) $(BUILD_DATETIME_FILE) | cut -d " " -f 1 | tr -d '\n') \
 	   --partition_name init_boot $(INTERNAL_AVB_INIT_BOOT_SIGNING_ARGS) \
 	   $(BOARD_AVB_INIT_BOOT_ADD_HASH_FOOTER_ARGS)
 
@@ -1622,6 +1656,8 @@ INTERNAL_VENDOR_RAMDISK_FILES := $(filter $(TARGET_VENDOR_RAMDISK_OUT)/%, \
     $(ALL_DEFAULT_INSTALLED_MODULES))
 
 INTERNAL_VENDOR_RAMDISK_TARGET := $(call intermediates-dir-for,PACKAGING,vendor_boot)/vendor_ramdisk.cpio$(RAMDISK_EXT)
+vendor_ramdisk_intermediates :=$= $(call intermediates-dir-for,PACKAGING,vendor_ramdisk)
+$(eval $(call write-partition-file-list,$(vendor_ramdisk_intermediates)/file_list.txt,$(TARGET_VENDOR_RAMDISK_OUT),$(INTERNAL_VENDOR_RAMDISK_FILES)))
 
 # Exclude recovery files in the default vendor ramdisk if including a standalone
 # recovery ramdisk in vendor_boot.
@@ -1676,12 +1712,13 @@ ifdef INTERNAL_KERNEL_CMDLINE
   INTERNAL_VENDOR_BOOTIMAGE_ARGS += --vendor_cmdline "$(INTERNAL_KERNEL_CMDLINE)"
 endif
 
-ifdef INTERNAL_BOOTCONFIG
+ifneq (, $(INTERNAL_BOOTCONFIG)$(INTERNAL_BOOTCONFIG_FILE))
   INTERNAL_VENDOR_BOOTCONFIG_TARGET := $(PRODUCT_OUT)/vendor-bootconfig.img
   $(INTERNAL_VENDOR_BOOTCONFIG_TARGET):
 	rm -f $@
 	$(foreach param,$(INTERNAL_BOOTCONFIG), \
 	 printf "%s\n" $(param) >> $@;)
+	cat $(INTERNAL_BOOTCONFIG_FILE) >> $@
   INTERNAL_VENDOR_BOOTIMAGE_ARGS += --vendor_bootconfig $(INTERNAL_VENDOR_BOOTCONFIG_TARGET)
 endif
 
@@ -1736,6 +1773,7 @@ $(INSTALLED_VENDOR_BOOTIMAGE_TARGET): $(AVBTOOL) $(BOARD_AVB_VENDOR_BOOTIMAGE_KE
 	$(AVBTOOL) add_hash_footer \
            --image $@ \
 	   $(call get-partition-size-argument,$(BOARD_VENDOR_BOOTIMAGE_PARTITION_SIZE)) \
+	   --salt $$(sha256sum $(BUILD_NUMBER_FILE) $(BUILD_DATETIME_FILE) | cut -d " " -f 1 | tr -d '\n') \
 	   --partition_name vendor_boot $(INTERNAL_AVB_VENDOR_BOOT_SIGNING_ARGS) \
 	   $(BOARD_AVB_VENDOR_BOOT_ADD_HASH_FOOTER_ARGS)
 else
@@ -2901,6 +2939,9 @@ ifneq ($(BOARD_NAND_SPARE_SIZE),)
 $(error MTD device is no longer supported and thus BOARD_NAND_SPARE_SIZE is deprecated.)
 endif
 
+recovery_intermediates := $(call intermediates-dir-for,PACKAGING,recovery)
+$(eval $(call write-partition-file-list,$(recovery_intermediates)/file_list.txt,$(TARGET_RECOVERY_OUT),$(INTERNAL_RECOVERYIMAGE_FILES)))
+
 
 # -----------------------------------------------------------------
 # Build debug ramdisk and debug boot image.
@@ -3473,31 +3514,6 @@ endif
 
 FULL_SYSTEMIMAGE_DEPS += $(INTERNAL_ROOT_FILES) $(INSTALLED_FILES_FILE_ROOT)
 
-# Returns a list of EXTRA_INSTALL_ZIPS trios whose primary file is contained within $(1)
-# The trios will contain the primary installed file : the directory to unzip the zip to : the zip
-define relevant-extra-install-zips
-$(strip $(foreach p,$(EXTRA_INSTALL_ZIPS), \
-  $(if $(filter $(call word-colon,1,$(p)),$(1)), \
-    $(p))))
-endef
-
-# Writes a text file that contains all of the files that will be inside a partition.
-# All the file paths will be relative to the partition's staging directory.
-# It will also take into account files inside zips listed in EXTRA_INSTALL_ZIPS.
-#
-# Arguments:
-#   $(1): Output file
-#   $(2): The partition's staging directory
-#   $(3): Files to include in the partition
-define write-partition-file-list
-$(1): $$(HOST_OUT_EXECUTABLES)/extra_install_zips_file_list $(foreach p,$(call relevant-extra-install-zips,$(filter $(2)/%,$(3))),$(call word-colon,3,$(p)))
-	@echo Writing $$@
-	rm -f $$@
-	echo -n > $$@
-	$$(foreach f,$(subst $(2)/,,$(filter $(2)/%,$(3))),echo "$$(f)" >> $$@$$(newline))
-	$$(HOST_OUT_EXECUTABLES)/extra_install_zips_file_list $(2) $(call relevant-extra-install-zips,$(filter $(2)/%,$(3))) >> $$@
-endef
-
 # -----------------------------------------------------------------
 ifdef BUILDING_SYSTEM_IMAGE
 
@@ -3569,14 +3585,24 @@ ifneq ($(PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE),)
 file_list_diff := $(HOST_OUT_EXECUTABLES)/file_list_diff$(HOST_EXECUTABLE_SUFFIX)
 system_file_diff_timestamp := $(systemimage_intermediates)/file_diff.timestamp
 
+# The build configuration to build the REL version may have more files to allow.
+# Use allowlist_next in addition to the allowlist in this case.
+system_file_diff_allowlist_next :=
+ifeq (REL,$(PLATFORM_VERSION_CODENAME))
+system_file_diff_allowlist_next := $(ALL_MODULES.system_image_diff_allowlist_next.INSTALLED)
+$(system_file_diff_timestamp): PRIVATE_ALLOWLIST_NEXT := $(system_file_diff_allowlist_next)
+endif
 $(system_file_diff_timestamp): \
 	    $(systemimage_intermediates)/file_list.txt \
 	    $(ALL_MODULES.$(PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE).FILESYSTEM_FILELIST) \
 	    $(ALL_MODULES.system_image_diff_allowlist.INSTALLED) \
+	    $(system_file_diff_allowlist_next) \
 	    $(file_list_diff)
 	$(file_list_diff) $(systemimage_intermediates)/file_list.txt \
 	  $(ALL_MODULES.$(PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE).FILESYSTEM_FILELIST) \
-	  $(ALL_MODULES.system_image_diff_allowlist.INSTALLED) $(PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE)
+	  $(PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE) \
+	  --allowlists $(ALL_MODULES.system_image_diff_allowlist.INSTALLED) \
+	  $(PRIVATE_ALLOWLIST_NEXT)
 	touch $@
 
 $(BUILT_SYSTEMIMAGE): $(system_file_diff_timestamp)
@@ -4001,6 +4027,21 @@ ifdef BUILDING_PRODUCT_IMAGE
 INTERNAL_PRODUCTIMAGE_FILES := \
     $(filter $(TARGET_OUT_PRODUCT)/%,\
       $(ALL_DEFAULT_INSTALLED_MODULES))
+
+# Install product/etc/linker.config.pb with PRODUCT_PRODUCT_LINKER_CONFIG_FRAGMENTS
+product_linker_config_file := $(TARGET_OUT_PRODUCT)/etc/linker.config.pb
+$(product_linker_config_file): private_linker_config_fragments := $(PRODUCT_PRODUCT_LINKER_CONFIG_FRAGMENTS)
+$(product_linker_config_file): $(INTERNAL_PRODUCTIMAGE_FILES) | $(HOST_OUT_EXECUTABLES)/conv_linker_config
+	@echo Creating linker config: $@
+	@mkdir -p $(dir $@)
+	@rm -f $@
+	$(HOST_OUT_EXECUTABLES)/conv_linker_config proto \
+		--source $(call normalize-path-list,$(private_linker_config_fragments)) \
+		--output $@
+$(call define declare-1p-target,$(product_linker_config_file),)
+INTERNAL_PRODUCTIMAGE_FILES += $(product_linker_config_file)
+ALL_DEFAULT_INSTALLED_MODULES += $(product_linker_config_file)
+
 
 INSTALLED_FILES_FILE_PRODUCT := $(PRODUCT_OUT)/installed-files-product.txt
 INSTALLED_FILES_JSON_PRODUCT := $(INSTALLED_FILES_FILE_PRODUCT:.txt=.json)
@@ -5138,6 +5179,8 @@ INTERNAL_ALLIMAGES_FILES := \
 # Run apex_sepolicy_tests for all installed APEXes
 
 ifeq (,$(TARGET_BUILD_UNBUNDLED))
+# TODO(b/353896817) apex_sepolicy_tests supports only ext4
+ifeq (ext4,$(PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE))
 intermediate := $(call intermediates-dir-for,PACKAGING,apex_sepolicy_tests)
 apex_dirs := \
   $(TARGET_OUT)/apex/% \
@@ -5177,6 +5220,7 @@ droid_targets: run_apex_sepolicy_tests
 
 apex_files :=
 intermediate :=
+endif # PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE
 endif # TARGET_BUILD_UNBUNDLED
 
 # -----------------------------------------------------------------
@@ -5272,7 +5316,7 @@ $(vintffm_log): $(HOST_OUT_EXECUTABLES)/vintffm $(check_vintf_system_deps) $(APE
 	  --dirmap /system_ext:$(TARGET_OUT_SYSTEM_EXT) \
 	  --dirmap /product:$(TARGET_OUT_PRODUCT) \
 	  --dirmap /apex:$(APEX_OUT) \
-	  $(VINTF_FRAMEWORK_MANIFEST_FROZEN_DIR) > $@ 2>&1 ) || ( cat $@ && exit 1 )
+	  system/libhidl/vintfdata/frozen > $@ 2>&1 ) || ( cat $@ && exit 1 )
 
 $(call declare-1p-target,$(vintffm_log))
 
@@ -5645,6 +5689,7 @@ INTERNAL_OTATOOLS_MODULES := \
   brotli \
   bsdiff \
   build_image \
+  build_mixed_kernels_ramdisk_host \
   build_super_image \
   build_verity_metadata \
   build_verity_tree \
@@ -6358,6 +6403,10 @@ ifdef BUILDING_VENDOR_BOOT_IMAGE
   ifeq (true,$(BOARD_MOVE_RECOVERY_RESOURCES_TO_VENDOR_BOOT))
     $(BUILT_TARGET_FILES_DIR): $(INTERNAL_RECOVERY_RAMDISK_FILES_TIMESTAMP)
   endif
+endif
+
+ifdef BUILDING_VENDOR_KERNEL_BOOT_IMAGE
+  $(BUILT_TARGET_FILES_DIR): $(INTERNAL_VENDOR_KERNEL_RAMDISK_FILES)
 endif
 
 ifdef BUILDING_RECOVERY_IMAGE
@@ -7953,11 +8002,16 @@ endif # PACK_DESKTOP_FILESYSTEM_IMAGES
 
 # -----------------------------------------------------------------
 # Desktop pack recovery image hook.
-ifneq (,$(strip $(PACK_DESKTOP_RECOVERY_IMAGE)))
+ifeq ($(BOARD_USES_DESKTOP_RECOVERY_IMAGE),true)
 PACK_RECOVERY_IMAGE_TARGET := $(PRODUCT_OUT)/android-desktop_recovery_image.bin
+PACK_RECOVERY_IMAGE_ARGS := --noarchive --recovery
+
+ifneq (,$(strip $(PACK_RECOVERY_IMAGE_EXPERIMENTAL)))
+PACK_RECOVERY_IMAGE_ARGS += --experimental
+endif # PACK_RECOVERY_IMAGE_EXPERIMENTAL
 
 $(PACK_RECOVERY_IMAGE_TARGET): $(IMAGES) $(PACK_IMAGE_SCRIPT)
-	$(PACK_IMAGE_SCRIPT) --out_dir $(PRODUCT_OUT) --noarchive --recovery
+	$(PACK_IMAGE_SCRIPT) --out_dir $(PRODUCT_OUT) $(PACK_RECOVERY_IMAGE_ARGS)
 
 PACKED_RECOVERY_IMAGE_ARCHIVE_TARGET := $(PACK_RECOVERY_IMAGE_TARGET).gz
 
@@ -7969,15 +8023,20 @@ $(call dist-for-goals,dist_files,$(PACKED_RECOVERY_IMAGE_ARCHIVE_TARGET))
 .PHONY: pack-recovery-image
 pack-recovery-image: $(PACK_RECOVERY_IMAGE_TARGET)
 
-endif # PACK_DESKTOP_RECOVERY_IMAGE
+endif # BOARD_USES_DESKTOP_RECOVERY_IMAGE
 
 # -----------------------------------------------------------------
 # Desktop pack update image hook.
-ifneq (,$(strip $(PACK_DESKTOP_UPDATE_IMAGE)))
+ifeq ($(BOARD_USES_DESKTOP_UPDATE_IMAGE),true)
 PACK_UPDATE_IMAGE_TARGET := $(PRODUCT_OUT)/android-desktop_update_image.bin
+PACK_UPDATE_IMAGE_ARGS := --noarchive --update
+
+ifneq (,$(strip $(PACK_UPDATE_IMAGE_EXPERIMENTAL)))
+PACK_UPDATE_IMAGE_ARGS += --experimental
+endif # PACK_UPDATE_IMAGE_EXPERIMENTAL
 
 $(PACK_UPDATE_IMAGE_TARGET): $(IMAGES) $(PACK_IMAGE_SCRIPT)
-	$(PACK_IMAGE_SCRIPT) --out_dir $(PRODUCT_OUT) --noarchive --update
+	$(PACK_IMAGE_SCRIPT) --out_dir $(PRODUCT_OUT) $(PACK_UPDATE_IMAGE_ARGS)
 
 PACKED_UPDATE_IMAGE_ARCHIVE_TARGET := $(PACK_UPDATE_IMAGE_TARGET).gz
 
@@ -7989,7 +8048,29 @@ $(call dist-for-goals,dist_files,$(PACKED_UPDATE_IMAGE_ARCHIVE_TARGET))
 .PHONY: pack-update-image
 pack-update-image: $(PACK_UPDATE_IMAGE_TARGET)
 
-endif # PACK_DESKTOP_UPDATE_IMAGE
+endif # BOARD_USES_DESKTOP_UPDATE_IMAGE
+
+PACK_MIGRATION_IMAGE_SCRIPT := $(HOST_OUT_EXECUTABLES)/pack_migration_image
+
+# -----------------------------------------------------------------
+# Desktop pack migration image hook.
+ifeq ($(ANDROID_DESKTOP_MIGRATION_IMAGE),true)
+PACK_MIGRATION_IMAGE_TARGET := $(PRODUCT_OUT)/android-desktop_migration_image.bin
+
+$(PACK_MIGRATION_IMAGE_TARGET): $(IMAGES) $(PACK_MIGRATION_IMAGE_SCRIPT)
+	$(PACK_MIGRATION_IMAGE_SCRIPT) --out_dir $(PRODUCT_OUT) --noarchive
+
+PACKED_MIGRATION_IMAGE_ARCHIVE_TARGET := $(PACK_MIGRATION_IMAGE_TARGET).gz
+
+$(PACKED_MIGRATION_IMAGE_ARCHIVE_TARGET): $(PACK_MIGRATION_IMAGE_TARGET) | $(GZIP)
+	$(GZIP) -fk $(PACK_MIGRATION_IMAGE_TARGET)
+
+$(call dist-for-goals,dist_files,$(PACKED_MIGRATION_IMAGE_ARCHIVE_TARGET))
+
+.PHONY: pack-migration-image
+pack-migration-image: $(PACK_MIGRATION_IMAGE_TARGET)
+
+endif # ANDROID_DESKTOP_MIGRATION_IMAGE
 
 # -----------------------------------------------------------------
 # OS Licensing

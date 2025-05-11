@@ -51,6 +51,7 @@ PRODUCT_BOOT_JARS += \
     framework-minus-apex \
     framework-graphics \
     framework-location \
+    framework-connectivity-b \
     ext \
     telephony-common \
     voip-common \
@@ -90,10 +91,26 @@ PRODUCT_APEX_BOOT_JARS := \
     com.android.virt:framework-virtualization \
     com.android.wifi:framework-wifi \
 
-# When we release crashrecovery module
+# When crashrecovery module is ready use apex jar
+# else put the platform jar in system
 ifeq ($(RELEASE_CRASHRECOVERY_MODULE),true)
-  PRODUCT_APEX_BOOT_JARS += \
+    PRODUCT_APEX_BOOT_JARS += \
         com.android.crashrecovery:framework-crashrecovery \
+
+else
+    PRODUCT_BOOT_JARS += \
+        framework-platformcrashrecovery \
+
+endif
+
+# When we release ondeviceintelligence in NeuralNetworks module
+ifeq ($(RELEASE_ONDEVICE_INTELLIGENCE_MODULE),true)
+    PRODUCT_APEX_BOOT_JARS += \
+    com.android.neuralnetworks:framework-ondeviceintelligence \
+
+else
+    PRODUCT_BOOT_JARS += \
+        framework-ondeviceintelligence-platform \
 
 endif
 
@@ -139,6 +156,13 @@ PRODUCT_APEX_SYSTEM_SERVER_JARS := \
 ifeq ($(RELEASE_CRASHRECOVERY_MODULE),true)
   PRODUCT_APEX_SYSTEM_SERVER_JARS += \
         com.android.crashrecovery:service-crashrecovery \
+
+endif
+
+# When we release ondeviceintelligence in NeuralNetworks module
+ifeq ($(RELEASE_ONDEVICE_INTELLIGENCE_MODULE),true)
+    PRODUCT_APEX_SYSTEM_SERVER_JARS += \
+        com.android.neuralnetworks:service-ondeviceintelligence
 
 endif
 
