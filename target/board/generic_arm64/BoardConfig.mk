@@ -23,14 +23,14 @@ TARGET_2ND_ARCH := arm
 TARGET_2ND_CPU_ABI := armeabi-v7a
 TARGET_2ND_CPU_ABI2 := armeabi
 
-ifneq ($(TARGET_BUILD_APPS)$(filter cts sdk,$(MAKECMDGOALS)),)
+ifneq ($(TARGET_BUILD_APPS)$(filter sdk,$(MAKECMDGOALS)),)
 # DO NOT USE
 # DO NOT USE
 #
 # This architecture / CPU variant must NOT be used for any 64 bit
 # platform builds. It is the lowest common denominator required
 # to build an unbundled application or cts for all supported 32 and 64 bit
-# platforms.
+# platforms. It now recommended to use generic_arm64_plus_armv7 to achieve this.
 #
 # If you're building a 64 bit platform (and not an application) the
 # ARM-v8 specification allows you to assume all the features available in an
@@ -66,6 +66,8 @@ include build/make/target/board/BoardConfigGsiCommon.mk
 BOARD_ROOT_EXTRA_SYMLINKS += /vendor/lib/dsp:/dsp
 BOARD_ROOT_EXTRA_SYMLINKS += /mnt/vendor/persist:/persist
 BOARD_ROOT_EXTRA_SYMLINKS += /vendor/firmware_mnt:/firmware
+# for Android.bp
+TARGET_ADD_ROOT_EXTRA_VENDOR_SYMLINKS := true
 
 # TODO(b/36764215): remove this setting when the generic system image
 # no longer has QCOM-specific directories under /.
