@@ -16,6 +16,7 @@
 
 package android.aconfig.storage;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public enum FileType {
     PACKAGE_MAP(0),
     FLAG_MAP(1),

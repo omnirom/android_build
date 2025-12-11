@@ -81,12 +81,6 @@ built_static_gcno_libraries := \
         STATIC_LIBRARIES,$(lib),$(my_kind),,$(LOCAL_2ND_ARCH_VAR_PREFIX), \
         $(my_host_cross))/$(lib)$(gcno_suffix))
 
-ifdef LOCAL_IS_HOST_MODULE
-my_coverage_path := $($(my_prefix)OUT_COVERAGE)/$(patsubst $($(my_prefix)OUT)/%,%,$(my_module_path))
-else
-my_coverage_path := $(TARGET_OUT_COVERAGE)/$(patsubst $(PRODUCT_OUT)/%,%,$(my_module_path))
-endif
-
 GCNO_ARCHIVE := $(basename $(my_installed_module_stem))$(gcno_suffix)
 
 $(intermediates)/$(GCNO_ARCHIVE) : $(SOONG_ZIP) $(MERGE_ZIPS)
@@ -94,11 +88,6 @@ $(intermediates)/$(GCNO_ARCHIVE) : PRIVATE_ALL_OBJECTS := $(strip $(LOCAL_GCNO_F
 $(intermediates)/$(GCNO_ARCHIVE) : PRIVATE_ALL_WHOLE_STATIC_LIBRARIES := $(strip $(built_whole_gcno_libraries)) $(strip $(built_static_gcno_libraries))
 $(intermediates)/$(GCNO_ARCHIVE) : $(LOCAL_GCNO_FILES) $(built_whole_gcno_libraries) $(built_static_gcno_libraries)
 	$(package-coverage-files)
-
-$(my_coverage_path)/$(GCNO_ARCHIVE) : $(intermediates)/$(GCNO_ARCHIVE)
-	$(copy-file-to-target)
-
-$(LOCAL_BUILT_MODULE): $(my_coverage_path)/$(GCNO_ARCHIVE)
 endif
 
 $(if $(my_register_name),$(eval ALL_MODULES.$(my_register_name).MAKE_MODULE_TYPE:=SHARED_LIBRARY))

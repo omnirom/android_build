@@ -22,6 +22,7 @@ package android.aconfig.storage;
  * <p>This exception indicates a general problem with Aconfig Storage, such as an inability to read
  * or write data.
  */
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class AconfigStorageException extends RuntimeException {
 
     /** Generic error code indicating an unspecified Aconfig Storage error. */

@@ -1,0 +1,24 @@
+{
+    "namespaces": {
+        "com_android_tethering": {
+            "container": "com.android.tethering",
+            "allow_exported": true
+        },
+        "com_android_networkstack": {
+            "container": "com.android.networkstack",
+            "allow_exported": false
+        },
+        "com_android_captiveportallogin": {
+            "container": "com.android.captiveportallogin",
+            "allow_exported": false
+        },
+        "com_android_healthfitness": {
+            "container": "com.android.healthfitness",
+            "allow_exported": true
+        },
+        "com_android_mediaprovider": {
+            "container": "com.android.mediaprovider",
+            "allow_exported": true
+        }
+    }
+}

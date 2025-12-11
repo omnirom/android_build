@@ -132,6 +132,17 @@ class MetadataDb:
       installed_files_metadata.append(metadata)
     return installed_files_metadata
 
+  def get_installed_files_of_module(self, module_name):
+    # Get install file list of a module
+    cursor = self.conn.execute(f'select installed_file, build_output_path from "{module_name}"')
+    rows = cursor.fetchall()
+    cursor.close()
+    installed_files_metadata = []
+    for row in rows:
+      metadata = dict(zip(row.keys(), row))
+      installed_files_metadata.append(metadata)
+    return installed_files_metadata
+
   def get_installed_file_in_dir(self, dir):
     dir = dir.removesuffix('/')
     cursor = self.conn.execute(

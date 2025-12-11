@@ -21,6 +21,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class ByteBufferReader {
 
     private ByteBuffer mByteBuffer;
@@ -29,6 +30,10 @@ public class ByteBufferReader {
     public ByteBufferReader(ByteBuffer byteBuffer) {
         this.mByteBuffer = byteBuffer;
         this.mByteBuffer.order(ByteOrder.LITTLE_ENDIAN);
+    }
+
+    public boolean readBoolean() {
+        return readByte() == 1;
     }
 
     public int readByte() {

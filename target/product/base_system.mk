@@ -28,6 +28,7 @@ PRODUCT_PACKAGES += \
     android.test.mock \
     android.test.runner \
     apexd \
+    apexd.mainline_patch_level_2 \
     appops \
     app_process \
     appwidget \
@@ -103,7 +104,6 @@ PRODUCT_PACKAGES += \
     framework-sysconfig.xml \
     fsck.erofs \
     fsck_msdos \
-    fsverity-release-cert-der \
     fs_config_files_system \
     fs_config_dirs_system \
     gpu_counter_producer \
@@ -284,7 +284,6 @@ PRODUCT_PACKAGES += \
     system-build.prop \
     task_profiles.json \
     tc \
-    telecom \
     telephony-common \
     tombstoned \
     traced \
@@ -303,6 +302,22 @@ PRODUCT_PACKAGES += \
     wificond \
     wifi.rc \
     wm \
+
+ifeq ($(RELEASE_CROSS_DEVICE_SYNC),true)
+  PRODUCT_PACKAGES += \
+        CrossDeviceSync
+endif
+
+# Once Telecom is APEX, we will consolidate all deps
+ifeq ($(RELEASE_TELECOM_MAINLINE_MODULE),true)
+  PRODUCT_PACKAGES += \
+      com.android.telecom \
+
+else
+  PRODUCT_PACKAGES += \
+      telecom \
+
+endif
 
 # When we release crashrecovery module
 ifeq ($(RELEASE_CRASHRECOVERY_MODULE),true)
@@ -375,6 +390,15 @@ endif
 ifneq ($(RELEASE_MOVE_VCN_TO_MAINLINE),true)
     PRODUCT_PACKAGES += \
         framework-connectivity-b
+endif
+
+ifeq ($(RELEASE_TELEPHONY_MODULE),true)
+    PRODUCT_PACKAGES += \
+       com.android.telephonycore
+
+else
+    PRODUCT_PACKAGES += \
+        framework-platformtelephony
 endif
 
 ifneq (,$(RELEASE_RANGING_STACK))
@@ -495,11 +519,15 @@ PRODUCT_PACKAGES += init.usb.rc init.usb.configfs.rc
 PRODUCT_PACKAGES += etc_hosts
 
 PRODUCT_PACKAGES += init.zygote32.rc
-PRODUCT_VENDOR_PROPERTIES += ro.zygote?=zygote32
 
 PRODUCT_SYSTEM_PROPERTIES += debug.atrace.tags.enableflags=0
 PRODUCT_SYSTEM_PROPERTIES += persist.traced.enable=1
 PRODUCT_SYSTEM_PROPERTIES += ro.surface_flinger.game_default_frame_rate_override=60
+
+# When the flag RELEASE_ADBD_OPEN_VSOCK_PORT is enabled, open adbd on vsock port 8382 as default.
+ifneq ($(RELEASE_ADBD_OPEN_VSOCK_PORT),)
+PRODUCT_SYSTEM_PROPERTIES += service.adb.listen_addrs?=vsock:8382
+endif
 
 # Include kernel configs.
 PRODUCT_PACKAGES += \
@@ -521,6 +549,7 @@ PRODUCT_PACKAGES_DEBUG := \
     libclang_rt.ubsan_standalone \
     logpersist.start \
     logtagd.rc \
+    lpmodify \
     ot-cli-ftd \
     ot-ctl \
     overlay_remounter \
@@ -567,6 +596,11 @@ ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
     PRODUCT_PRODUCT_PROPERTIES += persist.debug.perfetto.persistent_sysui_tracing_for_bugreport=1
 endif
 
+ifneq (,$(RELEASE_NATIVE_FRAMEWORK_PROTOTYPE))
+    PRODUCT_PACKAGES += \
+        zygote_next
+endif
+
 $(call inherit-product, $(SRC_TARGET_DIR)/product/runtime_libart.mk)
 
 # Ensure all trunk-stable flags are available.
@@ -577,8 +611,3 @@ $(call inherit-product,$(SRC_TARGET_DIR)/product/updatable_apex.mk)
 
 $(call soong_config_set, bionic, large_system_property_node, $(RELEASE_LARGE_SYSTEM_PROPERTY_NODE))
 $(call soong_config_set, Aconfig, read_from_new_storage, $(RELEASE_READ_FROM_NEW_STORAGE))
-$(call soong_config_set, SettingsLib, legacy_avatar_picker_app_enabled, $(if $(RELEASE_AVATAR_PICKER_APP),,true))
-$(call soong_config_set, appsearch, enable_isolated_storage, $(RELEASE_APPSEARCH_ENABLE_ISOLATED_STORAGE))
-
-# Enable AppSearch Isolated Storage per BUILD flag
-PRODUCT_PRODUCT_PROPERTIES += ro.appsearch.feature.enable_isolated_storage=$(RELEASE_APPSEARCH_ENABLE_ISOLATED_STORAGE)

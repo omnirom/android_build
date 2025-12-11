@@ -17,5 +17,5 @@
 # To enable ANGLE as the default system GLES drivers, add
 # $(call inherit-product, $(SRC_TARGET_DIR)/product/angle_default.mk) to the Makefile.
 
-PRODUCT_SYSTEM_PROPERTIES += \
+PRODUCT_SYSTEM_EXT_PROPERTIES += \
     persist.graphics.egl=angle

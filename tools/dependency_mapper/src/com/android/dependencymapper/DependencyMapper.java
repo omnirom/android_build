@@ -18,6 +18,7 @@ package com.android.dependencymapper;
 import com.android.dependencymapper.DependencyProto;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,12 +34,13 @@ public class DependencyMapper {
     private final List<JavaSourceData> mJavaSourceDataList;
     private final Map<String, String> mClassToSourceMap = new HashMap<>();
     private final Map<String, Set<String>> mFileDependencies = new HashMap<>();
+    private final Map<String, Set<String>> mCrossModuleClassDependencies = new HashMap<>();
     private final Set<String> mDependencyToAll = new HashSet<>();
     private final Map<String, Set<String>> mSourceToClasses = new HashMap<>();
 
     public DependencyMapper(List<ClassDependencyData> classAnalysisList, List<JavaSourceData> javaSourceDataList) {
-        this.mClassAnalysisList = classAnalysisList;
-        this.mJavaSourceDataList = javaSourceDataList;
+        mClassAnalysisList = classAnalysisList;
+        mJavaSourceDataList = javaSourceDataList;
     }
 
     public DependencyProto.FileDependencyList buildDependencyMaps() {
@@ -69,6 +71,10 @@ public class DependencyMapper {
             classDependencies.computeIfAbsent(className, k ->
                     new HashSet<>()).addAll(analysis.getClassDependencies());
 
+            // compute crossModuleClassDependencies
+            mCrossModuleClassDependencies.computeIfAbsent(sourcePath, k ->
+                    new HashSet<>()).addAll(analysis.getCrossModuleClassDependencies());
+
             // Compute constantRegistry
             analysis.getConstantsDefined().forEach(c ->
                     constantRegistry.computeIfAbsent(c, k -> new HashSet<>()).add(className));
@@ -92,7 +98,8 @@ public class DependencyMapper {
         return sourcePaths;
     }
 
-    private Map<String, Set<String>> combineDependencies(Map<String, Set<String>> classDependencies,
+    private Map<String, Set<String>> combineDependencies(
+            Map<String, Set<String>> classDependencies,
             Map<Object, Set<String>> inlinedUsages,
             Map<Object, Set<String>> constantRegistry) {
         Map<String, Set<String>> combined = new HashMap<>(
@@ -127,17 +134,21 @@ public class DependencyMapper {
         combinedClassDependencies.forEach((className, dependencies) -> {
             String sourceFile = mClassToSourceMap.get(className);
             if (sourceFile == null) {
-                throw new IllegalArgumentException("Class '" + className
+                System.err.println("Class '" + className
                         + "' does not have a corresponding source file.");
+                return;
             }
             mFileDependencies.computeIfAbsent(sourceFile, k -> new HashSet<>());
             dependencies.forEach(dependency -> {
                 String dependencySource = mClassToSourceMap.get(dependency);
                 if (dependencySource == null) {
-                    throw new IllegalArgumentException("Dependency '" + dependency
+                    System.err.println("Dependency '" + dependency
                             + "' does not have a corresponding source file.");
+                    return;
                 }
-                mFileDependencies.get(sourceFile).add(dependencySource);
+                if (!sourceFile.equals(dependencySource)) {
+                    mFileDependencies.get(sourceFile).add(dependencySource);
+                }
             });
         });
     }
@@ -145,7 +156,7 @@ public class DependencyMapper {
     private void buildSourceToClassMap() {
         mClassToSourceMap.forEach((className, sourceFile) ->
                 mSourceToClasses.computeIfAbsent(sourceFile, k ->
-                        new HashSet<>()).add(className));
+                        new HashSet<>()).add(Utils.convertClassToFileBasedPath(className)));
     }
 
     private DependencyProto.FileDependencyList createFileDependencies() {
@@ -156,6 +167,7 @@ public class DependencyMapper {
                     .setIsDependencyToAll(mDependencyToAll.contains(file))
                     .addAllGeneratedClasses(mSourceToClasses.get(file))
                     .addAllFileDependencies(dependencies)
+                    .addAllCrossModuleClassDeps(mCrossModuleClassDependencies.getOrDefault(file, Collections.emptySet()))
                     .build();
             fileDependencies.add(dependency);
         });

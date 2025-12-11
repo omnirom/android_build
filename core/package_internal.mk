@@ -509,22 +509,6 @@ else
 endif
 endif
 
-# Run veridex on product, system_ext and vendor modules.
-# We skip it for unbundled app builds where we cannot build veridex.
-module_run_appcompat :=
-ifeq (true,$(non_system_module))
-ifeq (,$(TARGET_BUILD_APPS))  # ! unbundled app build
-ifneq ($(UNSAFE_DISABLE_HIDDENAPI_FLAGS),true)
-  module_run_appcompat := true
-endif
-endif
-endif
-
-ifeq ($(module_run_appcompat),true)
-$(LOCAL_BUILT_MODULE) : $(appcompat-files)
-$(LOCAL_BUILT_MODULE): PRIVATE_INSTALLED_MODULE := $(LOCAL_INSTALLED_MODULE)
-endif
-
 $(LOCAL_BUILT_MODULE): PRIVATE_RESOURCE_INTERMEDIATES_DIR := $(intermediates.COMMON)/resources
 $(LOCAL_BUILT_MODULE) : $(jni_shared_libraries)
 $(LOCAL_BUILT_MODULE) : $(JAR_ARGS) $(SOONG_ZIP) $(MERGE_ZIPS) $(ZIP2ZIP)
@@ -562,11 +546,6 @@ ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
 	@# No need to align, sign-package below will do it.
 	$(uncompress-dexs)
 endif
-# Run appcompat before signing.
-ifeq ($(module_run_appcompat),true)
-	$(appcompat-header)
-	$(run-appcompat)
-endif  # module_run_appcompat
 	$(sign-package)
 ifdef LOCAL_COMPRESSED_MODULE
 	$(compress-package)

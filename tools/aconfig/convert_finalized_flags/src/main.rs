@@ -23,9 +23,7 @@
 use anyhow::Result;
 use clap::Parser;
 
-use convert_finalized_flags::{
-    read_extend_file_to_map_using_path, read_files_to_map_using_path, EXTENDED_FLAGS_35_APILEVEL,
-};
+use convert_finalized_flags::read_files_to_map_using_path;
 
 const ABOUT_TEXT: &str = "Tool for processing finalized-flags.txt files.
 
@@ -47,20 +45,13 @@ struct Cli {
     /// Flags files.
     #[arg(long = "flag_file_path")]
     flag_file_path: Vec<String>,
-
-    #[arg(long)]
-    extended_flag_file_path: String,
 }
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
-    let mut finalized_flags_map = read_files_to_map_using_path(cli.flag_file_path)?;
-    let extended_flag_set = read_extend_file_to_map_using_path(cli.extended_flag_file_path)?;
-    for flag in extended_flag_set {
-        finalized_flags_map.insert_if_new(EXTENDED_FLAGS_35_APILEVEL, flag);
-    }
+    let finalized_flags_map = read_files_to_map_using_path(cli.flag_file_path)?;
 
     let json_str = serde_json::to_string(&finalized_flags_map)?;
-    println!("{}", json_str);
+    println!("{json_str}");
     Ok(())
 }

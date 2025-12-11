@@ -134,8 +134,8 @@ $(LAYOUTLIB_SBOM)/sbom-metadata.csv:
 
 	$(foreach f,$(_layoutlib_fonts_files), \
 	  $(eval _module_name := $(ALL_INSTALLED_FILES.$f)) \
-	  $(eval _module_path := $(strip $(sort $(ALL_MODULES.$(_module_name).PATH)))) \
-	  $(eval _soong_module_type := $(strip $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE)))) \
+	  $(eval _module_path := $(sort $(ALL_MODULES.$(_module_name).PATH))) \
+	  $(eval _soong_module_type := $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE))) \
 	  echo data/fonts/$(notdir $f),$(_module_path),$(_soong_module_type),,,,,$f,,, >> $@; \
 	)
 
@@ -145,8 +145,8 @@ $(LAYOUTLIB_SBOM)/sbom-metadata.csv:
 
 	$(foreach f,$(_layoutlib_hyphen_files), \
 	  $(eval _module_name := $(ALL_INSTALLED_FILES.$f)) \
-	  $(eval _module_path := $(strip $(sort $(ALL_MODULES.$(_module_name).PATH)))) \
-	  $(eval _soong_module_type := $(strip $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE)))) \
+	  $(eval _module_path := $(sort $(ALL_MODULES.$(_module_name).PATH))) \
+	  $(eval _soong_module_type := $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE))) \
 	  echo data/hyphen-data/$(notdir $f),$(_module_path),$(_soong_module_type),,,,,$f,,, >> $@; \
 	)
 
@@ -156,8 +156,8 @@ $(LAYOUTLIB_SBOM)/sbom-metadata.csv:
 	  $(eval _dist_file := $(patsubst data/windows/%,data/win/lib64/%,$(patsubst layoutlib_native/%,data/%,$(_dist_file)))) \
 	  $(eval _dist_file := $(subst layoutlib.jar,data/layoutlib.jar,$(_dist_file))) \
 	  $(eval _module_name := $(strip $(foreach m,$(ALL_MODULES),$(if $(filter $(_prebuilt_module_file),$(ALL_MODULES.$m.CHECKED)),$m)))) \
-	  $(eval _module_path := $(strip $(sort $(ALL_MODULES.$(_module_name).PATH)))) \
-	  $(eval _soong_module_type := $(strip $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE)))) \
+	  $(eval _module_path := $(sort $(ALL_MODULES.$(_module_name).PATH))) \
+	  $(eval _soong_module_type := $(sort $(ALL_MODULES.$(_module_name).SOONG_MODULE_TYPE))) \
 	  echo $(patsubst layoutlib_native/%,%,$(_dist_file)),$(_module_path),$(_soong_module_type),,,,,$(_prebuilt_module_file),,, >> $@; \
 	)
 

@@ -27,6 +27,7 @@ java_library {
     name: "aconfig_storage_stub",
     srcs: [
         "src/android/os/flagging/**/*.java",
+        "src/android/provider/**/*.java",
     ],
     sdk_version: "core_current",
     host_supported: true,

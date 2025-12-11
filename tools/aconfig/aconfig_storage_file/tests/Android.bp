@@ -10,14 +10,7 @@ cc_test {
         "libbase",
     ],
     data: [
-        "data/v1/package_v1.map",
-        "data/v1/flag_v1.map",
-        "data/v1/flag_v1.val",
-        "data/v1/flag_v1.info",
-        "data/v2/package_v2.map",
-        "data/v2/flag_v2.map",
-        "data/v2/flag_v2.val",
-        "data/v2/flag_v2.info",
+        ":test_storage_files",
     ],
     test_suites: [
         "device-tests",
@@ -39,6 +32,17 @@ android_test {
     test_config: "AndroidStorageJaveTest.xml",
     sdk_version: "test_current",
     data: [
+        ":test_storage_files",
+    ],
+    test_suites: [
+        "general-tests",
+    ],
+    jarjar_rules: "jarjar.txt",
+}
+
+filegroup {
+    name: "test_storage_files",
+    srcs: [
         "data/v1/package_v1.map",
         "data/v1/flag_v1.map",
         "data/v1/flag_v1.val",
@@ -47,9 +51,12 @@ android_test {
         "data/v2/flag_v2.map",
         "data/v2/flag_v2.val",
         "data/v2/flag_v2.info",
+        "data/v3/package_v3.map",
+        "data/v3/flag_v3.map",
+        "data/v3/flag_v3.val",
+        "data/v3/flag_v3.info",
     ],
-    test_suites: [
-        "general-tests",
+    visibility: [
+        "//build/make/tools/aconfig:__subpackages__",
     ],
-    jarjar_rules: "jarjar.txt",
 }

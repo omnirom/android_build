@@ -11,4 +11,5 @@ cargo = []
 aconfig_protos = { path = "../aconfig_protos" }
 anyhow = "1.0.69"
 clap = { version = "4.1.8", features = ["derive"] }
+protobuf = "3.2.0"
 regex = "1.11.1"

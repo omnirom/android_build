@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 
+# This task is implemented in build/soong/filesystem/host_init_verifier_check.go.
+# This mk can be removed after only supporting Soong.
 host_init_verifier_output := $(PRODUCT_OUT)/host_init_verifier_output.txt
 
 $(host_init_verifier_output): \

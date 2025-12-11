@@ -61,8 +61,7 @@ module-info: $(MODULE_INFO_JSON)
 
 droidcore-unbundled: $(MODULE_INFO_JSON)
 
-$(call dist-for-goals, general-tests, $(MODULE_INFO_JSON))
-$(call dist-for-goals, droidcore-unbundled, $(MODULE_INFO_JSON))
+$(call dist-for-goals, general-tests droidcore-unbundled dist_files module-info, $(MODULE_INFO_JSON))
 
 # On every build, generate an all_modules.txt file to be used for autocompleting
 # the m command. After timing this using $(shell date +"%s.%3N"), it only adds

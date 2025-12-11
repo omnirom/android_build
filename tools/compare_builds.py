@@ -120,6 +120,7 @@ of the commandline flags. Here are a sampling of useful combinations.
 import argparse
 import itertools
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -161,10 +162,13 @@ BUILD_INTERNALS_SUFFIX_SKIP = (
     "/build_number.txt",
     "/build.ninja",
     "/.out-dir",
-    "/build_fingerprint.txt",
-    "/build_thumbprint.txt",
     "/.copied_headers_list",
     "/.installable_files",
+)
+
+BUILD_INTERNALS_REGEX_SKIP = (
+    "/build_fingerprint-[^-/]*\.txt$",
+    "/build_thumbprint-[^-/]*\.txt$",
 )
 
 
@@ -604,6 +608,9 @@ class OutFiles(FileIterator):
         return False
     for skip in BUILD_INTERNALS_SUFFIX_SKIP:
       if relative.endswith(skip):
+        return False
+    for skip in BUILD_INTERNALS_REGEX_SKIP:
+      if re.match(relative, skip):
         return False
     return True
 

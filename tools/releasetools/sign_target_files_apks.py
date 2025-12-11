@@ -386,7 +386,7 @@ def GetMicrodroidVbmetaKey(virt_apex_path, avbtool_path):
     avbtool_path: The path to the avbtool executable.
 
   Returns:
-    The AVB public key (bytes).
+    The AVB public key (bytes), or None if microdroid_vbmeta.img is not found.
   """
   # Creates an ApexApkSigner to extract microdroid_vbmeta.img.
   # No need to set key_passwords/codename_to_api_level_map since
@@ -398,6 +398,10 @@ def GetMicrodroidVbmetaKey(virt_apex_path, avbtool_path):
   payload_dir = apex_signer.ExtractApexPayload(virt_apex_path)
   microdroid_vbmeta_image = os.path.join(
       payload_dir, 'etc', 'fs', 'microdroid_vbmeta.img')
+
+  # If microdroid_vbmeta.img doesn't exist (e.g. AVF disabled), return None.
+  if not os.path.exists(microdroid_vbmeta_image):
+    return None
 
   # Extracts the avb public key from microdroid_vbmeta.img.
   with tempfile.NamedTemporaryFile() as microdroid_pubkey:
@@ -894,16 +898,15 @@ def ProcessTargetFiles(input_tf_zip: zipfile.ZipFile, output_tf_zip: zipfile.Zip
     # Updates pvmfw embedded public key with the virt APEX payload key.
     elif filename == "PREBUILT_IMAGES/pvmfw.img":
       # Find the path of the virt APEX in the target files.
+      copy_pvmfw_verbatim = True
       namelist = input_tf_zip.namelist()
       apex_gen = (f for f in namelist if IsApexFile(f))
       virt_apex_re = re.compile("^.*com\.([^\.]+\.)?android\.virt\.apex$")
       virt_apex_path = next(
         (a for a in apex_gen if virt_apex_re.match(a)), None)
       if not virt_apex_path:
-        print("Removing %s from ramdisk: virt APEX not found" % filename)
+        print("Skip updating public key in %s: virt APEX not found" % filename)
       else:
-        print("Replacing %s embedded key with %s key" % (filename,
-                                                         virt_apex_path))
         # Get the current and new embedded keys.
         virt_apex = GetApexFilename(virt_apex_path)
         payload_key, container_key, sign_tool = apex_keys[virt_apex]
@@ -921,21 +924,49 @@ def ProcessTargetFiles(input_tf_zip: zipfile.ZipFile, output_tf_zip: zipfile.Zip
           with open(new_pubkey_path, 'rb') as f:
             new_pubkey = f.read()
 
-        pubkey_info = copy.copy(
-            input_tf_zip.getinfo("PREBUILT_IMAGES/pvmfw_embedded.avbpubkey"))
-        old_pubkey = input_tf_zip.read(pubkey_info.filename)
-        # Validate the keys and image.
-        if len(old_pubkey) != len(new_pubkey):
-          raise common.ExternalError("pvmfw embedded public key size mismatch")
-        pos = data.find(old_pubkey)
-        if pos == -1:
-          raise common.ExternalError("pvmfw embedded public key not found")
-        # Replace the key and copy new files.
-        new_data = data[:pos] + new_pubkey + data[pos+len(old_pubkey):]
-        common.ZipWriteStr(output_tf_zip, out_info, new_data)
-        common.ZipWriteStr(output_tf_zip, pubkey_info, new_pubkey)
+        if new_pubkey:
+          print("Replacing %s embedded key with %s key" % (filename,
+                                                           virt_apex_path))
+          copy_pvmfw_verbatim = False
+          pubkey_info = copy.copy(
+              input_tf_zip.getinfo("PREBUILT_IMAGES/pvmfw_embedded.avbpubkey"))
+          old_pubkey = input_tf_zip.read(pubkey_info.filename)
+          # Validate the keys and image.
+          if len(old_pubkey) != len(new_pubkey):
+            raise common.ExternalError("pvmfw embedded public key size mismatch")
+          pos = data.find(old_pubkey)
+          if pos == -1:
+            raise common.ExternalError("pvmfw embedded public key not found")
+          # Replace the key and copy new files.
+          new_data = data[:pos] + new_pubkey + data[pos+len(old_pubkey):]
+          common.ZipWriteStr(output_tf_zip, out_info, new_data)
+          common.ZipWriteStr(output_tf_zip, pubkey_info, new_pubkey)
+        else:
+          print("Skip updating public key in %s: no new_pubkey" % filename)
+
+        if copy_pvmfw_verbatim:
+          common.ZipWriteStr(output_tf_zip, out_info, data)
+
+
     elif filename == "PREBUILT_IMAGES/pvmfw_embedded.avbpubkey":
       pass
+
+    elif filename == "VENDOR/firmware/ap-ec-fw.zip":
+      signed_firmware_data = None
+      try:
+        signed_firmware_data = input_tf_zip.read("SIGNED_PREBUILTS/ap-ec-fw-signed.zip")
+        print("Found signed AP/EC firmware.")
+      except KeyError:
+        # TODO(b/435006163): Remove this branch once all target_files.zip
+        # contain signed firmware.
+        print("No signed AP/EC firmware found, using existing.")
+        signed_firmware_data = data
+
+      common.ZipWriteStr(output_tf_zip, out_info, signed_firmware_data)
+
+    elif filename == "SIGNED_PREBUILTS/ap-ec-fw-signed.zip":
+      # Skip the signed file since it was copied above.
+      continue
 
     # Should NOT sign boot-debug.img.
     elif filename in (
@@ -963,6 +994,18 @@ def ProcessTargetFiles(input_tf_zip: zipfile.ZipFile, output_tf_zip: zipfile.Zip
         ReplaceKeyInAvbHashtreeFooter(image, vendor_key, vendor_algorithm,
             misc_info)
         common.ZipWrite(output_tf_zip, image.name, filename)
+    elif filename == "SYSTEM_EXT/etc/vm/trusty_vm/desktop_trusty_signed.elf":
+      desktop_key = OPTIONS.extra_apex_payload_keys["com.google.android.virt.apex"]
+      desktop_algorithm = OPTIONS.avb_algorithms.get("desktop_trusty")
+      if desktop_algorithm is None:
+          desktop_algorithm = "SHA256_RSA4096"
+      with tempfile.NamedTemporaryFile() as image:
+        image.write(data)
+        image.flush()
+        extra_args = OPTIONS.avb_extra_args.get("apex")
+        ResignDesktopTrusty(image, desktop_key, desktop_algorithm,
+            misc_info, extra_args)
+        common.ZipWrite(output_tf_zip, image.name, filename)
     # A non-APK file; copy it verbatim.
     else:
       try:
@@ -980,6 +1023,16 @@ def ProcessTargetFiles(input_tf_zip: zipfile.ZipFile, output_tf_zip: zipfile.Zip
 
   # Write back misc_info with the latest values.
   ReplaceMiscInfoTxt(input_tf_zip, output_tf_zip, misc_info)
+
+def ResignDesktopTrusty(image, new_key, new_algorithm, misc_info, extra_args):
+    avbtool = misc_info["avb_avbtool"]
+    cmd = ["desktop_trusty_signing_tool",
+      "--avbtool", avbtool,
+      "--key", new_key,
+      "--algorithm", new_algorithm,
+      "--elf-file", image.name,
+    ] + shlex.split(extra_args)
+    common.RunAndCheckOutput(cmd)
 
 # Parse string output of `avbtool info_image`.
 def ParseAvbInfo(info_raw):
@@ -1727,6 +1780,8 @@ def main(argv):
       OPTIONS.override_apex_keys = a
     elif o in ("--gki_signing_key",  "--gki_signing_algorithm",  "--gki_signing_extra_args"):
       print(f"{o} is deprecated and does nothing")
+    elif o == "--avb_desktop_trusty_algorithm":
+      OPTIONS.avb_algorithms['desktop_trusty'] = a
     else:
       return False
     return True
@@ -1753,6 +1808,7 @@ def main(argv):
           "avb_boot_algorithm=",
           "avb_boot_key=",
           "avb_boot_extra_args=",
+          "avb_desktop_trusty_algorithm=",
           "avb_dtbo_algorithm=",
           "avb_dtbo_key=",
           "avb_dtbo_extra_args=",

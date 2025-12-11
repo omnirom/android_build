@@ -190,6 +190,7 @@ def SignOtaPackage(input_path, output_path):
   with tempfile.NamedTemporaryFile() as unsigned_payload, zipfile.ZipFile(input_path, "r", allowZip64=True) as zfp:
     with zfp.open("payload.bin") as payload_fp:
       shutil.copyfileobj(payload_fp, unsigned_payload)
+      unsigned_payload.flush()
     signed_payload = payload_signer.SignPayload(unsigned_payload.name)
     properties_file = GeneratePayloadProperties(signed_payload)
     with zipfile.ZipFile(output_path, "a", compression=zipfile.ZIP_STORED, allowZip64=True) as output_zfp:

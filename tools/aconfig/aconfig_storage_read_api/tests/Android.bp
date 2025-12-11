@@ -1,17 +1,3 @@
-filegroup {
-    name: "read_api_test_storage_files",
-    srcs: [
-        "data/v1/package_v1.map",
-        "data/v1/flag_v1.map",
-        "data/v1/flag_v1.val",
-        "data/v1/flag_v1.info",
-        "data/v2/package_v2.map",
-        "data/v2/flag_v2.map",
-        "data/v2/flag_v2.val",
-        "data/v2/flag_v2.info",
-    ],
-}
-
 rust_test {
     name: "aconfig_storage_read_api.test.rust",
     srcs: [
@@ -24,7 +10,7 @@ rust_test {
         "librand",
     ],
     data: [
-        ":read_api_test_storage_files",
+        ":test_storage_files",
     ],
     test_suites: ["general-tests"],
 }
@@ -41,7 +27,7 @@ cc_test {
         "liblog",
     ],
     data: [
-        ":read_api_test_storage_files",
+        ":test_storage_files",
     ],
     test_suites: [
         "device-tests",
@@ -65,7 +51,7 @@ android_test {
         "libaconfig_storage_read_api_rust_jni",
     ],
     data: [
-        ":read_api_test_storage_files",
+        ":test_storage_files",
     ],
     platform_apis: true,
     certificate: "platform",

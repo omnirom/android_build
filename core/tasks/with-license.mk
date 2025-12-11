@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# An equivalent of this file is implemented in the android_device module
+# for soong-only builds.
 
 .PHONY: with-license
 

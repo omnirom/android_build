@@ -1,8 +1,10 @@
 package {package_name};
 
 {{ if not library_exported- }}
+{{ if support_uau_annotation- }}
 // TODO(b/303773055): Remove the annotation after access issue is resolved.
 import android.compat.annotation.UnsupportedAppUsage;
+{{ -endif }}
 {{ -endif }}
 import java.util.Arrays;
 {{ -if library_exported }}
@@ -35,7 +37,11 @@ public class CustomFeatureFlags implements FeatureFlags \{
 
 {{ -for item in flag_elements}}
     @Override
-{{ if not library_exported }}    @UnsupportedAppUsage{{ -endif }}
+{{ if not library_exported- }}
+{{ if support_uau_annotation- }}
+    @UnsupportedAppUsage
+{{ -endif }}
+{{ -endif }}
     public boolean {item.method_name}() \{
         return getValue(Flags.FLAG_{item.flag_name_constant_suffix},
             FeatureFlags::{item.method_name});
@@ -82,14 +88,14 @@ public class CustomFeatureFlags implements FeatureFlags \{
     );
 
 {{ -if library_exported }}
-    private Map<String, Integer> mFinalizedFlags = new HashMap<>(
+    private Map<String, Boolean> mFinalizedFlags = new HashMap<>(
         Map.ofEntries(
             {{ -for item in flag_elements }}
             {{ -if item.finalized_sdk_present }}
-            Map.entry(Flags.FLAG_{item.flag_name_constant_suffix}, {item.finalized_sdk_value}),
+            Map.entry(Flags.FLAG_{item.flag_name_constant_suffix}, {item.finalized_sdk_check|unescaped} ? true : false),
             {{ -endif }}
             {{ -endfor }}
-            Map.entry("", Integer.MAX_VALUE){# The empty entry to avoid empty entries #}
+            Map.entry("", false){# The empty entry to avoid empty entries #}
         )
     );
 
@@ -97,7 +103,7 @@ public class CustomFeatureFlags implements FeatureFlags \{
         if (!mFinalizedFlags.containsKey(flagName)) \{
             return false;
         }
-        return Build.VERSION.SDK_INT >= mFinalizedFlags.get(flagName);
+        return mFinalizedFlags.get(flagName);
     }
 {{ -endif }}
 }

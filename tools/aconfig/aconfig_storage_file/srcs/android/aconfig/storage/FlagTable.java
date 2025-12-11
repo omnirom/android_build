@@ -21,6 +21,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class FlagTable {
 
     private Header mHeader;

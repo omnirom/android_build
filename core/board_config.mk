@@ -67,6 +67,7 @@ _board_strip_readonly_list += TARGET_ARCH_SUITE
 _board_strip_readonly_list += BOARD_FLASH_BLOCK_SIZE
 _board_strip_readonly_list += BOARD_BOOTIMAGE_PARTITION_SIZE
 _board_strip_readonly_list += BOARD_INIT_BOOT_IMAGE_PARTITION_SIZE
+_board_strip_readonly_list += BOARD_INIT_BOOT_IMAGE_PAGESIZE
 _board_strip_readonly_list += BOARD_RECOVERYIMAGE_PARTITION_SIZE
 _board_strip_readonly_list += BOARD_SYSTEMIMAGE_PARTITION_SIZE
 _board_strip_readonly_list += BOARD_SYSTEMIMAGE_FILE_SYSTEM_TYPE
@@ -186,7 +187,6 @@ _build_broken_var_list := \
   BUILD_BROKEN_VENDOR_PROPERTY_NAMESPACE \
   BUILD_BROKEN_VINTF_PRODUCT_COPY_FILES \
   BUILD_BROKEN_INCORRECT_PARTITION_IMAGES \
-  BUILD_BROKEN_GENRULE_SANDBOXING \
   BUILD_BROKEN_DONT_CHECK_SYSTEMSDK \
 
 _build_broken_var_list += \
@@ -221,14 +221,14 @@ ifdef TARGET_DEVICE_DIR
   board_config_mk := $(TARGET_DEVICE_DIR)/BoardConfig.mk
 else
   board_config_mk := \
-    $(strip $(sort $(wildcard \
+    $(sort $(wildcard \
       $(SRC_TARGET_DIR)/board/$(TARGET_DEVICE)/BoardConfig.mk \
       device/generic/goldfish/board/$(TARGET_DEVICE)/BoardConfig.mk \
       device/google/cuttlefish/board/$(TARGET_DEVICE)/BoardConfig.mk \
       vendor/google/products/cuttlefish/pixel_watch/board/$(TARGET_DEVICE)/BoardConfig.mk \
       $(shell test -d device && find -L device -maxdepth 4 -path '*/$(TARGET_DEVICE)/BoardConfig.mk') \
       $(shell test -d vendor && find -L vendor -maxdepth 4 -path '*/$(TARGET_DEVICE)/BoardConfig.mk') \
-    )))
+    ))
   ifeq ($(board_config_mk),)
     $(error No config file found for TARGET_DEVICE $(TARGET_DEVICE))
   endif
@@ -294,7 +294,6 @@ include $(BUILD_SYSTEM)/board_config_wifi.mk
 
 # Set up soong config for "soong_config_value_variable".
 -include hardware/interfaces/configstore/1.1/default/surfaceflinger.mk
--include vendor/google/build/soong/soong_config_namespace/camera.mk
 
 # Default *_CPU_VARIANT_RUNTIME to CPU_VARIANT if unspecified.
 TARGET_CPU_VARIANT_RUNTIME := $(or $(TARGET_CPU_VARIANT_RUNTIME),$(TARGET_CPU_VARIANT))
@@ -649,24 +648,37 @@ ifeq ($(PRODUCT_BUILD_VBMETA_IMAGE),false)
 endif
 .KATI_READONLY := BUILDING_VBMETA_IMAGE
 
-# Are we building a super_empty image
+# Are we building a super_empty image, it should also respect PRODUCT_BUILD_SUPER_PARTITION
 BUILDING_SUPER_EMPTY_IMAGE :=
-ifeq ($(PRODUCT_BUILD_SUPER_EMPTY_IMAGE),)
-  ifeq (true,$(PRODUCT_USE_DYNAMIC_PARTITIONS))
-    ifneq ($(BOARD_SUPER_PARTITION_SIZE),)
-      BUILDING_SUPER_EMPTY_IMAGE := true
+ifeq (true,$(PRODUCT_BUILD_SUPER_PARTITION))
+  ifeq ($(PRODUCT_BUILD_SUPER_EMPTY_IMAGE),)
+    ifeq (true,$(PRODUCT_USE_DYNAMIC_PARTITIONS))
+      ifneq ($(BOARD_SUPER_PARTITION_SIZE),)
+        BUILDING_SUPER_EMPTY_IMAGE := true
+      endif
     endif
+  else ifeq ($(PRODUCT_BUILD_SUPER_EMPTY_IMAGE),true)
+    ifneq (true,$(PRODUCT_USE_DYNAMIC_PARTITIONS))
+      $(error PRODUCT_BUILD_SUPER_EMPTY_IMAGE set to true, but PRODUCT_USE_DYNAMIC_PARTITIONS is not true)
+    endif
+    ifeq ($(BOARD_SUPER_PARTITION_SIZE),)
+      $(error PRODUCT_BUILD_SUPER_EMPTY_IMAGE set to true, but BOARD_SUPER_PARTITION_SIZE is not defined)
+    endif
+    BUILDING_SUPER_EMPTY_IMAGE := true
   endif
 else ifeq ($(PRODUCT_BUILD_SUPER_EMPTY_IMAGE),true)
-  ifneq (true,$(PRODUCT_USE_DYNAMIC_PARTITIONS))
-    $(error PRODUCT_BUILD_SUPER_EMPTY_IMAGE set to true, but PRODUCT_USE_DYNAMIC_PARTITIONS is not true)
-  endif
-  ifeq ($(BOARD_SUPER_PARTITION_SIZE),)
-    $(error PRODUCT_BUILD_SUPER_EMPTY_IMAGE set to true, but BOARD_SUPER_PARTITION_SIZE is not defined)
-  endif
-  BUILDING_SUPER_EMPTY_IMAGE := true
+  $(error PRODUCT_BUILD_SUPER_PARTITION not set to true, but BUILDING_SUPER_EMPTY_IMAGE is true)
 endif
 .KATI_READONLY := BUILDING_SUPER_EMPTY_IMAGE
+
+# Allow the release config to override the board super partition error limit, setting
+# it to the full size of the superpartition.  This build flag is only enabled on eng builds.
+# See b/428178183.
+ifneq (,$(RELEASE_SUPER_PARTITION_ERROR_LIMIT_IS_SIZE))
+  ifneq (,$(BOARD_SUPER_PARTITION_ERROR_LIMIT))
+    BOARD_SUPER_PARTITION_ERROR_LIMIT:=$(BOARD_SUPER_PARTITION_SIZE)
+  endif
+endif
 
 ###########################################
 # Now we can substitute with the real value of TARGET_COPY_OUT_VENDOR
@@ -932,6 +944,12 @@ ifeq ($(PRODUCT_BUILD_DESKTOP_RECOVERY_IMAGE),true)
   BOARD_USES_DESKTOP_RECOVERY_IMAGE := true
 endif
 .KATI_READONLY := BOARD_USES_DESKTOP_RECOVERY_IMAGE
+
+BOARD_USES_DESKTOP_RECOVERY_SWAP_KERNEL :=
+ifeq ($(PRODUCT_USES_DESKTOP_RECOVERY_SWAP_KERNEL),true)
+  BOARD_USES_DESKTOP_RECOVERY_SWAP_KERNEL := true
+endif
+.KATI_READONLY := BOARD_USES_DESKTOP_RECOVERY_SWAP_KERNEL
 
 BOARD_USES_DESKTOP_UPDATE_IMAGE :=
 ifeq ($(PRODUCT_BUILD_DESKTOP_UPDATE_IMAGE),true)

@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = ["cargo"]
 cargo = []
+support_minor_sdk = []
 
 [dependencies]
 anyhow = "1.0.69"

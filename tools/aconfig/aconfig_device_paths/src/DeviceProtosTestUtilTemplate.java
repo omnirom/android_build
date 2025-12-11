@@ -25,11 +25,43 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-/** @hide */
+/**
+ * Utility class to load protobuf storage files.
+ *
+ * This class _does_ support Ravenwood.
+ *
+ * In order to avoid adding extra dependencies, this class doesn't use Ravenwood annotations
+ * or RavenwoodHelper.java. Instead, we just hardcode relevant logic.
+ *
+ * @hide
+ */
 public class DeviceProtosTestUtil {
-    public static final String[] PATHS = {
+    private static final String[] PATHS_DEVICE = {
         TEMPLATE
     };
+
+    /** Path to ravenwood runtime, or null on non-ravenwood environment. */
+    private static final String RAVENWOOD_RUNTIME_PATH
+            = System.getProperty("android.ravenwood.runtime_path");
+
+    /** True if on ravenwood */
+    private static final boolean ON_RAVENWOOD = RAVENWOOD_RUNTIME_PATH != null;
+
+    private static String[] getPaths() {
+        if (!ON_RAVENWOOD) {
+            return PATHS_DEVICE;
+        }
+        return new String[] {
+            RAVENWOOD_RUNTIME_PATH + "/aconfig/metadata/aconfig/etc/all_aconfig_declarations.pb"
+        };
+    }
+
+    /**
+     * Protobuf storage files. On the device side, this array contains multiple files, one
+     * from each partition. On Ravenwood, this contains a single protobuf file containing all the
+     * flags.
+     */
+    public static final String[] PATHS = getPaths();
 
     private static final String APEX_DIR = "/apex/";
     private static final String APEX_ACONFIG_PATH_SUFFIX = "/etc/aconfig_flags.pb";
@@ -66,6 +98,10 @@ public class DeviceProtosTestUtil {
      */
     public static List<String> parsedFlagsProtoPaths() {
         ArrayList<String> paths = new ArrayList(Arrays.asList(PATHS));
+
+        if (ON_RAVENWOOD) {
+            return paths; // No apexes on Ravenwood.
+        }
 
         File apexDirectory = new File(SYSTEM_APEX_DIR);
         if (!apexDirectory.isDirectory()) {

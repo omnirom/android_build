@@ -33,7 +33,7 @@ function finalize_step_0_main() {
     commit_step_0_changes
 
     # build to confirm everything is OK
-    AIDL_FROZEN_REL=true $m
+    $m
 }
 
 finalize_step_0_main $@

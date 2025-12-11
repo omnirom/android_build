@@ -30,8 +30,8 @@ $(call add_soong_config_var,ANDROID,BOARD_USES_ODMIMAGE)
 $(call soong_config_set_bool,ANDROID,BOARD_USES_RECOVERY_AS_BOOT,$(BOARD_USES_RECOVERY_AS_BOOT))
 $(call soong_config_set_bool,ANDROID,BOARD_MOVE_GSI_AVB_KEYS_TO_VENDOR_BOOT,$(BOARD_MOVE_GSI_AVB_KEYS_TO_VENDOR_BOOT))
 $(call add_soong_config_var,ANDROID,CHECK_DEV_TYPE_VIOLATIONS)
-$(call soong_config_set_bool,ANDROID,HAS_BOARD_SYSTEM_EXT_PREBUILT_DIR,$(if $(BOARD_SYSTEM_EXT_PREBUILT_DIR),true,false))
-$(call soong_config_set_bool,ANDROID,HAS_BOARD_PRODUCT_PREBUILT_DIR,$(if $(BOARD_PRODUCT_PREBUILT_DIR),true,false))
+$(call soong_config_set_bool,ANDROID,HAS_BOARD_SYSTEM_EXT_SEPOLICY_PREBUILT_DIRS,$(if $(BOARD_SYSTEM_EXT_SEPOLICY_PREBUILT_DIRS),true,false))
+$(call soong_config_set_bool,ANDROID,HAS_BOARD_PRODUCT_SEPOLICY_PREBUILT_DIRS,$(if $(BOARD_PRODUCT_SEPOLICY_PREBUILT_DIRS),true,false))
 $(call add_soong_config_var,ANDROID,PLATFORM_SEPOLICY_VERSION)
 $(call add_soong_config_var,ANDROID,PLATFORM_SEPOLICY_COMPAT_VERSIONS)
 $(call add_soong_config_var,ANDROID,PRODUCT_INSTALL_DEBUG_POLICY_TO_SYSTEM_EXT)
@@ -65,6 +65,7 @@ endif
 $(call soong_config_set_bool,ANDROID,ASAN_ENABLED,$(if $(filter address,$(SANITIZE_TARGET)),true,false))
 $(call soong_config_set_bool,ANDROID,HWASAN_ENABLED,$(if $(filter hwaddress,$(SANITIZE_TARGET)),true,false))
 $(call soong_config_set_bool,ANDROID,SANITIZE_TARGET_SYSTEM_ENABLED,$(if $(filter true,$(SANITIZE_TARGET_SYSTEM)),true,false))
+$(call soong_config_set_bool,ANDROID,HAS_SANITIZE_HOST,$(if $(SANITIZE_HOST),true,false))
 
 # For init.environ.rc
 $(call soong_config_set_bool,ANDROID,GCOV_COVERAGE,$(NATIVE_COVERAGE))
@@ -83,6 +84,15 @@ $(call soong_config_set,art_module,art_debug_opt_flag,$(ART_DEBUG_OPT_FLAG))
 endif
 # The default value of ART_BUILD_HOST_DEBUG is true
 $(call soong_config_set_bool,art_module,art_build_host_debug,$(if $(filter false,$(ART_BUILD_HOST_DEBUG)),false,true))
+
+# For ART_BUILD_TARGET in art/build/Android.common_build.mk
+# Sets 'art_module_build_target' to true unless both NDEBUG and DEBUG variables are explicitly 'false'.
+$(call soong_config_set_bool,art_module,art_build_target, \
+  $(if $(filter-out false_marker,$(ART_BUILD_TARGET_NDEBUG)_marker $(ART_BUILD_TARGET_DEBUG)_marker),true,false))
+# For ART_BUILD_HOST in art/build/Android.common_build.mk
+# Sets 'art_module_build_host' to true unless both NDEBUG and DEBUG variables are explicitly 'false'.
+$(call soong_config_set_bool,art_module,art_build_host, \
+  $(if $(filter-out false_marker,$(ART_BUILD_HOST_NDEBUG)_marker $(ART_BUILD_HOST_DEBUG)_marker),true,false))
 
 # For chre
 $(call soong_config_set_bool,chre,chre_daemon_lpma_enabled,$(if $(filter true,$(CHRE_DAEMON_LPMA_ENABLED)),true,false))
@@ -260,8 +270,16 @@ endif
 $(call soong_config_set,ANDROID,release_package_profiling_module,$(RELEASE_PACKAGE_PROFILING_MODULE))
 $(call soong_config_set,bootclasspath,release_package_profiling_module,$(RELEASE_PACKAGE_PROFILING_MODULE))
 
+# Enable anomaly detector inside the Profiling module. Also used by platform_bootclasspath.
+$(call soong_config_set,ANDROID,release_anomaly_detector,$(RELEASE_ANOMALY_DETECTOR))
+$(call soong_config_set,bootclasspath,release_anomaly_detector,$(RELEASE_ANOMALY_DETECTOR))
+
 # Move VCN from platform to the Tethering module; used by both platform and module
 $(call soong_config_set,ANDROID,is_vcn_in_mainline,$(RELEASE_MOVE_VCN_TO_MAINLINE))
+
+# Add telephony build flag to soong
+$(call soong_config_set,ANDROID,release_telephony_module,$(RELEASE_TELEPHONY_MODULE))
+$(call soong_config_set,bootclasspath,release_telephony_module,$(RELEASE_TELEPHONY_MODULE))
 
 # Add perf-setup build flag to soong
 # Note: BOARD_PERFSETUP_SCRIPT location must be under platform_testing/scripts/perf-setup/.
@@ -375,4 +393,100 @@ ifneq ($(wildcard vendor/google/tools/build_mixed_kernels_ramdisk),)
 endif
 ifneq ($(wildcard bootable/deprecated-ota/applypatch),)
   $(call soong_config_set_bool,otatools,use_bootable_deprecated_ota_applypatch,true)
+endif
+
+# Flags used in building continuous_native_tests
+ifeq ($(BOARD_IS_AUTOMOTIVE), true)
+  $(call soong_config_set_bool,ANDROID,board_is_automotive,true)
+endif
+ifneq ($(filter vendor/google/darwinn,$(PRODUCT_SOONG_NAMESPACES)),)
+  $(call soong_config_set_bool,ci_tests,uses_darwinn_tests,true)
+endif
+
+# Flags used in building continuous_instrumentation_tests
+ifneq ($(filter StorageManager, $(PRODUCT_PACKAGES)),)
+  $(call soong_config_set_bool,ci_tests,uses_storage_manager_tests,true)
+endif
+
+ifneq ($(BUILD_OS),darwin)
+  ifneq ($(TARGET_SKIP_OTATOOLS_PACKAGE),true)
+    $(call soong_config_set_bool,otatools,use_otatools_package,true)
+  endif
+endif
+
+# Variables for qcom bluetooth modules.
+$(call soong_config_set,qcom_bluetooth,TARGET_BLUETOOTH_UART_DEVICE,$(TARGET_BLUETOOTH_UART_DEVICE))
+$(call soong_config_set_bool,qcom_bluetooth,BOARD_HAVE_QCOM_FM,$(if $(filter true,$(BOARD_HAVE_QCOM_FM)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,BOARD_HAVE_QTI_BT_LAZY_SERVICE,$(if $(filter true,$(BOARD_HAVE_QTI_BT_LAZY_SERVICE)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,QCOM_BLUETOOTH_USING_DIAG,$(if $(filter true,$(QCOM_BLUETOOTH_USING_DIAG)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_BLUETOOTH_HCI_V1_1,$(if $(filter true,$(TARGET_BLUETOOTH_HCI_V1_1)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_BLUETOOTH_SUPPORT_QMI_ADDRESS,$(if $(filter true,$(TARGET_BLUETOOTH_SUPPORT_QMI_ADDRESS)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_DROP_BYTES_BEFORE_SSR_DUMP,$(if $(filter true,$(TARGET_DROP_BYTES_BEFORE_SSR_DUMP)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_CHANNEL_AVOIDANCE,$(if $(filter true,$(TARGET_USE_QTI_BT_CHANNEL_AVOIDANCE)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_EXT,$(if $(filter true,$(TARGET_USE_QTI_BT_EXT)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_CONFIGSTORE,$(if $(filter true,$(TARGET_USE_QTI_BT_CONFIGSTORE)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_IBS,$(if $(filter true,$(TARGET_USE_QTI_BT_IBS)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_OBS,$(if $(filter true,$(TARGET_USE_QTI_BT_OBS)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_SAR,$(if $(filter true,$(TARGET_USE_QTI_BT_SAR)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_BT_SAR_V1_1,$(if $(filter true,$(TARGET_USE_QTI_BT_SAR_V1_1)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,TARGET_USE_QTI_VND_FWK_DETECT,$(if $(filter true,$(TARGET_USE_QTI_VND_FWK_DETECT)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,UART_BAUDRATE_3_0_MBPS,$(if $(filter true,$(UART_BAUDRATE_3_0_MBPS)),true,false))
+$(call soong_config_set_bool,qcom_bluetooth,UART_USE_TERMIOS_AFC,$(if $(filter true,$(UART_USE_TERMIOS_AFC)),true,false))
+
+# Flags for Fingerprint HAL
+$(call soong_config_set,fp_hal_feature,FPC_CONFIG_KEYMASTER_APP_PATH,$(FPC_CONFIG_KEYMASTER_APP_PATH))
+$(call soong_config_set,fp_hal_feature,FPC_CONFIG_KEYMASTER_NAME,$(FPC_CONFIG_KEYMASTER_NAME))
+$(call soong_config_set,fp_hal_feature,FPC_CONFIG_SENSE_TOUCH_CALIBRATION_PATH,$(FPC_CONFIG_SENSE_TOUCH_CALIBRATION_PATH))
+$(call soong_config_set,fp_hal_feature,FPC_MODULE_TYPE,$(FPC_MODULE_TYPE))
+$(call soong_config_set,fp_hal_feature,FPC_PLATFORM_TARGET,$(FPC_PLATFORM_TARGET))
+$(call soong_config_set,fp_hal_feature,FPC_TEE_RUNTIME,$(FPC_TEE_RUNTIME))
+ifneq ($(FPC_CONFIG_RETRY_MATCH_TIMEOUT),)
+  $(call soong_config_set,fp_hal_feature,FPC_CONFIG_RETRY_MATCH_TIMEOUT,$(FPC_CONFIG_RETRY_MATCH_TIMEOUT))
+endif
+ifneq ($(GOOGLE_CONFIG_DP_COUNT),)
+  $(call soong_config_set,fp_hal_feature,GOOGLE_CONFIG_DP_COUNT,$(GOOGLE_CONFIG_DP_COUNT))
+endif
+ifneq ($(GOOGLE_CONFIG_POWER_NODE),)
+  $(call soong_config_set,fp_hal_feature,GOOGLE_CONFIG_POWER_NODE,$(GOOGLE_CONFIG_POWER_NODE))
+endif
+
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_DEBUG,$(if $(filter 1,$(FPC_CONFIG_DEBUG)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_ENGINEERING,$(if $(FPC_CONFIG_ENGINEERING),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_ENROL_TIMEOUT,$(if $(filter 1,$(FPC_CONFIG_ENROL_TIMEOUT)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_FIDO_AUTH,$(if $(FPC_CONFIG_FIDO_AUTH),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_FIDO_AUTH_VER_GMRZ,$(if $(filter 1,$(FPC_CONFIG_FIDO_AUTH_VER_GMRZ)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_HW_AUTH,$(if $(filter 1,$(FPC_CONFIG_HW_AUTH)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_GOOGLE_CUSTOMIZE,$(if $(filter 1,$(FPC_CONFIG_GOOGLE_CUSTOMIZE)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_GOOGLE_RELEASE,$(if $(filter 1,$(FPC_CONFIG_GOOGLE_RELEASE)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_NAVIGATION,$(if $(FPC_CONFIG_NAVIGATION),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_NO_ALGO,$(if $(FPC_CONFIG_NO_ALGO),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_NO_SENSOR,$(if $(FPC_CONFIG_NO_SENSOR),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_NORMAL_SENSOR_RESET,$(if $(FPC_CONFIG_NORMAL_SENSOR_RESET),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_NORMAL_SPI_RESET,$(if $(FPC_CONFIG_NORMAL_SPI_RESET),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_SENSORTEST,$(if $(FPC_CONFIG_SENSORTEST),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_SWIPE_ENROL,$(if $(filter 1,$(FPC_CONFIG_SWIPE_ENROL)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_TA_FS,$(if $(FPC_CONFIG_TA_FS),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_TRUSTY_CLEAN_TA,$(if $(filter 1,$(FPC_CONFIG_TRUSTY_CLEAN_TA)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_TRUSTY_EMULATOR,$(if $(filter 1,$(FPC_CONFIG_TRUSTY_EMULATOR)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,FPC_CONFIG_TRUSTY_SC,$(if $(filter 1,$(FPC_CONFIG_TRUSTY_SC)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,GOOGLE_CONFIG_PERFORMANCE,$(if $(filter 1,$(GOOGLE_CONFIG_PERFORMANCE)),true,false))
+$(call soong_config_set_bool,fp_hal_feature,GOOGLE_CONFIG_TOUCH_TO_UNLOCK_ANYTIME,$(if $(filter 1,$(GOOGLE_CONFIG_TOUCH_TO_UNLOCK_ANYTIME)),true,false))
+
+# Flag for building static_apexer_tools
+$(call soong_config_set_bool,ANDROID,BUILD_HOST_static,$(if $(filter true 1,$(BUILD_HOST_static)),true,false))
+
+# Flags for CLOCKWORK
+$(call soong_config_set_bool,CLOCKWORK,CLOCKWORK_EMULATOR_PRODUCT,$(if $(filter true,$(CLOCKWORK_EMULATOR_PRODUCT)),true,false))
+$(call soong_config_set_bool,CLOCKWORK,CLOCKWORK_ENABLE_HEALTH_SERVICES_HAL,$(if $(filter true,$(CLOCKWORK_ENABLE_HEALTH_SERVICES_HAL)),true,false))
+$(call soong_config_set_bool,CLOCKWORK,CLOCKWORK_G3_BUILD,$(if $(filter true,$(CLOCKWORK_G3_BUILD)),true,false))
+
+# Flag for using SetupWizardCar certificate
+$(call soong_config_set_bool,AUTO,USE_AUTOMTIVE_SETUPWIZARD_TEST_CERTIFICATE,$(if $(filter true,$(USE_AUTOMTIVE_SETUPWIZARD_TEST_CERTIFICATE)),true,false))
+
+# This flag is used to control to use tools/tradefederation/core or
+# tools/tradefederation/prebuilts for tradefederation.
+ifeq (,$(wildcard tools/tradefederation/core))
+$(call soong_config_set_bool,tradefed,use_prebuilt,true)
+else
+$(call soong_config_set_bool,tradefed,use_prebuilt,false)
 endif

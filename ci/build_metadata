@@ -37,8 +37,21 @@ TARGETS=(
 # Build modules
 build/soong/bin/m dist ${TARGETS[@]} || exit $?
 
+# Generate all of the release configs for all of the named products.
+(
+  PATH=$(gettop)/build/soong/bin:${PATH}
+  args=(--dist --intermediate-dir=${OUT_DIR}/soong/.intermediates/build/soong/scripts/product-configs --json --textproto)
+  if [[ -r vendor/google/build/broken_products_allowlist.txt ]]; then
+      args+=(--skip-file vendor/google/build/broken_products_allowlist.txt)
+  fi
+  if [[ -r vendor/google/build/broken_projects_rw_dirs.txt ]]; then
+      args+=(--rw-dirs-file vendor/google/build/broken_projects_rw_dirs.txt)
+  fi
+  ./build/soong/scripts/product-configs ${args[@]}
+) || exit $?
+
 # List all source files in the tree
-( \
+(
     $HOST_OUT_EXECUTABLES/source_tree_size -o $DIST_DIR/all_source_tree_files.pb \
         && gzip -fn $DIST_DIR/all_source_tree_files.pb \
 ) || exit $?

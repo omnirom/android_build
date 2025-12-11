@@ -19,9 +19,9 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -32,25 +32,14 @@ import java.util.regex.Pattern;
 public class JavaSourceAnalyzer {
 
     // Regex that matches against "package abc.xyz.lmn;" declarations in a java file.
-    private static final String PACKAGE_REGEX = "^package\\s+([a-zA-Z_][a-zA-Z0-9_.]*);";
+    private static final String PACKAGE_REGEX = "^\\s*package\\s+([a-zA-Z_][a-zA-Z0-9_.]*);";
 
-    public static List<JavaSourceData> analyze(Path srcRspFile) {
+    public static List<JavaSourceData> parse(Path srcRspFile) {
+        Set<String> files = Utils.parseRspFile(srcRspFile);
         List<JavaSourceData> javaSourceDataList = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(srcRspFile.toFile()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // Split the line by spaces, tabs, multiple java files can be on a single line.
-                String[] files = line.trim().split("\\s+");
-                for (String file : files) {
-                    Path p = Paths.get("", file);
-                    System.out.println(p.toAbsolutePath().toString());
-                    javaSourceDataList
-                            .add(new JavaSourceData(file, constructPackagePrependedFileName(file)));
-                }
-            }
-        } catch (IOException e) {
-            System.err.println("Error reading rsp file at: " + srcRspFile);
-            throw new RuntimeException(e);
+        for (String file : files) {
+            javaSourceDataList.add(
+                    new JavaSourceData(file, constructPackagePrependedFileName(file)));
         }
         return javaSourceDataList;
     }
@@ -58,7 +47,7 @@ public class JavaSourceAnalyzer {
     private static String constructPackagePrependedFileName(String filePath) {
         String packageAppendedFileName = null;
         // if the file path is abc/def/ghi/JavaFile.java we extract JavaFile.java
-        String javaFileName = filePath.substring(filePath.lastIndexOf("/") + 1);
+        String packagePrependedFileName = filePath.substring(filePath.lastIndexOf("/") + 1);
         try (BufferedReader reader = new BufferedReader(new FileReader(filePath))) {
             String line;
             // Process each line and match against the package regex pattern.
@@ -66,7 +55,7 @@ public class JavaSourceAnalyzer {
                 Pattern pattern = Pattern.compile(PACKAGE_REGEX);
                 Matcher matcher = pattern.matcher(line);
                 if (matcher.find()) {
-                    packageAppendedFileName = matcher.group(1) + "." + javaFileName;
+                    packagePrependedFileName = matcher.group(1) + "." + packagePrependedFileName;
                     break;
                 }
             }
@@ -74,8 +63,6 @@ public class JavaSourceAnalyzer {
             System.err.println("Error reading java file at: " + filePath);
             throw new RuntimeException(e);
         }
-        // Should not be null
-        assert packageAppendedFileName != null;
-        return packageAppendedFileName;
+        return packagePrependedFileName;
     }
 }

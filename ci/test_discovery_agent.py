@@ -72,7 +72,8 @@ class TestDiscoveryAgent:
       env.update({"DISCOVERY_OUTPUT_FILE": test_discovery_output_file.name})
       logging.info(f"Calling test discovery with args: {java_args}")
       try:
-        result = subprocess.run(args=java_args, env=env, text=True, check=True)
+        result = subprocess.run(args=java_args, env=env, text=True, check=True, stdout=subprocess.PIPE,
+    stderr=subprocess.PIPE)
         logging.info(f"Test zip discovery output: {result.stdout}")
       except subprocess.CalledProcessError as e:
         raise TestDiscoveryError(

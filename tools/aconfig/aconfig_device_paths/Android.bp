@@ -21,7 +21,11 @@ rust_defaults {
     edition: "2021",
     clippy_lints: "android",
     lints: "android",
-    srcs: ["src/lib.rs"],
+    crate_root: "src/lib.rs",
+    srcs: [
+        "partition_aconfig_flags_paths.txt",
+        "mainline_aconfig_flags_paths.txt",
+    ],
     rustlibs: [
         "libaconfig_protos",
         "libanyhow",
@@ -72,7 +76,7 @@ genrule {
         "mainline_aconfig_flags_paths.txt",
     ],
     cmd: "sed -e '/TEMPLATE/{r$(location partition_aconfig_flags_paths.txt)' -e 'd}' $(in) > $(out).tmp && " +
-    "sed -e '/MAINLINE_T/{r$(location mainline_aconfig_flags_paths.txt)' -e 'd}' $(out).tmp > $(out)",
+        "sed -e '/MAINLINE_T/{r$(location mainline_aconfig_flags_paths.txt)' -e 'd}' $(out).tmp > $(out)",
 }
 
 java_library_host {

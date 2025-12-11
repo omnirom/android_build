@@ -16,6 +16,7 @@
 #
 """Compatibility checks that should be performed on merged target_files."""
 
+import glob
 import json
 import logging
 import os
@@ -28,6 +29,23 @@ import find_shareduid_violation
 
 logger = logging.getLogger(__name__)
 OPTIONS = common.OPTIONS
+
+
+def _GetPreinstalledApps(target_files_dir, partition_map, partitions):
+  ret = []
+
+  for partition in partitions:
+    if partition not in partition_map:
+      continue
+    partition_dir = os.path.join(target_files_dir, partition_map[partition])
+    app_dir = os.path.join(partition_dir, 'app')
+    priv_app_dir = os.path.join(partition_dir, 'priv-app')
+
+    for dir in (app_dir, priv_app_dir):
+      glob_pattern = os.path.join(dir, '*', '*.apk')
+      ret.extend(glob.glob(glob_pattern))
+
+  return ret
 
 
 def CheckCompatibility(target_files_dir, partition_map):
@@ -113,22 +131,39 @@ def CheckInitRcFiles(target_files_dir, partition_map):
   return []
 
 
-def CheckCombinedSepolicy(target_files_dir, partition_map, execute=True):
+def make_file_getter(target_files_dir, partition_map):
+  """Creates and returns a function to retrieve file paths.
+
+  This factory function generates a closure, `get_file`, which is configured
+  with a target files dir and a map of partition names to their subdirectories.
+  The returned function can be used to retrieved a file given its partition
+  and relative path within that partition's subdirectory.
+  """
+  def get_file(partition, path):
+    if partition not in partition_map:
+      logger.warning('Cannot load SEPolicy files for missing partition %s',
+                      partition)
+      return None
+    file_path = os.path.join(target_files_dir, partition_map[partition], path)
+    if os.path.exists(file_path):
+      return file_path
+    return None
+
+  return get_file
+
+
+def CheckCombinedSepolicy(target_files_dir, partition_map, execute=True, get_file=None):
   """Uses secilc to compile a split sepolicy file.
 
   Depends on various */etc/selinux/* and */etc/vintf/* files within partitions.
   """
   errors = []
 
-  def get_file(partition, path):
-    if partition not in partition_map:
-      logger.warning('Cannot load SEPolicy files for missing partition %s',
-                     partition)
-      return None
-    file_path = os.path.join(target_files_dir, partition_map[partition], path)
-    if os.path.exists(file_path):
-      return file_path
-    return None
+  get_file = make_file_getter(target_files_dir, partition_map) if get_file is None else get_file
+
+  def get_files(partition_and_paths):
+    return map(lambda partition_and_path: get_file(*partition_and_path),
+               partition_and_paths)
 
   # Load the kernel sepolicy version from the FCM. This is normally provided
   # directly to selinux.cpp as a build flag, but is also available in this file.
@@ -151,11 +186,21 @@ def CheckCombinedSepolicy(target_files_dir, partition_map, execute=True):
   with open(vendor_plat_version_file) as f:
     vendor_plat_version = f.read().strip()
 
+  vendor_genfs_version = ""
+  vendor_genfs_version_file = get_file('vendor',
+                                       'etc/selinux/genfs_labels_version.txt')
+  if vendor_genfs_version_file:
+    with open(vendor_genfs_version_file) as f:
+      vendor_genfs_version = f.read().strip()
+  else:
+    logger.debug('Missing vendor/etc/selinux/genfs_labels_version.txt')
+
   # Use the same flags and arguments as selinux.cpp OpenSplitPolicy().
-  cmd = ['secilc', '-m', '-M', 'true', '-G', '-N']
-  cmd.extend(['-c', kernel_sepolicy_version])
-  cmd.extend(['-o', os.path.join(target_files_dir, 'META/combined_sepolicy')])
-  cmd.extend(['-f', '/dev/null'])
+  combined_sepolicy = os.path.join(target_files_dir, 'META/combined_sepolicy')
+  secilc_cmd = ['secilc', '-m', '-M', 'true', '-G', '-N']
+  secilc_cmd.extend(['-c', kernel_sepolicy_version])
+  secilc_cmd.extend(['-o', combined_sepolicy])
+  secilc_cmd.extend(['-f', '/dev/null'])
 
   required_policy_files = (
       ('system', 'etc/selinux/plat_sepolicy.cil'),
@@ -163,33 +208,105 @@ def CheckCombinedSepolicy(target_files_dir, partition_map, execute=True):
       ('vendor', 'etc/selinux/vendor_sepolicy.cil'),
       ('vendor', 'etc/selinux/plat_pub_versioned.cil'),
   )
-  for policy in (map(lambda partition_and_path: get_file(*partition_and_path),
-                     required_policy_files)):
+  for policy in get_files(required_policy_files):
     if not policy:
       errors.append('Missing required sepolicy file %s' % policy)
       return errors
-    cmd.append(policy)
+    secilc_cmd.append(policy)
 
-  optional_policy_files = (
+  optional_policy_files = [
       ('system', 'etc/selinux/mapping/%s.compat.cil' % vendor_plat_version),
       ('system_ext', 'etc/selinux/system_ext_sepolicy.cil'),
       ('system_ext', 'etc/selinux/mapping/%s.cil' % vendor_plat_version),
       ('product', 'etc/selinux/product_sepolicy.cil'),
       ('product', 'etc/selinux/mapping/%s.cil' % vendor_plat_version),
       ('odm', 'etc/selinux/odm_sepolicy.cil'),
-  )
-  for policy in (map(lambda partition_and_path: get_file(*partition_and_path),
-                     optional_policy_files)):
-    if policy:
-      cmd.append(policy)
+  ]
+  if vendor_genfs_version != "":
+    optional_policy_files.append(
+        ('system',
+         f'etc/selinux/plat_sepolicy_genfs_{vendor_genfs_version}.cil',
+        )
+    )
+  secilc_cmd.extend(f for f in get_files(optional_policy_files) if f)
+  cmds = [secilc_cmd]
 
-  try:
-    if execute:
-      common.RunAndCheckOutput(cmd)
+  if vendor_plat_version >= '202604':
+    temp_dir = common.MakeTempDir(prefix='treble_labeling_tests_')
+
+    platform_sepolicy = os.path.join(temp_dir, 'platform_sepolicy')
+    platform_secilc_cmd = ['secilc', '-m', '-M', 'true', '-G', '-N']
+    platform_secilc_cmd.extend(['-c', kernel_sepolicy_version])
+    platform_secilc_cmd.extend(['-o', platform_sepolicy])
+    platform_secilc_cmd.extend(['-f', '/dev/null'])
+    platform_policy_files = (
+      ('system', 'etc/selinux/plat_sepolicy.cil'),
+      ('system_ext', 'etc/selinux/system_ext_sepolicy.cil'),
+      ('product', 'etc/selinux/product_sepolicy.cil'),
+    )
+    platform_secilc_cmd.extend(f for f in get_files(platform_policy_files) if f)
+    cmds.append(platform_secilc_cmd)
+
+    platform_apks_file = os.path.join(temp_dir, 'platform_apps.txt')
+    with open(platform_apks_file, 'w', encoding='utf-8') as f:
+      f.write('\n'.join(_GetPreinstalledApps(target_files_dir, partition_map, ['system', 'system_ext', 'product'])))
+
+    vendor_apks_file = os.path.join(temp_dir, 'vendor_apps.txt')
+    with open(vendor_apks_file, 'w', encoding='utf-8') as f:
+      f.write('\n'.join(_GetPreinstalledApps(target_files_dir, partition_map, ['vendor', 'odm'])))
+
+    platform_seapp_contexts_files = [
+        ('system', 'etc/selinux/plat_seapp_contexts'),
+        ('system_ext', 'etc/selinux/system_ext_seapp_contexts'),
+        ('product', 'etc/selinux/product_seapp_contexts'),
+    ]
+    vendor_seapp_contexts_files = [
+        ('vendor', 'etc/selinux/vendor_seapp_contexts'),
+        ('odm', 'etc/selinux/odm_seapp_contexts'),
+    ]
+    vendor_file_contexts_files = [
+        ('vendor', 'etc/selinux/vendor_file_contexts'),
+        ('odm', 'etc/selinux/odm_file_contexts'),
+    ]
+    check_cmd = ['treble_labeling_tests']
+    check_cmd.extend(['--platform_apks', platform_apks_file])
+    check_cmd.extend(['--vendor_apks', vendor_apks_file])
+    check_cmd.extend(['--precompiled_sepolicy_without_vendor',
+                      platform_sepolicy])
+    check_cmd.extend(['--precompiled_sepolicy', combined_sepolicy])
+    check_cmd.append('--platform_seapp_contexts')
+    check_cmd.extend(f for f in get_files(platform_seapp_contexts_files) if f)
+    check_cmd.append('--vendor_seapp_contexts')
+    check_cmd.extend(f for f in get_files(vendor_seapp_contexts_files) if f)
+    check_cmd.append('--vendor_file_contexts')
+    check_cmd.extend(f for f in get_files(vendor_file_contexts_files) if f)
+    check_cmd.extend(['--aapt2_path', 'aapt2'])
+    check_cmd.append('--treat_as_warnings')
+    build_prop_path = get_file('system', 'build.prop')
+    if build_prop_path:
+      with open(build_prop_path, 'r', encoding='utf-8') as f:
+        for line in f:
+          line = line.strip()
+          if not line.startswith('ro.debuggable='):
+            continue
+          value = line[line.find('=')+1:]
+          if value == '1' or value == 'true':
+            check_cmd.append('--debuggable')
+            break
     else:
-      return cmd
-  except RuntimeError as err:
-    errors.append(str(err))
+      logger.warning(f"Can't find SYSTEM/build.prop, assuming non-debuggable")
+
+    cmds.append(check_cmd)
+
+  if not execute:
+    return cmds
+
+  for cmd in cmds:
+    try:
+      common.RunAndCheckOutput(cmd)
+    except RuntimeError as err:
+      errors.append(str(err))
+      break
 
   return errors
 

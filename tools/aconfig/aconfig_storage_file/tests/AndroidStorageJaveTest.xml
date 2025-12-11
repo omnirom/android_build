@@ -29,6 +29,10 @@
         <option name="push" value="flag_v2.map->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v2.flag.map" />
         <option name="push" value="flag_v2.val->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v2.val" />
         <option name="push" value="flag_v2.info->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v2.info" />
+        <option name="push" value="package_v3.map->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v3.package.map" />
+        <option name="push" value="flag_v3.map->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v3.flag.map" />
+        <option name="push" value="flag_v3.val->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v3.val" />
+        <option name="push" value="flag_v3.info->/data/local/tmp/aconfig_storage_file_test_java/testdata/mock.v3.info" />
         <option name="post-push" value="chmod +r /data/local/tmp/aconfig_storage_file_test_java/testdata/" />
     </target_preparer>
     <test class="com.android.tradefed.testtype.AndroidJUnitTest" >

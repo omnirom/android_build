@@ -1,5 +1,22 @@
 #pragma once
 
+{{ if not is_test_mode }}
+{{ if readwrite- }}
+// Avoid destruction for thread safety.
+// Only enable this with clang.
+#if defined(__clang__)
+#ifndef ACONFIG_NO_DESTROY
+#define ACONFIG_NO_DESTROY [[clang::no_destroy]]
+#endif
+#else
+#warning "not built with clang disable no_destroy"
+#ifndef ACONFIG_NO_DESTROY
+#define ACONFIG_NO_DESTROY
+#endif
+#endif
+{{ -endif }}
+{{ -endif }}
+
 {{ if not is_test_mode- }}
 {{ if has_fixed_read_only- }}
 #ifndef {package_macro}
@@ -38,7 +55,7 @@ public:
     {{ -endif }}
 };
 
-extern std::unique_ptr<flag_provider_interface> provider_;
+{{ if not is_test_mode }}{{ if readwrite }}ACONFIG_NO_DESTROY{{ endif }}{{ endif }} extern std::unique_ptr<flag_provider_interface> provider_;
 
 {{ for item in class_elements}}
 {{ if not is_test_mode }}{{ if item.is_fixed_read_only }}constexpr {{ endif }}{{ endif -}}

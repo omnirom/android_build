@@ -56,8 +56,8 @@ mod tests {
 
     #[test]
     fn test_mapped_file_contents() {
-        let mut rw_val_file = copy_to_temp_file("./tests/flag.val", false).unwrap();
-        let mut rw_info_file = copy_to_temp_file("./tests/flag.info", false).unwrap();
+        let mut rw_val_file = copy_to_temp_file("data/v1/flag_v1.val", false).unwrap();
+        let mut rw_info_file = copy_to_temp_file("data/v1/flag_v1.info", false).unwrap();
         let flag_val = rw_val_file.path().display().to_string();
         let flag_info = rw_info_file.path().display().to_string();
 
@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn test_mapped_read_only_file() {
-        let ro_val_file = copy_to_temp_file("./tests/flag.val", true).unwrap();
+        let ro_val_file = copy_to_temp_file("data/v1/flag_v1.val", true).unwrap();
         let flag_val = ro_val_file.path().display().to_string();
 
         // SAFETY:

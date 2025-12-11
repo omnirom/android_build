@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 
-use aconfig_protos::ParsedFlagExt;
-use anyhow::{anyhow, Context, Result};
+use aconfig_protos::{ParsedFlagExt, ProtoParsedFlags};
+use anyhow::{anyhow, Result};
+use protobuf::Message;
 use regex::Regex;
 use std::{
     collections::HashSet,
@@ -36,11 +37,14 @@ pub(crate) fn extract_flagged_api_flags<R: Read>(mut reader: R) -> Result<HashSe
 
 /// Read a list of flag names. The input is expected to be plain text, with each line containing
 /// the name of a single flag.
-pub(crate) fn read_finalized_flags<R: Read>(reader: R) -> Result<HashSet<FlagId>> {
-    BufReader::new(reader)
+pub(crate) fn read_flag_from_binary<R: Read>(reader: R) -> Result<HashSet<FlagId>> {
+    Ok(BufReader::new(reader)
         .lines()
-        .map(|line_result| line_result.context("Failed to read line from finalized flags file"))
-        .collect()
+        .map_while(Result::ok) // Ignore lines that fail to read
+        .map(|line| line.trim().to_string())
+        .filter(|line| !line.is_empty())
+        .filter(|line| !line.starts_with("/"))
+        .collect())
 }
 
 /// Parse a ProtoParsedFlags binary protobuf blob and return the fully qualified names of flags
@@ -60,28 +64,15 @@ pub(crate) fn get_exported_flags_from_binary_proto<R: Read>(
     Ok(HashSet::from_iter(iter))
 }
 
-fn get_allow_flag_list() -> Result<HashSet<FlagId>> {
-    let allow_list: HashSet<FlagId> =
-        include_str!("../allow_flag_list.txt").lines().map(|x| x.into()).collect();
-    Ok(allow_list)
-}
-
-fn get_allow_package_list() -> Result<HashSet<FlagId>> {
-    let allow_list: HashSet<FlagId> =
-        include_str!("../allow_package_list.txt").lines().map(|x| x.into()).collect();
-    Ok(allow_list)
-}
-
 /// Filter out the flags have is_exported as true but not used with @FlaggedApi annotations
 /// in the source tree, or in the previously finalized flags set.
 pub(crate) fn check_all_exported_flags(
     flags_used_with_flaggedapi_annotation: &HashSet<FlagId>,
     all_flags: &HashSet<FlagId>,
     already_finalized_flags: &HashSet<FlagId>,
+    allow_flag_set: &HashSet<FlagId>,
+    allow_package_set: &HashSet<FlagId>,
 ) -> Result<Vec<FlagId>> {
-    let allow_flag_list = get_allow_flag_list()?;
-    let allow_package_list = get_allow_package_list()?;
-
     let new_flags: Vec<FlagId> = all_flags
         .difference(flags_used_with_flaggedapi_annotation)
         .cloned()
@@ -89,11 +80,11 @@ pub(crate) fn check_all_exported_flags(
         .difference(already_finalized_flags)
         .cloned()
         .collect::<HashSet<_>>()
-        .difference(&allow_flag_list)
+        .difference(allow_flag_set)
         .filter(|flag| {
             if let Some(last_dot_index) = flag.rfind('.') {
                 let package_name = &flag[..last_dot_index];
-                !allow_package_list.contains(package_name)
+                !allow_package_set.contains(package_name)
             } else {
                 true
             }
@@ -104,14 +95,37 @@ pub(crate) fn check_all_exported_flags(
     Ok(new_flags)
 }
 
+pub(crate) fn filter_api_flags<R: Read>(
+    mut cache: R,
+    non_api_flag_set: &HashSet<FlagId>,
+) -> Result<Vec<u8>> {
+    let mut buffer = Vec::new();
+    cache.read_to_end(&mut buffer)?;
+    let parsed_flags = aconfig_protos::parsed_flags::try_from_binary_proto(&buffer)
+        .map_err(|_| anyhow!("failed to parse binary proto"))?;
+    let mut filtered_parsed_flags = ProtoParsedFlags::new();
+    parsed_flags
+        .parsed_flag
+        .into_iter()
+        .filter(|flag| {
+            flag.is_exported() && !non_api_flag_set.contains(&flag.fully_qualified_name())
+        })
+        .for_each(|flag| filtered_parsed_flags.parsed_flag.push(flag.clone()));
+    aconfig_protos::parsed_flags::sort_parsed_flags(&mut filtered_parsed_flags);
+    let mut output = Vec::new();
+    filtered_parsed_flags.write_to_vec(&mut output)?;
+    Ok(output)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aconfig_protos::parsed_flags;
 
     #[test]
     fn test_extract_flagged_api_flags() {
-        let api_signature_file = include_bytes!("../tests/api-signature-file.txt");
-        let flags = extract_flagged_api_flags(&api_signature_file[..]).unwrap();
+        let api_signature_files = include_bytes!("../tests/api-signature-file.txt");
+        let flags = extract_flagged_api_flags(&api_signature_files[..]).unwrap();
         assert_eq!(
             flags,
             HashSet::from_iter(vec![
@@ -124,7 +138,7 @@ mod tests {
     #[test]
     fn test_read_finalized_flags() {
         let input = include_bytes!("../tests/finalized-flags.txt");
-        let flags = read_finalized_flags(&input[..]).unwrap();
+        let flags = read_flag_from_binary(&input[..]).unwrap();
         assert_eq!(
             flags,
             HashSet::from_iter(vec![
@@ -135,14 +149,91 @@ mod tests {
     }
 
     #[test]
-    fn test_disabled_or_read_write_flags_are_ignored() {
-        let bytes = include_bytes!("../tests/flags.protobuf");
+    fn test_get_exported_flags_from_binary_proto() {
+        let input = std::str::from_utf8(include_bytes!("../tests/flags.textproto")).unwrap();
+        let parsed_flags = parsed_flags::try_from_text_proto(input).unwrap();
+        let mut bytes = Vec::new();
+        parsed_flags.write_to_vec(&mut bytes).unwrap();
         let flags = get_exported_flags_from_binary_proto(&bytes[..]).unwrap();
         assert_eq!(
             flags,
             HashSet::from_iter(vec![
                 "record_finalized_flags.test.foo".to_string(),
-                "record_finalized_flags.test.not_enabled".to_string()
+                "record_finalized_flags.test.not_enabled".to_string(),
+                "record_finalized_flags.test.bar".to_string(),
+                "record_finalized_flags.test.boo".to_string(),
+            ])
+        );
+    }
+
+    #[test]
+    fn test_filter_api_flags() {
+        let input = std::str::from_utf8(include_bytes!("../tests/flags.textproto")).unwrap();
+        let parsed_flags = parsed_flags::try_from_text_proto(input).unwrap();
+        let mut bytes = Vec::new();
+        parsed_flags.write_to_vec(&mut bytes).unwrap();
+        let allow_flag_file = r#"
+        record_finalized_flags.test.boo
+        record_finalized_flags.test.not_enabled
+        "#
+        .as_bytes();
+
+        let allow_flag_set = read_flag_from_binary(allow_flag_file).unwrap();
+        let flags = filter_api_flags(&bytes[..], &allow_flag_set).unwrap();
+        let parsed_flags = aconfig_protos::parsed_flags::try_from_binary_proto(&flags).unwrap();
+        assert_eq!(2, parsed_flags.parsed_flag.len());
+
+        let ret = parsed_flags
+            .parsed_flag
+            .into_iter()
+            .filter(|flag| flag.is_exported())
+            .map(|flag| flag.fully_qualified_name())
+            .collect::<HashSet<FlagId>>();
+        assert_eq!(
+            ret,
+            HashSet::from_iter(vec![
+                "record_finalized_flags.test.foo".to_string(),
+                "record_finalized_flags.test.bar".to_string(),
+            ])
+        );
+
+        let allow_flag_file = r#"
+        record_finalized_flags.test.foo
+        record_finalized_flags.test.boo
+        record_finalized_flags.test.not_enabled
+        "#
+        .as_bytes();
+        let allow_flag_set = read_flag_from_binary(allow_flag_file).unwrap();
+        let flags = filter_api_flags(&bytes[..], &allow_flag_set).unwrap();
+        let parsed_flags = aconfig_protos::parsed_flags::try_from_binary_proto(&flags).unwrap();
+        assert_eq!(1, parsed_flags.parsed_flag.len());
+
+        let ret = parsed_flags
+            .parsed_flag
+            .into_iter()
+            .filter(|flag| flag.is_exported())
+            .map(|flag| flag.fully_qualified_name())
+            .collect::<HashSet<FlagId>>();
+        assert_eq!(ret, HashSet::from_iter(vec!["record_finalized_flags.test.bar".to_string(),]));
+    }
+
+    #[test]
+    fn test_read_flag_from_binary() {
+        let test_binary_file = r#"
+        // This is a comment
+        //record_finalized_flags.test.not_enabled
+        record_finalized_flags.test.bar
+
+        record_finalized_flags.test.baz
+        "#
+        .as_bytes();
+        let ret = read_flag_from_binary(test_binary_file).unwrap();
+        assert_eq!(2, ret.len());
+        assert_eq!(
+            ret,
+            HashSet::from_iter(vec![
+                "record_finalized_flags.test.bar".to_string(),
+                "record_finalized_flags.test.baz".to_string(),
             ])
         );
     }

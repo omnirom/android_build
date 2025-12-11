@@ -581,7 +581,7 @@ team {
 }
 
 team {
-    name: "trendy_team_performance",
+    name: "trendy_team_system_ui_performance",
 
     // go/trendy/manage/engineers/5842000521625600
     trendy_team_id: "5842000521625600",
@@ -1792,7 +1792,7 @@ team {
 }
 
 team {
-    name: "trendy_team_android_profile_experiences",
+    name: "trendy_team_android_data_aegis",
 
     // go/trendy/manage/engineers/5914919462404096
     trendy_team_id: "5914919462404096",
@@ -3108,7 +3108,7 @@ team {
 }
 
 team {
-    name: "trendy_team_wear_wearflow",
+    name: "trendy_team_wear_remote_compose",
 
     // go/trendy/manage/engineers/5947250429558784
     trendy_team_id: "5947250429558784",
@@ -4368,6 +4368,20 @@ team {
 }
 
 team {
+    name: "trendy_team_desktop_biometrics",
+
+    // go/trendy/manage/engineers/6163282303221760
+    trendy_team_id: "6163282303221760",
+}
+
+team {
+    name: "trendy_team_desktop_connectivity",
+
+    // go/trendy/manage/engineers/4563545867255808
+    trendy_team_id: "4563545867255808",
+}
+
+team {
     name: "trendy_team_desktop_firmware",
 
     // go/trendy/manage/engineers/5787938454863872
@@ -4414,6 +4428,41 @@ team {
 
     // go/trendy/manage/engineers/6463689697099776
     trendy_team_id: "6463689697099776",
+}
+
+team {
+    name: "trendy_team_desktop_experiences",
+
+    // go/trendy/manage/engineers/5342568499216384
+    trendy_team_id: "5342568499216384",
+}
+
+team {
+    name: "trendy_team_desktop_video",
+
+    // go/trendy/manage/engineers/5667398129909760
+    trendy_team_id: "5667398129909760",
+}
+
+team {
+    name: "trendy_team_desktop_manufacturing_and_serviceability",
+
+    // go/trendy/manage/engineers/4630910416027648
+    trendy_team_id: "4630910416027648",
+}
+
+team {
+    name: "trendy_team_desktop_apps",
+
+    // go/trendy/manage/engineers/5126495820677120
+    trendy_team_id: "5126495820677120",
+}
+
+team {
+    name: "trendy_team_private_compute_core",
+
+    // go/trendy/manage/engineers/6240132656365568
+    trendy_team_id: "6240132656365568",
 }
 
 // DON'T ADD NEW RULES HERE. For more details refer to

@@ -1,0 +1,11 @@
+[package]
+name = "sdk-artifact-verifier"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.98"
+clap = { version = "4.5.38", features = ["derive"] }
+itertools = "0.14.0"
+serde = { version = "1.0.219" , features = ["derive"] }
+serde-xml-rs = "0.6.0"

@@ -25,8 +25,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::io::{self, BufRead};
+use std::str::FromStr;
 
+/// Mirrors the Java API in android.os.Build.
 const SDK_INT_MULTIPLIER: u32 = 100_000;
+
+/// SDK_INT_FULL was introduced in Baklava, so checking SDK_INT_FULL on a lower
+/// version would throw an exception. Therefore, we shouldn't allow the creation
+/// of a lower version.
+const MIN_SDK_INT_FULL: u32 = SDK_INT_MULTIPLIER * 36;
 
 /// Just the fully qualified flag name (package_name.flag_name).
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -37,12 +44,64 @@ pub struct FinalizedFlag {
     pub package_name: String,
 }
 
-/// API level in which the flag was finalized.
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct ApiLevel(pub i32);
+/// API level check for the flag.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct ApiLevel(pub u32);
 
-/// API level of the extended flags file of version 35
-pub const EXTENDED_FLAGS_35_APILEVEL: ApiLevel = ApiLevel(35);
+impl ApiLevel {
+    /// Creates an api level check against Build.VERSION.SDK_INT.
+    pub fn from_sdk_int(level: u32) -> Self {
+        if level > SDK_INT_MULTIPLIER {
+            panic!("SDK_INT value too large.");
+        }
+        ApiLevel(level)
+    }
+
+    /// Creates an api level check against Build.VERSION.SDK_INT_FULL.
+    /// Since SDK_INT_FULL was introduced in Baklava, only works for levels above
+    /// 3_600_000 (panics otherwise).
+    pub fn from_sdk_int_full(level: u32) -> Self {
+        if level < MIN_SDK_INT_FULL {
+            panic!("Cannot use SDK_INT_FULL below Baklava (36).");
+        }
+
+        ApiLevel(level)
+    }
+
+    /// Returns the string condition to check if the flag is finalized on device
+    /// in Java.
+    pub fn conditional(&self) -> String {
+        if self.0 < SDK_INT_MULTIPLIER {
+            format!("Build.VERSION.SDK_INT >= {}", self.0)
+        } else if self.0 < MIN_SDK_INT_FULL {
+            panic!("Invalid SDK level ({}) - greater than the multiplier but less than the supported level.", self.0);
+        } else {
+            format!("Build.VERSION.SDK_INT >= 36 && Build.VERSION.SDK_INT_FULL >= {}", self.0)
+        }
+    }
+}
+
+impl FromStr for ApiLevel {
+    type Err = anyhow::Error;
+
+    /// Converts a string to the appropriate ApiLevel.
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let float_value = s.parse::<f64>()?;
+
+        if float_value.fract() == 0.0 {
+            return Ok(ApiLevel::from_sdk_int(float_value as u32));
+        }
+
+        if cfg!(feature = "support_minor_sdk") {
+            match parse_full_version(s.to_string()) {
+                Ok(full_sdk_int) => Ok(ApiLevel::from_sdk_int_full(full_sdk_int)),
+                Err(e) => Err(e),
+            }
+        } else {
+            Err(anyhow!("Numeric string is float, can't parse to int."))
+        }
+    }
+}
 
 /// Contains all flags finalized for a given API level.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -63,7 +122,7 @@ impl FinalizedFlagMap {
     pub fn get_finalized_level(&self, flag: &FinalizedFlag) -> Option<ApiLevel> {
         for (api_level, flags_for_level) in &self.0 {
             if flags_for_level.contains(flag) {
-                return Some(*api_level);
+                return Some(api_level.clone());
             }
         }
         None
@@ -83,7 +142,6 @@ impl FinalizedFlagMap {
     }
 }
 
-#[allow(dead_code)] // TODO: b/378936061: Use with SDK_INT_FULL check.
 fn parse_full_version(version: String) -> Result<u32> {
     let (major, minor) = if let Some(decimal_index) = version.find('.') {
         (version[..decimal_index].parse::<u32>()?, version[decimal_index + 1..].parse::<u32>()?)
@@ -101,20 +159,6 @@ fn parse_full_version(version: String) -> Result<u32> {
     Ok(major * SDK_INT_MULTIPLIER + minor)
 }
 
-const EXTENDED_FLAGS_LIST_35: &str = "extended_flags_list_35.txt";
-
-/// Converts a string to an int. Will parse to int even if the string is "X.0".
-/// Returns error for "X.1".
-fn str_to_api_level(numeric_string: &str) -> Result<ApiLevel> {
-    let float_value = numeric_string.parse::<f64>()?;
-
-    if float_value.fract() == 0.0 {
-        Ok(ApiLevel(float_value as i32))
-    } else {
-        Err(anyhow!("Numeric string is float, can't parse to int."))
-    }
-}
-
 /// For each file, extracts the qualified flag names into a FinalizedFlag, then
 /// enters them in a map at the API level corresponding to their directory.
 /// Ex: /prebuilts/sdk/35/finalized-flags.txt -> {36, [flag1, flag2]}.
@@ -126,53 +170,32 @@ pub fn read_files_to_map_using_path(flag_files: Vec<String>) -> Result<Finalized
         let flag_file_split: Vec<String> =
             flag_file.clone().rsplitn(3, '/').map(|s| s.to_string()).collect();
 
-        if &flag_file_split[0] != "finalized-flags.txt" {
-            return Err(anyhow!("Provided incorrect file, must be finalized-flags.txt"));
+        if &flag_file_split[0] != "finalized-flags.txt"
+            && &flag_file_split[0] != "extended_flags_list.txt"
+        {
+            return Err(anyhow!(
+                "Provided incorrect file, must be finalized-flags.txt or extended_flags_list.txt"
+            ));
         }
 
         let api_level_string = &flag_file_split[1];
 
-        // For now, skip any directory with full API level, e.g. "36.1". The
-        // finalized flag files each contain all flags finalized *up to* that
-        // level (including prior levels), so skipping intermediate levels means
-        // the flags will be included at the next full number.
-        // TODO: b/378936061 - Support full SDK version.
         // In the future, we should error if provided a non-numeric directory.
-        let Ok(api_level) = str_to_api_level(api_level_string) else {
+        let Ok(api_level) = ApiLevel::from_str(api_level_string) else {
             continue;
         };
 
         let file = fs::File::open(&flag_file)?;
 
         io::BufReader::new(file).lines().for_each(|flag| {
-            let flag =
-                flag.unwrap_or_else(|_| panic!("Failed to read line from file {}", flag_file));
+            let flag = flag.unwrap_or_else(|_| panic!("Failed to read line from file {flag_file}"));
             let finalized_flag = build_finalized_flag(&flag)
-                .unwrap_or_else(|_| panic!("cannot build finalized flag {}", flag));
-            data_map.insert_if_new(api_level, finalized_flag);
+                .unwrap_or_else(|_| panic!("cannot build finalized flag {flag}"));
+            data_map.insert_if_new(api_level.clone(), finalized_flag);
         });
     }
 
     Ok(data_map)
-}
-
-/// Read the qualified flag names into a FinalizedFlag set
-pub fn read_extend_file_to_map_using_path(extened_file: String) -> Result<HashSet<FinalizedFlag>> {
-    let (_, file_name) =
-        extened_file.rsplit_once('/').ok_or(anyhow!("Invalid file: '{}'", extened_file))?;
-    if file_name != EXTENDED_FLAGS_LIST_35 {
-        return Err(anyhow!("Provided incorrect file, must be {}", EXTENDED_FLAGS_LIST_35));
-    }
-    let file = fs::File::open(extened_file)?;
-    let extended_flags = io::BufReader::new(file)
-        .lines()
-        .map(|flag| {
-            let flag = flag.expect("Failed to read line from extended file");
-            build_finalized_flag(&flag)
-                .unwrap_or_else(|_| panic!("cannot build finalized flag {}", flag))
-        })
-        .collect::<HashSet<FinalizedFlag>>();
-    Ok(extended_flags)
 }
 
 fn build_finalized_flag(qualified_flag_name: &String) -> Result<FinalizedFlag> {
@@ -230,8 +253,8 @@ mod tests {
         let map = read_files_to_map_using_path(vec![flag_file_path]).unwrap();
 
         assert_eq!(map.0.len(), 1);
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[1]));
     }
 
     #[test]
@@ -263,12 +286,12 @@ mod tests {
 
         // Assert there are two API levels, 35 and 36.
         assert_eq!(map.0.len(), 2);
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[0]));
 
         // 36 should not have the first flag in the set, as it was finalized in
         // an earlier API level.
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[1]));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[2]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(36)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(36)).unwrap().contains(&flags[2]));
     }
 
     #[test]
@@ -299,11 +322,12 @@ mod tests {
         let map = read_files_to_map_using_path(vec![flag_file_path1, flag_file_path2]).unwrap();
 
         assert_eq!(map.0.len(), 2);
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[1]));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[2]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(36)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(36)).unwrap().contains(&flags[2]));
     }
 
+    #[cfg(not(feature = "support_minor_sdk"))]
     #[test]
     fn test_read_flags_fractions_round_up() {
         let flags = create_test_flags();
@@ -311,13 +335,13 @@ mod tests {
         // Create the file <temp_dir>/35/finalized-flags.txt and for 36.
         let temp_dir = tempdir().unwrap();
         let mut file_path1 = temp_dir.path().to_path_buf();
-        file_path1.push("35.1");
+        file_path1.push("36.1");
         fs::create_dir_all(&file_path1).unwrap();
         file_path1.push(FLAG_FILE_NAME);
         let mut file1 = File::create(&file_path1).unwrap();
 
         let mut file_path2 = temp_dir.path().to_path_buf();
-        file_path2.push("36.0");
+        file_path2.push("37.0");
         fs::create_dir_all(&file_path2).unwrap();
         file_path2.push(FLAG_FILE_NAME);
         let mut file2 = File::create(&file_path2).unwrap();
@@ -333,10 +357,46 @@ mod tests {
 
         // No flags were added in 35. All 35.1 flags were rolled up to 36.
         assert_eq!(map.0.len(), 1);
-        assert!(!map.0.contains_key(&ApiLevel(35)));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[0]));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[1]));
-        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[2]));
+        assert!(!map.0.contains_key(&ApiLevel::from_sdk_int(36)));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(37)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(37)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(37)).unwrap().contains(&flags[2]));
+    }
+
+    #[cfg(feature = "support_minor_sdk")]
+    #[test]
+    fn test_read_flags_fractions_creates_full_sdk() {
+        let flags = create_test_flags();
+
+        // Create the file <temp_dir>/35/finalized-flags.txt and for 36.
+        let temp_dir = tempdir().unwrap();
+        let mut file_path1 = temp_dir.path().to_path_buf();
+        file_path1.push("36.1");
+        fs::create_dir_all(&file_path1).unwrap();
+        file_path1.push(FLAG_FILE_NAME);
+        let mut file1 = File::create(&file_path1).unwrap();
+
+        let mut file_path2 = temp_dir.path().to_path_buf();
+        file_path2.push("37.0");
+        fs::create_dir_all(&file_path2).unwrap();
+        file_path2.push(FLAG_FILE_NAME);
+        let mut file2 = File::create(&file_path2).unwrap();
+
+        // Write all flags to the files.
+        add_flags_to_file(&mut file1, &[flags[0].clone()]);
+        add_flags_to_file(&mut file2, &[flags[0].clone(), flags[1].clone(), flags[2].clone()]);
+        let flag_file_path1 = file_path1.to_string_lossy().to_string();
+        let flag_file_path2 = file_path2.to_string_lossy().to_string();
+
+        // Convert to map.
+        let map = read_files_to_map_using_path(vec![flag_file_path1, flag_file_path2]).unwrap();
+
+        // Support 35.1 and 36.0.
+        assert_eq!(map.0.len(), 2);
+        assert!(!map.0.contains_key(&ApiLevel::from_sdk_int(36)));
+        assert!(map.0.get(&ApiLevel::from_sdk_int_full(3_600_001)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(37)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(37)).unwrap().contains(&flags[2]));
     }
 
     #[test]
@@ -370,8 +430,8 @@ mod tests {
 
         // No set should be created for sdk-annotations.
         assert_eq!(map.0.len(), 1);
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
-        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel::from_sdk_int(35)).unwrap().contains(&flags[1]));
     }
 
     #[test]
@@ -409,58 +469,44 @@ mod tests {
     fn test_flags_map_insert_if_new() {
         let flags = create_test_flags();
         let mut map = FinalizedFlagMap::new();
-        let l35 = ApiLevel(35);
-        let l36 = ApiLevel(36);
+        let l35 = ApiLevel::from_sdk_int(35);
+        let l36 = ApiLevel::from_sdk_int(36);
 
-        map.insert_if_new(l35, flags[0].clone());
-        map.insert_if_new(l35, flags[1].clone());
-        map.insert_if_new(l35, flags[2].clone());
-        map.insert_if_new(l36, flags[0].clone());
+        map.insert_if_new(l35.clone(), flags[0].clone());
+        map.insert_if_new(l35.clone(), flags[1].clone());
+        map.insert_if_new(l35.clone(), flags[2].clone());
+        map.insert_if_new(l36.clone(), flags[0].clone());
 
-        assert!(map.0.get(&l35).unwrap().contains(&flags[0]));
-        assert!(map.0.get(&l35).unwrap().contains(&flags[1]));
-        assert!(map.0.get(&l35).unwrap().contains(&flags[2]));
-        assert!(!map.0.contains_key(&l36));
+        assert!(map.0.get(&l35.clone()).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&l35.clone()).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&l35.clone()).unwrap().contains(&flags[2]));
+        assert!(!map.0.contains_key(&l36.clone()));
     }
 
     #[test]
     fn test_flags_map_get_level() {
         let flags = create_test_flags();
         let mut map = FinalizedFlagMap::new();
-        let l35 = ApiLevel(35);
-        let l36 = ApiLevel(36);
+        let l35 = ApiLevel::from_sdk_int(35);
+        let l36 = ApiLevel::from_sdk_int(36);
 
         map.insert_if_new(l35, flags[0].clone());
         map.insert_if_new(l36, flags[1].clone());
 
-        assert_eq!(map.get_finalized_level(&flags[0]).unwrap(), l35);
-        assert_eq!(map.get_finalized_level(&flags[1]).unwrap(), l36);
+        assert_eq!(
+            map.get_finalized_level(&flags[0]).unwrap(),
+            //ApiLevel("Build.VERSION.SDK_INT >= 35".to_string())
+            ApiLevel(35)
+        );
+        assert_eq!(
+            map.get_finalized_level(&flags[1]).unwrap(),
+            //ApiLevel("Build.VERSION.SDK_INT >= 36".to_string())
+            ApiLevel(36)
+        );
     }
 
     #[test]
     fn test_read_flag_from_extended_file() {
-        let flags = create_test_flags();
-
-        // Create the file <temp_dir>/35/extended_flags_list_35.txt
-        let temp_dir = tempdir().unwrap();
-        let mut file_path = temp_dir.path().to_path_buf();
-        file_path.push("35");
-        fs::create_dir_all(&file_path).unwrap();
-        file_path.push(EXTENDED_FLAGS_LIST_35);
-        let mut file = File::create(&file_path).unwrap();
-
-        // Write all flags to the file.
-        add_flags_to_file(&mut file, &[flags[0].clone(), flags[1].clone()]);
-
-        let flags_set =
-            read_extend_file_to_map_using_path(file_path.to_string_lossy().to_string()).unwrap();
-        assert_eq!(flags_set.len(), 2);
-        assert!(flags_set.contains(&flags[0]));
-        assert!(flags_set.contains(&flags[1]));
-    }
-
-    #[test]
-    fn test_read_flag_from_wrong_extended_file_err() {
         let flags = create_test_flags();
 
         // Create the file <temp_dir>/35/extended_flags_list.txt
@@ -474,11 +520,84 @@ mod tests {
         // Write all flags to the file.
         add_flags_to_file(&mut file, &[flags[0].clone(), flags[1].clone()]);
 
-        let err = read_extend_file_to_map_using_path(file_path.to_string_lossy().to_string())
+        let map =
+            read_files_to_map_using_path(vec![file_path.to_string_lossy().to_string()]).unwrap();
+        assert_eq!(map.0.len(), 1);
+        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[1]));
+    }
+
+    #[test]
+    fn test_read_flags_sdk_file_and_extended_file() {
+        let flags = create_test_flags();
+
+        // Create the file <temp_dir>/35/finalized-flags.txt
+        let temp_dir = tempdir().unwrap();
+        let mut file_path1 = temp_dir.path().to_path_buf();
+        file_path1.push("35");
+        fs::create_dir_all(&file_path1).unwrap();
+        file_path1.push(FLAG_FILE_NAME);
+        let mut file1 = File::create(&file_path1).unwrap();
+
+        // Create the file <temp_dir>/36/finalized-flags.txt
+        let temp_dir = tempdir().unwrap();
+        let mut file_path2 = temp_dir.path().to_path_buf();
+        file_path2.push("36");
+        fs::create_dir_all(&file_path2).unwrap();
+        file_path2.push(FLAG_FILE_NAME);
+        let mut file2 = File::create(&file_path2).unwrap();
+
+        // Create the file <temp_dir>/36/extended_flags_list.txt
+        let mut file_path3 = temp_dir.path().to_path_buf();
+        file_path3.push("36");
+        fs::create_dir_all(&file_path3).unwrap();
+        file_path3.push("extended_flags_list.txt");
+        let mut file3 = File::create(&file_path3).unwrap();
+
+        // Write all flags to the files.
+        add_flags_to_file(&mut file1, &[flags[0].clone()]);
+        add_flags_to_file(&mut file2, &[flags[0].clone(), flags[1].clone()]);
+        add_flags_to_file(&mut file3, &[flags[0].clone(), flags[1].clone(), flags[2].clone()]);
+        let flag_file_path1 = file_path1.to_string_lossy().to_string();
+        let flag_file_path2 = file_path2.to_string_lossy().to_string();
+        let flag_file_path3 = file_path3.to_string_lossy().to_string();
+
+        // Convert to map.
+        let map =
+            read_files_to_map_using_path(vec![flag_file_path1, flag_file_path2, flag_file_path3])
+                .unwrap();
+
+        // Assert there are two API levels, 35 and 36.
+        assert_eq!(map.0.len(), 2);
+        assert!(map.0.get(&ApiLevel(35)).unwrap().contains(&flags[0]));
+
+        // 36 should not have the first flag in the set, as it was finalized in
+        // an earlier API level.
+        assert!(!map.0.get(&ApiLevel(36)).unwrap().contains(&flags[0]));
+        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[1]));
+        assert!(map.0.get(&ApiLevel(36)).unwrap().contains(&flags[2]));
+    }
+
+    #[test]
+    fn test_read_flag_from_wrong_extended_file_err() {
+        let flags = create_test_flags();
+
+        // Create the file <temp_dir>/35/bar.txt
+        let temp_dir = tempdir().unwrap();
+        let mut file_path = temp_dir.path().to_path_buf();
+        file_path.push("35");
+        fs::create_dir_all(&file_path).unwrap();
+        file_path.push("bar.txt");
+        let mut file = File::create(&file_path).unwrap();
+
+        // Write all flags to the file.
+        add_flags_to_file(&mut file, &[flags[0].clone(), flags[1].clone()]);
+
+        let err = read_files_to_map_using_path(vec![file_path.to_string_lossy().to_string()])
             .unwrap_err();
         assert_eq!(
-            format!("{:?}", err),
-            "Provided incorrect file, must be extended_flags_list_35.txt"
+            format!("{err:?}"),
+            "Provided incorrect file, must be finalized-flags.txt or extended_flags_list.txt"
         );
     }
 

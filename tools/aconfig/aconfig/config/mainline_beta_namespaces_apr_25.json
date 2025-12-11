@@ -1,0 +1,40 @@
+{
+    "namespaces": {
+        "com_android_mainline_beta_mockup": {
+            "container": "com.android.mainline_beta_mockup",
+            "allow_exported": true
+        },
+        "com_android_tethering": {
+            "container": "com.android.tethering",
+            "allow_exported": true
+        },
+        "com_android_networkstack": {
+            "container": "NetworkStack",
+            "allow_exported": false
+        },
+        "com_android_captiveportallogin": {
+            "container": "CaptivePortalLogin",
+            "allow_exported": false
+        },
+        "com_android_healthfitness": {
+            "container": "com.android.healthfitness",
+            "allow_exported": true
+        },
+        "com_android_mediaprovider": {
+            "container": "com.android.mediaprovider",
+            "allow_exported": true
+        },
+        "com_android_resolv": {
+            "container": "com.android.resolv",
+            "allow_exported": true
+        },
+        "com_android_sdkext": {
+            "container": "com.android.sdkext",
+            "allow_exported": true
+        },
+        "com_android_extservices": {
+            "container": "com.android.extservices",
+            "allow_exported": true
+        }
+    }
+}

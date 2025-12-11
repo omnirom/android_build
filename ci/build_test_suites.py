@@ -310,6 +310,7 @@ def execute_build_plan(build_plan: BuildPlan):
   except subprocess.CalledProcessError as e:
     raise BuildFailureError(e.returncode) from e
 
+  logging.info('executing packaging commands')
   get_metrics_agent().packaging_start()
   try:
     for packaging_commands_getter in build_plan.packaging_commands_getters:
@@ -319,6 +320,7 @@ def execute_build_plan(build_plan: BuildPlan):
     raise BuildFailureError(e.returncode) from e
   finally:
     get_metrics_agent().packaging_end()
+  logging.info('done with packaging commands')
 
 
 def get_top() -> pathlib.Path:

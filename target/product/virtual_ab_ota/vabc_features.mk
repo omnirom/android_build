@@ -53,6 +53,9 @@ PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled?=true
 # PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.verify_threshold_size=1073741824
 # PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.verify_block_size=1048576
 
+# Enabling this property will assign CPUSET_SP_BACKGROUND to readahead threads
+# and merge threads.
+# PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.set_task_profiles=true
 
 # Enabling this property will skip verification post OTA reboot.
 # Verification allows the device to safely roll back if any boot failures
@@ -61,7 +64,7 @@ PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.compression.xor.enabled?=true
 # /metadata/ota/. This will increase the boot time and may also impact
 # memory usage as all the blocks in dynamic partitions are read into page-cache.
 # If care_map.pb isn't present, update-verifier will skip the verification.
-# PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.skip_verification =true
+# PRODUCT_VENDOR_PROPERTIES += ro.virtual_ab.skip_verification=true
 
 # Enabling this property, will improve OTA install time
 # but will use an additional CPU core

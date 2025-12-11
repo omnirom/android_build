@@ -59,3 +59,27 @@ java_aconfig_library {
     name: "aconfig_flags_java",
     aconfig_declarations: "aconfig_flags",
 }
+
+// Library to port RELEASE_ACONFIG_PARSE_V4 build flag to Java.
+genrule {
+    name: "libaconfig_parse_v4_flag_wrapper_java",
+    srcs: select(release_flag("RELEASE_ACONFIG_PARSE_V4"), {
+        true: ["srcs/parse_v4_enabled/android/aconfig/storage/ParseV4FlagWrapper.java"],
+        default: ["srcs/parse_v4_disabled/android/aconfig/storage/ParseV4FlagWrapper.java"],
+    }),
+
+    out: [
+        "android/aconfig/storage/ParseV4FlagWrapper.java",
+    ],
+    cmd: "cp $(in) $(out)",
+}
+
+java_library {
+    name: "libaconfig_parse_v4_flag_wrapper",
+    srcs: [":libaconfig_parse_v4_flag_wrapper_java"],
+    sdk_version: "core_current",
+    apex_available: [
+        "//apex_available:platform",
+    ],
+    host_supported: true,
+}

@@ -17,15 +17,6 @@ android_app_certificate {
     certificate: "cts_uicc_2021",
 }
 
-// Google-owned certificate for CTS testing, since we can't trust arbitrary keys
-// on release devices.
-prebuilt_etc {
-    name: "fsverity-release-cert-der",
-    src: "fsverity-release.x509.der",
-    sub_dir: "security/fsverity",
-    filename_from_src: true,
-}
-
 // otacerts: A keystore with the authorized keys in it, which is used to verify
 // the authenticity of downloaded OTA packages.
 // This module zips files defined in PRODUCT_DEFAULT_DEV_CERTIFICATE and

@@ -64,7 +64,7 @@ PRODUCT_ARTIFACT_PATH_REQUIREMENT_ALLOWED_LIST += \
 # TODO(b/206676167): This property can be removed when renderscript is removed.
 # Prevents framework from attempting to load renderscript libraries, which are
 # not supported on this architecture.
-PRODUCT_SYSTEM_PROPERTIES += \
+PRODUCT_PRODUCT_PROPERTIES += \
     config.disable_renderscript=1 \
 
 # This build configuration supports 64-bit apps only

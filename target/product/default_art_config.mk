@@ -113,6 +113,13 @@ else
 
 endif
 
+# When we release NSC in Conscrypt.
+ifeq ($(RELEASE_CONSCRYPT_NSC),true)
+    PRODUCT_APEX_BOOT_JARS += \
+    com.android.conscrypt:framework-conscrypt-nsc \
+
+endif
+
 # Check if the build supports NFC apex or not
 ifeq ($(RELEASE_PACKAGE_NFC_STACK),NfcNci)
     PRODUCT_BOOT_JARS += \
@@ -126,7 +133,11 @@ endif
 # Check if build supports Profiling module.
 ifeq ($(RELEASE_PACKAGE_PROFILING_MODULE),true)
     PRODUCT_APEX_BOOT_JARS += \
-        com.android.profiling:framework-profiling \
+        com.android.profiling:framework-profiling
+    ifeq ($(RELEASE_ANOMALY_DETECTOR),true)
+        PRODUCT_APEX_BOOT_JARS += \
+            com.android.profiling:framework-anomaly-detector
+    endif
 
 endif
 
@@ -144,6 +155,16 @@ ifeq ($(RELEASE_MOVE_VCN_TO_MAINLINE),true)
 else
     PRODUCT_BOOT_JARS += \
         framework-connectivity-b \
+
+endif
+
+ifeq ($(RELEASE_TELEPHONY_MODULE),true)
+    PRODUCT_APEX_BOOT_JARS += \
+        com.android.telephonycore:framework-telephony \
+
+else
+    PRODUCT_BOOT_JARS += \
+        framework-platformtelephony \
 
 endif
 
@@ -193,6 +214,7 @@ PRODUCT_STANDALONE_SYSTEM_SERVER_JARS := \
 # List of jars delivered via apex that system_server loads dynamically using separate classloaders.
 # Keep the list sorted by module names and then library names.
 # Note: For modules available in Q, DO NOT add new entries here.
+# The Soong modules for these jars should inherit standalone-system-server-module-optimize-defaults.
 PRODUCT_APEX_STANDALONE_SYSTEM_SERVER_JARS := \
     com.android.bt:service-bluetooth \
     com.android.devicelock:service-devicelock \
@@ -205,13 +227,21 @@ PRODUCT_APEX_STANDALONE_SYSTEM_SERVER_JARS := \
 # Check if build supports Profiling module.
 ifeq ($(RELEASE_PACKAGE_PROFILING_MODULE),true)
     PRODUCT_APEX_STANDALONE_SYSTEM_SERVER_JARS += \
-        com.android.profiling:service-profiling \
-
+        com.android.profiling:service-profiling
+    ifeq ($(RELEASE_ANOMALY_DETECTOR),true)
+        PRODUCT_APEX_SYSTEM_SERVER_JARS += \
+            com.android.profiling:service-anomaly-detector
+    endif
 endif
 
 ifneq (,$(RELEASE_RANGING_STACK))
     PRODUCT_APEX_STANDALONE_SYSTEM_SERVER_JARS += \
         com.android.uwb:service-ranging
+endif
+
+ifeq ($(RELEASE_UPROBESTATS_SERVICE),true)
+    PRODUCT_APEX_STANDALONE_SYSTEM_SERVER_JARS += \
+        com.android.uprobestats:service-uprobestats
 endif
 
 # Overrides the (apex, jar) pairs above when determining the on-device location. The format is:

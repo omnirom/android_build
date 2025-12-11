@@ -138,6 +138,7 @@ Result<PackageReadContext> get_package_read_context(
     context.package_exists = context_cxx.package_exists;
     context.package_id = context_cxx.package_id;
     context.boolean_start_index = context_cxx.boolean_start_index;
+    context.fingerprint = context_cxx.fingerprint;
     return context;
   } else {
     auto result = Result<PackageReadContext>();

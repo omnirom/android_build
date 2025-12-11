@@ -1,0 +1,25 @@
+package: "com.android.aconfig.test.exported.mainline_beta"
+container: "com.android.mainline_beta_mockup"
+
+flag {
+    name: "exported_beta_disabled_rw"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "exported disabled rw mainline beta flag."
+    bug: "123456789"
+    is_exported: true
+}
+
+flag {
+    name: "exported_beta_enabled_rw"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "exported enabled rw mainline beta flag."
+    bug: "123456789"
+    is_exported: true
+}
+
+flag {
+    name: "beta_enabled_rw"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "enabled rw mainline beta flag."
+    bug: "123456789"
+}

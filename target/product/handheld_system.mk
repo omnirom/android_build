@@ -28,6 +28,7 @@ $(call inherit-product-if-exists, external/google-fonts/source-sans-pro/fonts.mk
 $(call inherit-product-if-exists, external/noto-fonts/fonts.mk)
 $(call inherit-product-if-exists, external/roboto-fonts/fonts.mk)
 $(call inherit-product-if-exists, external/roboto-flex-fonts/fonts.mk)
+$(call inherit-product-if-exists, external/roboto-mono/fonts.mk)
 $(call inherit-product-if-exists, external/hyphenation-patterns/patterns.mk)
 $(call inherit-product-if-exists, frameworks/base/data/keyboards/keyboards.mk)
 $(call inherit-product-if-exists, frameworks/webview/chromium/chromium.mk)
@@ -63,17 +64,25 @@ PRODUCT_PACKAGES += \
     preinstalled-packages-platform-handheld-system.xml \
     PrintRecommendationService \
     PrintSpooler \
+    PrivateSpace \
     ProxyHandler \
     screenrecord \
     SecureElement \
     SharedStorageBackup \
     SimAppDialog \
-    Telecom \
     TeleService \
     Traceur \
     UserDictionaryProvider \
     VpnDialogs \
     vr \
+
+ifeq ($(RELEASE_ACONFIG_INCLUDE_CONTACTS_PICKER_APP),true)
+  PRODUCT_PACKAGES += ContactsPicker
+endif
+
+ifeq ($(RELEASE_ACONFIG_INCLUDE_EYE_DROPPER_APP),true)
+  PRODUCT_PACKAGES += EyeDropper
+endif
 
 # Choose the correct products based on HSUM status
 ifeq ($(PRODUCT_USE_HSUM),true)
@@ -92,7 +101,15 @@ PRODUCT_SYSTEM_SERVER_APPS += \
     FusedLocation \
     InputDevices \
     KeyChain \
-    Telecom \
+
+ifneq ($(RELEASE_TELECOM_MAINLINE_MODULE),true)
+  PRODUCT_PACKAGES += \
+      Telecom \
+
+  PRODUCT_SYSTEM_SERVER_APPS += \
+      Telecom \
+
+endif
 
 PRODUCT_PACKAGES += framework-audio_effects.xml
 

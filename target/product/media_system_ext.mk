@@ -24,4 +24,6 @@ PRODUCT_PACKAGES += \
     StatementService \
 
 # Window Extensions
-$(call inherit-product, $(SRC_TARGET_DIR)/product/window_extensions_base.mk)
+ifneq ($(PRODUCT_IS_ATV),true)
+    $(call inherit-product, $(SRC_TARGET_DIR)/product/window_extensions_base.mk)
+endif

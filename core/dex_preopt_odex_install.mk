@@ -138,9 +138,17 @@ else
   my_dexpreopt_libs_compat :=
 endif
 
-my_dexpreopt_libs := \
-  $(LOCAL_USES_LIBRARIES) \
-  $(my_filtered_optional_uses_libraries)
+# Bootclasspath jars are accessible by all apps, so they don't have to and
+# should not be in the CLC.
+# For framework.jar, the name in `PRODUCT_BOOT_JARS` is `framework-minus-apex`,
+# so we need to use `FRAMEWORK_LIBRARIES`, which contains `framework`, to be
+# used for filtering.
+my_all_boot_jars := \
+  $(foreach jar,$(PRODUCT_BOOT_JARS) $(PRODUCT_APEX_BOOT_JARS),$(call word-colon,2,$(jar))) \
+  $(FRAMEWORK_LIBRARIES)
+
+my_dexpreopt_libs := $(filter-out $(my_all_boot_jars), \
+  $(LOCAL_USES_LIBRARIES) $(my_filtered_optional_uses_libraries))
 
 # The order needs to be deterministic.
 my_dexpreopt_libs_all := $(sort $(my_dexpreopt_libs) $(my_dexpreopt_libs_compat))
@@ -152,7 +160,7 @@ my_dexpreopt_libs_all := $(sort $(my_dexpreopt_libs) $(my_dexpreopt_libs_compat)
 # this dexpreopt.config is generated. So it's necessary to add file-level
 # dependencies between dexpreopt.config files.
 my_dexpreopt_dep_configs := $(foreach lib, \
-  $(filter-out $(my_dexpreopt_libs_compat) $(FRAMEWORK_LIBRARIES),$(LOCAL_USES_LIBRARIES) $(my_filtered_optional_uses_libraries)), \
+  $(filter-out $(my_dexpreopt_libs_compat),$(my_dexpreopt_libs)), \
   $(call intermediates-dir-for,JAVA_LIBRARIES,$(lib),,)/dexpreopt.config)
 
 # 1: SDK version
@@ -234,18 +242,21 @@ endif
 my_enforced_uses_libraries :=
 ifeq (true,$(LOCAL_ENFORCE_USES_LIBRARIES))
   my_verify_script := build/soong/scripts/manifest_check.py
-  my_uses_libs_args := $(patsubst %,--uses-library %,$(LOCAL_USES_LIBRARIES))
+  my_uses_libs_args := $(patsubst %,--uses-library %, \
+    $(filter-out $(my_all_boot_jars),$(LOCAL_USES_LIBRARIES)))
   my_optional_uses_libs_args := $(patsubst %,--optional-uses-library %, \
-    $(LOCAL_OPTIONAL_USES_LIBRARIES))
+    $(filter-out $(my_all_boot_jars),$(LOCAL_OPTIONAL_USES_LIBRARIES)))
   my_relax_check_arg := $(if $(filter true,$(RELAX_USES_LIBRARY_CHECK)), \
     --enforce-uses-libraries-relax,)
   my_dexpreopt_config_args := $(patsubst %,--dexpreopt-config %,$(my_dexpreopt_dep_configs))
+  my_bootclasspath_libs_args := $(patsubst %,--bootclasspath-libs %,$(my_all_boot_jars))
 
   my_enforced_uses_libraries := $(intermediates)/enforce_uses_libraries.status
   $(my_enforced_uses_libraries): PRIVATE_USES_LIBRARIES := $(my_uses_libs_args)
   $(my_enforced_uses_libraries): PRIVATE_OPTIONAL_USES_LIBRARIES := $(my_optional_uses_libs_args)
   $(my_enforced_uses_libraries): PRIVATE_DEXPREOPT_CONFIGS := $(my_dexpreopt_config_args)
   $(my_enforced_uses_libraries): PRIVATE_RELAX_CHECK := $(my_relax_check_arg)
+  $(my_enforced_uses_libraries): PRIVATE_BOOT_CLASSPATH_LIBS := $(my_bootclasspath_libs_args)
   $(my_enforced_uses_libraries): $(AAPT2)
   $(my_enforced_uses_libraries): $(my_verify_script)
   $(my_enforced_uses_libraries): $(my_dexpreopt_dep_configs)
@@ -260,6 +271,7 @@ ifeq (true,$(LOCAL_ENFORCE_USES_LIBRARIES))
 	  $(PRIVATE_OPTIONAL_USES_LIBRARIES) \
 	  $(PRIVATE_DEXPREOPT_CONFIGS) \
 	  $(PRIVATE_RELAX_CHECK) \
+	  $(PRIVATE_BOOT_CLASSPATH_LIBS) \
 	  $<
   $(LOCAL_BUILT_MODULE) : $(my_enforced_uses_libraries)
 endif
@@ -503,7 +515,7 @@ ifdef LOCAL_DEX_PREOPT
   _dexname := $(basename $(notdir $(_dexlocation)))
   _system_other := $(strip $(if $(strip $(BOARD_USES_SYSTEM_OTHER_ODEX)), \
     $(if $(strip $(SANITIZE_LITE)),, \
-      $(if $(filter $(_dexname),$(PRODUCT_DEXPREOPT_SPEED_APPS))$(filter $(_dexname),$(PRODUCT_SYSTEM_SERVER_APPS)),, \
+      $(if $(filter $(_dexname),$(PRODUCT_SYSTEM_SERVER_APPS)),, \
         $(if $(strip $(foreach myfilter,$(SYSTEM_OTHER_ODEX_FILTER),$(filter system/$(myfilter),$(_dexlocation))$(filter $(myfilter),$(_dexlocation)))), \
             system_other/)))))
   # _dexdir has a trailing /

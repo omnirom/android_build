@@ -20,6 +20,7 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"container/list"
 	"context"
 	"encoding/json"
@@ -299,7 +300,18 @@ func findJavaModules(paths []string, modules map[string]*javaModule) map[string]
 	for name := range modules {
 		keys = append(keys, name)
 	}
-	slices.Sort(keys)
+	slices.SortFunc(keys, func(k1, k2 string) int {
+		// Some libraries use annotations by setting annotations_enabled: true.
+		// To enable IDE integration for such libraries, prefer the non package-private
+		// version of the annotations library.
+		if k1 == "stub-annotations" && k2 == "private-stub-annotations" {
+			return -1
+		} else if k1 == "private-stub-annotations" && k2 == "stub-annotations" {
+			return 1
+		} else {
+			return cmp.Compare(k1, k2)
+		}
+	})
 	for _, name := range keys {
 		if strings.HasSuffix(name, ".impl") {
 			continue

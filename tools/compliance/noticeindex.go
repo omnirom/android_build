@@ -232,7 +232,7 @@ func (ni *NoticeIndex) Hashes() chan hash {
 // InputFiles returns the complete list of files read during indexing.
 func (ni *NoticeIndex) InputFiles() []string {
 	projectMeta := ni.pmix.AllMetadataFiles()
-	files := make([]string, 0, len(ni.files) + len(ni.lg.targets) + len(projectMeta))
+	files := make([]string, 0, len(ni.files)+len(ni.lg.targets)+len(projectMeta))
 	files = append(files, ni.files...)
 	for f := range ni.lg.targets {
 		files = append(files, f)
@@ -261,6 +261,29 @@ func (ni *NoticeIndex) HashLibInstalls(h hash, libName string) []string {
 	}
 	sort.Strings(installs)
 	return installs
+}
+
+// ContainsInstall returns if the given hash has a file installed by any lib that is present in
+// filter
+func (ni *NoticeIndex) ContainsInstall(h hash, filter map[string]struct{}) bool {
+	for libName := range ni.hashLibInstall[h] {
+		for installPath := range ni.hashLibInstall[h][libName] {
+			if _, ok := filter[installPath]; ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// ContainsInstallForLib returns if the given lib from the given hash has any file present in filter
+func (ni *NoticeIndex) ContainsInstallForLib(h hash, libName string, filter map[string]struct{}) bool {
+	for installPath := range ni.hashLibInstall[h][libName] {
+		if _, ok := filter[installPath]; ok {
+			return true
+		}
+	}
+	return false
 }
 
 // InstallPaths returns the ordered channel of indexed install paths.
@@ -322,6 +345,11 @@ func (ni *NoticeIndex) Libraries() chan string {
 
 // HashText returns the file content of the license text hashed as `h`.
 func (ni *NoticeIndex) HashText(h hash) []byte {
+	return ni.text[h]
+}
+
+func (ni *NoticeIndex) HashTextOfMd5(s string) []byte {
+	h := hash{key: s}
 	return ni.text[h]
 }
 

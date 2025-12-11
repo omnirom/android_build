@@ -10,3 +10,4 @@ tests/res/testdata/methods/FieldUsage.java
 tests/res/testdata/methods/MethodUsage.java
 tests/res/testdata/methods/ReferenceClass1.java
 tests/res/testdata/methods/ReferenceClass2.java
+tests/res/testdata/WithoutPackageClass.java

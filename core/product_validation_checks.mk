@@ -54,7 +54,7 @@ _c+=$(newline))
 _c+=$(newline))
 _c+=$(foreach f,$(PRODUCT_VALIDATION_CHECKS),$(newline)validate_product_variables_$(call filename_to_starlark,$(f))(_ctx))
 _c+=$(newline)variables_to_export_to_make = {}
-$(KATI_file_no_rerun >$(OUT_DIR)/product_validation_checks_entrypoint.scl,$(_c))
+$(KATI_file_no_rerun >$(OUT_DIR)/product_validation_checks_entrypoint.$(TARGET_PRODUCT).scl,$(_c))
 filename_to_starlark:=
 escape_starlark_string:=
 product_variable_starlark_value:=
@@ -67,6 +67,6 @@ known_board_list_variables :=
 #
 # We also need to pass --allow_external_entrypoint to rbcrun in case the OUT_DIR is set to something
 # outside of the source tree.
-$(call run-starlark,$(OUT_DIR)/product_validation_checks_entrypoint.scl,$(OUT_DIR)/product_validation_checks_entrypoint.scl,--allow_external_entrypoint)
+$(call run-starlark,$(OUT_DIR)/product_validation_checks_entrypoint.$(TARGET_PRODUCT).scl,$(OUT_DIR)/product_validation_checks_entrypoint.$(TARGET_PRODUCT).scl,--allow_external_entrypoint)
 
 endif # ifdef PRODUCT_VALIDATION_CHECKS

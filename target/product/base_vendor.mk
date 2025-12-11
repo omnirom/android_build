@@ -33,6 +33,7 @@ PRODUCT_VENDOR_PROPERTIES += \
     ro.recovery.usb.vid?=18D1 \
     ro.recovery.usb.adb.pid?=D001 \
     ro.recovery.usb.fastboot.pid?=4EE0 \
+    ro.zygote?=zygote32 \
 
 # These had been pulled in via init_second_stage.recovery, but may not be needed.
 PRODUCT_HOST_PACKAGES += \
@@ -94,8 +95,11 @@ ifneq ($(TARGET_SUPPORTS_OMX_SERVICE),false)
 endif
 
 # Base modules when shipping api level is less than or equal to 33
-PRODUCT_PACKAGES_SHIPPING_API_LEVEL_33 += \
-    android.hardware.cas@1.2-service \
+ifneq ($(TARGET_REQUIRES_HIDL_CAS_HAL),false)
+    PRODUCT_PACKAGES_SHIPPING_API_LEVEL_33 += \
+        android.hardware.cas@1.2-service \
+
+endif
 
 # Base modules when shipping api level is less than or equal to 29
 PRODUCT_PACKAGES_SHIPPING_API_LEVEL_29 += \

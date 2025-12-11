@@ -48,6 +48,7 @@ impl PackageTableNodeWrapper {
             package_name: String::from(package.package_name),
             package_id: package.package_id,
             fingerprint: package.fingerprint,
+            redact_exported_reads: package.redact_exported_reads,
             boolean_start_index: package.boolean_start_index,
             next_offset: None,
         };

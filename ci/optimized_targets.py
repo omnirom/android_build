@@ -20,6 +20,8 @@ import json
 import logging
 import os
 import pathlib
+import re
+import shutil
 import subprocess
 
 from build_context import BuildContext
@@ -54,8 +56,15 @@ class OptimizedBuildTarget(ABC):
   def get_build_targets(self) -> set[str]:
     features = self.build_context.enabled_build_features
     if self.get_enabled_flag() in features:
-      self.modules_to_build = self.get_build_targets_impl()
-      return self.modules_to_build
+      try:
+        self.modules_to_build = self.get_build_targets_impl()
+        return self.modules_to_build
+      except Exception as e:
+        logging.error(f'error while getting build targets: {e}')
+        metrics_agent_instance = metrics_agent.MetricsAgent.instance()
+        metrics_agent_instance.report_unoptimized_target(self.target, f'Error in optimized target for {self.target}: {repr(e)}')
+        self.modules_to_build = {self.target}
+        return {self.target}
 
     if self.target == 'general-tests':
       self._report_info_metrics_silently('general-tests.zip')
@@ -65,6 +74,9 @@ class OptimizedBuildTarget(ABC):
   def get_package_outputs_commands(self) -> list[list[str]]:
     features = self.build_context.enabled_build_features
     if self.get_enabled_flag() in features:
+      # If there was a fallback, don't try to do the packaging logic
+      if self.modules_to_build == {self.target}:
+        return []
       return self.get_package_outputs_commands_impl()
 
     return []
@@ -244,6 +256,7 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
       'cts-tradefed',
       'vts-tradefed',
       'compatibility-host-util',
+      'module-info',
   ])
 
   def get_build_targets_impl(self) -> set[str]:
@@ -257,6 +270,10 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
       if module_outputs:
         modules_to_build.add(module)
         self._build_outputs.extend(module_outputs)
+
+    if java_coverage_enabled():
+      # in theory this could be 'optimized' as well, but there is no support currently
+      modules_to_build.add('general-tests-jacoco')
 
     return modules_to_build
 
@@ -277,6 +294,65 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
       self._general_tests_target_outputs = general_tests_list_file.readlines()
     return general_tests_list
 
+  def _get_base_module_names(self, manifest_files: list[str], module_with_manifest_files: set[str]) -> set[str]:
+    if not manifest_files:
+      return set()
+    extra_files = set()
+    base_module_names = set()
+    for manifest_file in manifest_files:
+      with open(manifest_file, 'r') as file:
+        data = json.load(file)
+        base_module_names.add(data['base'])
+
+    for module in module_with_manifest_files:
+      module_path = pathlib.Path(module)
+      file_set = {
+        str(item) + '\n' for item in module_path.rglob('*') if (item.is_file() and item.name != 'test_module_config.manifest')
+      }
+      extra_files.update(file_set)
+
+    main_directory = pathlib.Path(manifest_files[0]).parent.parent
+    for base_module_name in base_module_names:
+      module_path = main_directory / base_module_name
+      if os.path.exists(module_path):
+        file_set = {
+          str(item) + '\n' for item in module_path.rglob('*') if item.is_file()
+        }
+        extra_files.update(file_set)
+
+    return extra_files
+
+  def _get_manifest_files(self, outputs: list[str]) -> tuple[list[str], set[str]]:
+    logging.info('looking for manifest files in outputs')
+    module_outputs_set = set()
+    for file in outputs:
+      for module in self.modules_to_build:
+        # Construct the pattern we are looking for (e.g., '/module_a/')
+        search_pattern = f'/{module}/'
+
+        if search_pattern in file:
+          # Find the end position of the search pattern
+          end_index = file.find(search_pattern) + len(search_pattern)
+
+          # Slice the file string up to that point
+          module_directory = file[:end_index]
+
+          # Construct the full path and add it to our set
+          module_outputs_set.add(module_directory)
+
+          # Optimization: once we find a match for this file,
+          # we can move to the next file.
+          break
+    module_with_manifest_files = set()
+    manifest_files = []
+    for output in module_outputs_set:
+      manifest_file = output + 'test_module_config.manifest'
+      if os.path.exists(manifest_file):
+        manifest_files.append(manifest_file)
+        module_with_manifest_files.add(output)
+    logging.info(manifest_files)
+    logging.info(module_with_manifest_files)
+    return manifest_files, module_with_manifest_files
 
   def _get_test_discovery_modules(self) -> set[str]:
     change_info = ChangeInfo(os.environ.get('CHANGE_INFO'))
@@ -314,16 +390,126 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
 
     return command
 
+  def _copy_lib_dirs(self, host_out: str):
+    if not host_out:
+      logging.info('Skip copying lib/ and lib64/ directory')
+    for dir in ['lib64', 'lib']:
+      testcases_lib_dir = pathlib.Path(os.path.join(host_out, 'testcases', dir))
+      lib_dir = pathlib.Path(os.path.join(host_out, dir))
+      if not testcases_lib_dir.exists() and lib_dir.exists():
+        logging.info('Copying %s to %s', lib_dir, testcases_lib_dir)
+        shutil.copytree(lib_dir, testcases_lib_dir)
+
+  def _module_in_modules_to_build(self, path) -> bool:
+    """True if the path has module in modules_to_build or has lib/ lib64/. """
+    for module in self.modules_to_build:
+      if f'/{module}/' in path:
+        return True
+      elif '/lib/' in path:
+        return True
+      elif '/lib64/' in path:
+        return True
+    return False
+
   def get_package_outputs_commands_impl(self):
     src_top = pathlib.Path(os.environ.get('TOP', os.getcwd()))
     dist_dir = pathlib.Path(os.environ.get('DIST_DIR'))
     tmp_dir = pathlib.Path(os.environ.get('TMPDIR'))
     print(f'modules: {self.modules_to_build}')
 
-    host_outputs = [str(src_top) + '/' + file for file in self._general_tests_host_outputs if any('/'+module+'/' in file for module in self.modules_to_build)]
-    target_outputs = [str(src_top) + '/' + file for file in self._general_tests_target_outputs if any('/'+module+'/' in file for module in self.modules_to_build)]
+    logging.info('Getting host outputs')
+    deduplicated_host_outputs = set(self._general_tests_host_outputs)
+
+    soong_vars = self._query_soong_vars(
+        src_top,
+        [
+            'PRODUCT_OUT',
+            'SOONG_HOST_OUT',
+            'HOST_OUT',
+            'OUT_DIR',
+        ],
+    )
+
+    self._copy_lib_dirs(soong_vars.get('HOST_OUT'))
+
+    host_shared_libs_per_module = dict()
+    host_outputs = list()
+
+    # pattern used to identify symlinks to host shared libraries, e.g.,
+    # out/host/linux-x86/testcase/hello_world_test/x86/shared_libs/libc++.so
+    # - group(1): out/host/linux-x86/testcase/hello_world_test
+    # - group(2): x86/shared_libs/libc++.so
+    regex_shared_libs = re.compile(r'(^.*)/([x86|x86_64]+/[shared_libs]+/.*.so$)')
+
+    # real symlinks stored in the Build System.
+    # https://source.corp.google.com/h/googleplex-android/platform/superproject/main/+/main:build/soong/test_suites/test_suites.go?q=%22pathForPackaging(ctx,%20suiteConfig.name)%22&sq=android
+    soong_out = os.path.join(
+        soong_vars.get('OUT_DIR'), 'soong', 'packaging', 'general-tests')
+    if java_coverage_enabled():
+      general_tests_jacoco_out = os.path.join(
+          soong_vars.get('OUT_DIR'), 'soong', 'packaging', 'general-tests_jacoco_report_classes.jar')
+      if os.path.exists(general_tests_jacoco_out):
+        shutil.copy(general_tests_jacoco_out, dist_dir)
+
+    for p in deduplicated_host_outputs:
+      file_path = os.path.join(str(src_top), p)
+
+      if not self._module_in_modules_to_build(file_path.strip()):
+        continue
+
+      if pathlib.Path(file_path.strip()).exists():
+        # 3 kinds of paths would be added, e.g.,
+        # out/host/linux-x86/testcase/hello_world_test/hello_world_test
+        # out/host/linux-x86/testcase/lib/libc++.so
+        # out/host/linux-x86/testcase/lib64/libc++.so
+        host_outputs.append(file_path)
+      else:
+        # for the in-existing paths, paths to shared_libs are needed, e,g,
+        # out/host/linux-x86/testcase/hello_world_test/x86/shared_libs/libc++.so
+        # out/host/linux-x86/testcase/hello_world_test/x86_64/shared_libs/libc++.so
+        match = regex_shared_libs.match(file_path.strip())
+        if match:
+          key = match.group(1).replace(soong_vars.get('HOST_OUT'), 'host')
+
+          # convert the symlink path to the real packaging path in Soong, e.g.,
+          # out/host/linux-x86/testcase/hello_world_test/x86/shared_libs/libc++.so
+          # is a symbolic link, and the real path in Soong is stored in
+          # out/soong/packaging/general-tests/x86/shared_libs/libc.so
+          symlink_path = os.path.join(soong_out, match.group(2))
+
+          if key in host_shared_libs_per_module:
+            host_shared_libs_per_module[key].append(symlink_path)
+          else:
+            host_shared_libs_per_module[key] = [symlink_path]
+
+    logging.info('host_outputs size: %d', len(host_outputs))
+    host_manifest_files, host_module_with_manifest_files = self._get_manifest_files(host_outputs)
+    extra_host_files = self._get_base_module_names(host_manifest_files, host_module_with_manifest_files)
+    host_outputs.extend(extra_host_files)
+
+    logging.info('Getting target outputs')
+    deduplicated_target_outputs = set(self._general_tests_target_outputs)
+    intermediate_target_outputs = [p for p in deduplicated_target_outputs if pathlib.Path(str(src_top) + '/' + p.strip()).exists()]
+    target_outputs = [str(src_top) + '/' + file for file in intermediate_target_outputs if any('/'+module+'/' in file for module in self.modules_to_build)]
+    logging.info('target_outputs size: %d', len(target_outputs))
+    target_manifest_files, target_module_with_manifest_files = self._get_manifest_files(target_outputs)
+    extra_target_files = self._get_base_module_names(target_manifest_files, target_module_with_manifest_files)
+    target_outputs.extend(extra_target_files)
+    # Dedup final entries in output and remove non-existent files.
+    logging.info('Handling host and target outputs')
+
+    host_outputs = set(host_outputs)
+    host_outputs = [p for p in host_outputs if pathlib.Path(p.strip()).exists()]
+
+    target_outputs = set(target_outputs)
+    target_outputs = [p for p in target_outputs if pathlib.Path(p.strip()).exists()]
+
+    logging.info('host_outputs final size: %d', len(host_outputs))
+    logging.info('target_outputs final size: %d', len(target_outputs))
+
     host_config_files = [file for file in host_outputs if file.endswith('.config\n')]
     target_config_files = [file for file in target_outputs if file.endswith('.config\n')]
+    logging.info('final outputs:')
     logging.info(host_outputs)
     logging.info(target_outputs)
     with open(f"{tmp_dir / 'host.list'}", 'w') as host_list_file:
@@ -332,17 +518,11 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
     with open(f"{tmp_dir / 'target.list'}", 'w') as target_list_file:
       for output in target_outputs:
         target_list_file.write(output)
-    soong_vars = self._query_soong_vars(
-        src_top,
-        [
-            'PRODUCT_OUT',
-            'SOONG_HOST_OUT',
-            'HOST_OUT',
-        ],
-    )
+
     product_out = pathlib.Path(soong_vars.get('PRODUCT_OUT'))
     soong_host_out = pathlib.Path(soong_vars.get('SOONG_HOST_OUT'))
     host_out = pathlib.Path(soong_vars.get('HOST_OUT'))
+
     zip_commands = []
 
     zip_commands.extend(
@@ -357,6 +537,7 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
     )
 
     zip_command = self._base_zip_command(src_top, dist_dir, 'general-tests.zip')
+
     # Add host testcases.
     if host_outputs:
       zip_command.extend(
@@ -393,9 +574,21 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
         )
     )
 
+    # Add symlinks to host shared libs.
+    if host_shared_libs_per_module:
+      for key in host_shared_libs_per_module.keys():
+        zip_command.extend(
+            self._generate_zip_options_for_items(
+                prefix=key,
+                relative_root=soong_out,
+                files=host_shared_libs_per_module[key],
+            )
+        )
+
     zip_command.append('-sha256')
 
     zip_commands.append(zip_command)
+    logging.info(zip_commands)
     return zip_commands
 
   def _get_zip_test_configs_zips_commands(
@@ -507,3 +700,12 @@ class GeneralTestsOptimizer(OptimizedBuildTarget):
 
 OPTIMIZED_BUILD_TARGETS = {}
 OPTIMIZED_BUILD_TARGETS.update(GeneralTestsOptimizer.get_optimized_targets())
+
+# Equivalent to soong's JavaCoverageEnabled()
+def java_coverage_enabled() -> bool:
+  return is_env_true('EMMA_INSTRUMENT') or is_env_true('EMMA_INSTRUMENT_STATIC') or is_env_true('EMMA_INSTRUMENT_FRAMEWORK')
+
+# Equivalent to soong's IsEnvTrue()
+def is_env_true(env: str) -> bool:
+  value = os.environ.get(env, '').lower()
+  return value == '1' or value == 'y' or value == 'yes' or value == 'on' or value == 'true'

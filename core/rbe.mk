@@ -15,7 +15,7 @@
 #
 
 # Notice: this works only with Google's RBE service.
-ifneq ($(filter-out false,$(USE_RBE)),)
+ifneq ($(filter-out false,$(USE_REWRAPPER)),)
   ifdef RBE_DIR
     rbe_dir := $(RBE_DIR)
   else

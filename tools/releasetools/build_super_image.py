@@ -30,11 +30,9 @@ input_file: one of the following:
       and super split images), a list of "*_image" should be paths of each
       source images.
 
-output_dir_or_file:
-    If a single super image is built (for super_empty.img, or super.img for
+output_file:
+    If a super image is built (for super_empty.img, or super.img for
     launch devices), this argument is the output file.
-    If a collection of split images are built (for retrofit devices), this
-    argument is the output directory.
 """
 
 from __future__ import print_function
@@ -77,32 +75,25 @@ def BuildSuperImageFromDict(info_dict, output):
 
   ab_update = info_dict.get("ab_update") == "true"
   virtual_ab = info_dict.get("virtual_ab") == "true"
-  virtual_ab_retrofit = info_dict.get("virtual_ab_retrofit") == "true"
-  retrofit = info_dict.get("dynamic_partition_retrofit") == "true"
   block_devices = shlex.split(info_dict.get("super_block_devices", "").strip())
   groups = shlex.split(info_dict.get("super_partition_groups", "").strip())
 
-  if ab_update and retrofit:
-    cmd += ["--metadata-slots", "2"]
-  elif ab_update:
+  if ab_update:
     cmd += ["--metadata-slots", "3"]
   else:
     cmd += ["--metadata-slots", "2"]
 
-  if ab_update and retrofit:
-    cmd.append("--auto-slot-suffixing")
-  if virtual_ab and not virtual_ab_retrofit:
+  if virtual_ab:
     cmd.append("--virtual-ab")
 
   for device in block_devices:
     size = info_dict["super_{}_device_size".format(device)]
     cmd += ["--device", "{}:{}".format(device, size)]
 
-  append_suffix = ab_update and not retrofit
   has_image = False
   for group in groups:
     group_size = info_dict["super_{}_group_size".format(group)]
-    if append_suffix:
+    if ab_update:
       cmd += ["--group", "{}_a:{}".format(group, group_size),
               "--group", "{}_b:{}".format(group, group_size)]
     else:
@@ -116,7 +107,7 @@ def BuildSuperImageFromDict(info_dict, output):
       if image:
         has_image = True
 
-      if not append_suffix:
+      if not ab_update:
         cmd += GetArgumentsForImage(partition, group, image)
         continue
 
@@ -140,11 +131,7 @@ def BuildSuperImageFromDict(info_dict, output):
 
   common.RunAndCheckOutput(cmd)
 
-  if retrofit and has_image:
-    logger.info("Done writing images to directory %s", output)
-  else:
-    logger.info("Done writing image %s", output)
-
+  logger.info("Done writing image %s", output)
   return True
 
 

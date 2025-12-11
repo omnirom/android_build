@@ -20,14 +20,11 @@ import static com.android.dependencymapper.Utils.listClassesInJar;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 
-import com.android.dependencymapper.ClassDependencyAnalyzer;
-import com.android.dependencymapper.ClassDependencyData;
-import com.android.dependencymapper.ClassRelevancyFilter;
-
 import org.junit.Test;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -45,9 +42,14 @@ public class ClassRelevancyFilterTest {
         String skippedClass = "res.testdata.BaseClass";
         classesInJar.remove(skippedClass);
 
+        // Add that skipped class as a "cross-module" class
+        Set<String> crossModuleClasses = new HashSet<>(List.of(skippedClass));
+
         // Perform dependency analysis.
-        List<ClassDependencyData> classDependencyDataList =
-                ClassDependencyAnalyzer.analyze(path, new ClassRelevancyFilter(classesInJar));
+        List<ClassDependencyData> classDependencyDataList = ClassDependencyAnalyzer.analyze(
+                path,
+                new ClassRelevancyFilter(classesInJar),
+                new ClassRelevancyFilter(crossModuleClasses));
 
         // check that the skipped class is not present in classDepsList
         for (ClassDependencyData dep : classDependencyDataList) {

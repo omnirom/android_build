@@ -46,7 +46,6 @@ class ClearcutEventHandler(PatternMatchingEventHandler):
       is_dry_run: bool = False,
       cclient: clearcut_client.Clearcut | None = None,
   ):
-
     super().__init__(patterns=["*"], ignore_directories=True)
     self.root_monitoring_path = path
     self.flush_interval_sec = flush_interval_sec
@@ -73,6 +72,10 @@ class ClearcutEventHandler(PatternMatchingEventHandler):
 
   def on_modified(self, event: FileSystemEvent):
     self._log_edit_event(event, edit_event_pb2.EditEvent.MODIFY)
+
+  def dispatch(self, event: FileSystemEvent) -> None:
+    if event.event_type in ("moved", "created", "deleted", "modified"):
+        super().dispatch(event)
 
   def flushall(self):
     logging.info("flushing all pending events.")
@@ -110,7 +113,7 @@ class ClearcutEventHandler(PatternMatchingEventHandler):
       )
       event_proto.single_edit_event.CopyFrom(
           edit_event_pb2.EditEvent.SingleEditEvent(
-              file_path=event.src_path, edit_type=edit_type
+              edit_type=edit_type
           )
       )
       with self._pending_events_lock:
@@ -199,11 +202,26 @@ def start(
     conn: the sender of the pipe to communicate with the deamon manager.
   """
   event_handler = ClearcutEventHandler(
-      path, flush_interval_sec, single_events_size_threshold, is_dry_run, cclient)
+      path,
+      flush_interval_sec,
+      single_events_size_threshold,
+      is_dry_run,
+      cclient,
+  )
   observer = Observer()
 
-  logging.info("Starting observer on path %s.", path)
-  observer.schedule(event_handler, path, recursive=True)
+  out_dir = os.environ.get("OUT_DIR", "out")
+  sub_dirs = [
+      os.path.join(path, name)
+      for name in os.listdir(path)
+      if name != out_dir
+      and not name.startswith(".")
+      and os.path.isdir(os.path.join(path, name))
+  ]
+  for sub_dir_name in sub_dirs:
+      logging.info("Starting observer on path %s.", sub_dir_name)
+      observer.schedule(event_handler, sub_dir_name, recursive=True)
+
   observer.start()
   logging.info("Observer started.")
   if pipe_sender:

@@ -24,6 +24,7 @@ import com.android.tools.metalava.model.ClassItem
 import com.android.tools.metalava.model.FieldItem
 import com.android.tools.metalava.model.Item
 import com.android.tools.metalava.model.text.ApiFile
+import com.android.tools.metalava.model.value.asString
 import com.github.ajalt.clikt.core.CliktCommand
 import com.github.ajalt.clikt.core.ProgramResult
 import com.github.ajalt.clikt.core.subcommands
@@ -292,8 +293,9 @@ internal fun parseApiSignature(path: String, input: InputStream): Set<Pair<Symbo
           return item.modifiers
               .findAnnotation("android.annotation.FlaggedApi")
               ?.findAttribute("value")
-              ?.legacyValue
-              ?.let { Flag(it.value() as String) }
+              ?.value
+              ?.asString()
+              ?.let { Flag(it) }
         }
       }
   val codebase = ApiFile.parseApi(path, input)

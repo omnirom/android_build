@@ -1,7 +1,9 @@
 package {package_name};
 {{ if not library_exported- }}
+{{ if support_uau_annotation- }}
 // TODO(b/303773055): Remove the annotation after access issue is resolved.
 import android.compat.annotation.UnsupportedAppUsage;
+{{ -endif }}
 {{ -endif }} {#- end of not library_exported#}
 {{ -if runtime_lookup_required }}
 import android.os.Binder;
@@ -52,7 +54,9 @@ public final class FeatureFlagsImpl implements FeatureFlags \{
     @Override
 {{ -if not library_exported }}
     @com.android.aconfig.annotations.AconfigFlagAccessor
+{{ if support_uau_annotation- }}
     @UnsupportedAppUsage
+{{ -endif }}
 {{ -endif }}{#- end of not library_exported #}
     public boolean {flag.method_name}() \{
 {{ -if flag.is_read_write }}

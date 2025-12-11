@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class PackageTable {
 
     private static final int FINGERPRINT_BYTES = 8;
@@ -72,7 +73,8 @@ public class PackageTable {
         ByteBufferReader reader = new ByteBufferReader(mBuffer);
         reader.position(mHeader.mNodeOffset);
         int fingerprintBytes = mHeader.mVersion == 1 ? 0 : FINGERPRINT_BYTES;
-        int skipBytes = fingerprintBytes + NODE_SKIP_BYTES;
+        int redactionBytes = mHeader.mVersion >= 3 ? 1 : 0;
+        int skipBytes = fingerprintBytes + redactionBytes + NODE_SKIP_BYTES;
         for (int i = 0; i < mHeader.mNumPackages; i++) {
             list.add(reader.readString());
             reader.position(reader.position() + skipBytes);
@@ -145,9 +147,11 @@ public class PackageTable {
         private String mPackageName;
         private int mPackageId;
         private long mPackageFingerprint;
+        private boolean mRedactExportedReads;
         private int mBooleanStartIndex;
         private int mNextOffset;
         private boolean mHasPackageFingerprint;
+        private boolean mHasRedactExportedReads;
 
         private static Node fromBytes(ByteBufferReader reader, int version) {
             switch (version) {
@@ -155,6 +159,8 @@ public class PackageTable {
                     return fromBytesV1(reader);
                 case 2:
                     return fromBytesV2(reader);
+                case 3:
+                    return fromBytesV3(reader);
                 default:
                     // Do we want to throw here?
                     return new Node();
@@ -176,6 +182,20 @@ public class PackageTable {
             node.mPackageName = reader.readString();
             node.mPackageId = reader.readInt();
             node.mPackageFingerprint = reader.readLong();
+            node.mBooleanStartIndex = reader.readInt();
+            node.mNextOffset = reader.readInt();
+            node.mNextOffset = node.mNextOffset == 0 ? -1 : node.mNextOffset;
+            node.mHasPackageFingerprint = true;
+            return node;
+        }
+
+        private static Node fromBytesV3(ByteBufferReader reader) {
+            Node node = new Node();
+            node.mPackageName = reader.readString();
+            node.mPackageId = reader.readInt();
+            node.mPackageFingerprint = reader.readLong();
+            node.mRedactExportedReads = reader.readBoolean();
+            node.mHasRedactExportedReads = true;
             node.mBooleanStartIndex = reader.readInt();
             node.mNextOffset = reader.readInt();
             node.mNextOffset = node.mNextOffset == 0 ? -1 : node.mNextOffset;
@@ -217,6 +237,10 @@ public class PackageTable {
             return mPackageFingerprint;
         }
 
+        public boolean getRedactExportedReads() {
+            return mRedactExportedReads;
+        }
+
         public int getBooleanStartIndex() {
             return mBooleanStartIndex;
         }
@@ -227,6 +251,10 @@ public class PackageTable {
 
         public boolean hasPackageFingerprint() {
             return mHasPackageFingerprint;
+        }
+
+        public boolean hasRedactExportedReads() {
+            return mHasRedactExportedReads;
         }
     }
 }

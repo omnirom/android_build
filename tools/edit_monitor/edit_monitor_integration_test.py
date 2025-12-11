@@ -58,18 +58,20 @@ class EditMonitorIntegrationTest(unittest.TestCase):
     super().tearDown()
 
   def test_log_single_edit_event_success(self):
-    p = self._start_edit_monitor_process()
-
     # Create the .git file under the monitoring dir.
     self.root_monitoring_path.joinpath(".git").touch()
+    test_dir = self.root_monitoring_path.joinpath('test')
+    test_dir.mkdir()
+
+    p = self._start_edit_monitor_process()
 
     # Create and modify a file.
-    test_file = self.root_monitoring_path.joinpath("test.txt")
+    test_file = test_dir.joinpath("test.txt")
     with open(test_file, "w") as f:
       f.write("something")
 
     # Move the file.
-    test_file_moved = self.root_monitoring_path.joinpath("new_test.txt")
+    test_file_moved = test_dir.joinpath("new_test.txt")
     test_file.rename(test_file_moved)
 
     # Delete the file.

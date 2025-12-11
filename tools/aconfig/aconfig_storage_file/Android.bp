@@ -9,7 +9,6 @@ rust_defaults {
     rustlibs: [
         "libanyhow",
         "libthiserror",
-        "libtempfile",
         "libprotobuf",
         "libclap",
         "libcxx",
@@ -33,6 +32,20 @@ rust_library {
     product_available: true,
 }
 
+rust_library {
+    name: "libaconfig_storage_file_with_test_utils",
+    crate_name: "aconfig_storage_file",
+    features: [
+        "test_utils",
+    ],
+    host_supported: true,
+    defaults: ["aconfig_storage_file.defaults"],
+    srcs: ["src/lib.rs"],
+    rustlibs: [
+        "libtempfile",
+    ],
+}
+
 rust_binary_host {
     name: "aconfig-storage",
     defaults: ["aconfig_storage_file.defaults"],
@@ -48,6 +61,9 @@ rust_test_host {
     test_suites: ["general-tests"],
     defaults: ["aconfig_storage_file.defaults"],
     srcs: ["src/lib.rs"],
+    rustlibs: [
+        "libtempfile",
+    ],
 }
 
 rust_protobuf {
@@ -148,6 +164,9 @@ java_library {
     srcs: [
         "srcs/**/*.java",
     ],
+    libs: [
+        "ravenwood-annotations-lib",
+    ],
     sdk_version: "core_current",
     min_sdk_version: "29",
     host_supported: true,
@@ -155,15 +174,4 @@ java_library {
         "//apex_available:platform",
         "//apex_available:anyapex",
     ],
-}
-
-// storage file parse api java library for core library
-java_library {
-    name: "aconfig_storage_file_java_none",
-    srcs: [
-        "srcs/**/*.java",
-    ],
-    sdk_version: "none",
-    system_modules: "core-all-system-modules",
-    host_supported: true,
 }

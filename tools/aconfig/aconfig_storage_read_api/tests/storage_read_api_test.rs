@@ -26,10 +26,10 @@ mod aconfig_storage_rust_test {
         let flag_map = storage_dir.clone() + "/maps/mockup.flag.map";
         let flag_val = storage_dir.clone() + "/boot/mockup.val";
         let flag_info = storage_dir.clone() + "/boot/mockup.info";
-        fs::copy(format!("./data/v{0}/package_v{0}.map", version), package_map).unwrap();
-        fs::copy(format!("./data/v{0}/flag_v{0}.map", version), flag_map).unwrap();
-        fs::copy(format!("./data/v{}/flag_v{0}.val", version), flag_val).unwrap();
-        fs::copy(format!("./data/v{}/flag_v{0}.info", version), flag_info).unwrap();
+        fs::copy(format!("./data/v{version}/package_v{version}.map"), package_map).unwrap();
+        fs::copy(format!("./data/v{version}/flag_v{version}.map"), flag_map).unwrap();
+        fs::copy(format!("./data/v{version}/flag_v{version}.val"), flag_val).unwrap();
+        fs::copy(format!("./data/v{version}/flag_v{version}.info"), flag_info).unwrap();
 
         storage_dir
     }
@@ -43,7 +43,7 @@ mod aconfig_storage_rust_test {
             get_mapped_file(&storage_dir, "vendor", StorageFileType::PackageMap).unwrap_err()
         };
         assert_eq!(
-            format!("{:?}", err),
+            format!("{err:?}"),
             format!(
                 "StorageFileNotFound(storage file {}/maps/vendor.package.map does not exist)",
                 storage_dir
@@ -208,7 +208,7 @@ mod aconfig_storage_rust_test {
             unsafe { get_mapped_file(&storage_dir, "mockup", StorageFileType::FlagVal).unwrap() };
         let err = get_boolean_flag_value(&flag_value_file, 8u32).unwrap_err();
         assert_eq!(
-            format!("{:?}", err),
+            format!("{err:?}"),
             "InvalidStorageFileOffset(Flag value offset goes beyond the end of the file.)"
         );
     }
@@ -239,7 +239,7 @@ mod aconfig_storage_rust_test {
             unsafe { get_mapped_file(&storage_dir, "mockup", StorageFileType::FlagInfo).unwrap() };
         let err = get_flag_attribute(&flag_info_file, FlagValueType::Boolean, 8u32).unwrap_err();
         assert_eq!(
-            format!("{:?}", err),
+            format!("{err:?}"),
             "InvalidStorageFileOffset(Flag info offset goes beyond the end of the file.)"
         );
     }

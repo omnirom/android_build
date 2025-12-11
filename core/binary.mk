@@ -7,7 +7,6 @@
 
 #######################################
 include $(BUILD_SYSTEM)/base_rules.mk
-include $(BUILD_SYSTEM)/use_lld_setup.mk
 #######################################
 
 ##################################################
@@ -156,12 +155,12 @@ endif
 my_tidy_checks := $(subst $(space),,$(my_tidy_checks))
 
 # Configure the pool to use for clang rules.
-# If LOCAL_CC or LOCAL_CXX is set don't use goma or RBE.
+# If LOCAL_CC or LOCAL_CXX is set don't RBE.
 # If clang-tidy is being used, don't use the RBE pool (as clang-tidy runs in
 # the same action, and is not remoted)
 my_pool :=
 ifeq (,$(strip $(my_cc))$(strip $(my_cxx))$(strip $(my_tidy_checks)))
-  my_pool := $(GOMA_OR_RBE_POOL)
+  my_pool := $(RBE_POOL)
 endif
 
 ifneq (,$(strip $(foreach dir,$(NATIVE_COVERAGE_PATHS),$(filter $(dir)%,$(LOCAL_PATH)))))
@@ -1651,17 +1650,13 @@ ifndef LOCAL_IS_HOST_MODULE
 my_target_global_cflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CFLAGS)
 my_target_global_conlyflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CONLYFLAGS) $(my_c_std_conlyflags)
 my_target_global_cppflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CPPFLAGS) $(my_cpp_std_cppflags)
-ifeq ($(my_use_clang_lld),true)
-  my_target_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LLDFLAGS)
-  include $(BUILD_SYSTEM)/pack_dyn_relocs_setup.mk
-  ifeq ($(my_pack_module_relocations),true)
-    my_target_global_ldflags += -Wl,--pack-dyn-relocs=android+relr -Wl,--use-android-relr-tags
-  else
-    my_target_global_ldflags += -Wl,--pack-dyn-relocs=none
-  endif
+my_target_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LDFLAGS)
+include $(BUILD_SYSTEM)/pack_dyn_relocs_setup.mk
+ifeq ($(my_pack_module_relocations),true)
+  my_target_global_ldflags += -Wl,--pack-dyn-relocs=android+relr -Wl,--use-android-relr-tags
 else
-  my_target_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LDFLAGS)
-endif # my_use_clang_lld
+  my_target_global_ldflags += -Wl,--pack-dyn-relocs=none
+endif
 
 ifeq ($(call module-in-vendor-or-product),true)
   my_target_global_c_includes :=
@@ -1706,11 +1701,7 @@ my_host_global_c_system_includes := $(SRC_SYSTEM_HEADERS) \
 my_host_global_cflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CFLAGS)
 my_host_global_conlyflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CONLYFLAGS) $(my_c_std_conlyflags)
 my_host_global_cppflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_CPPFLAGS) $(my_cpp_std_cppflags)
-ifeq ($(my_use_clang_lld),true)
-  my_host_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LLDFLAGS)
-else
-  my_host_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LDFLAGS)
-endif # my_use_clang_lld
+my_host_global_ldflags := $($(LOCAL_2ND_ARCH_VAR_PREFIX)CLANG_$(my_prefix)GLOBAL_LDFLAGS)
 
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_GLOBAL_C_INCLUDES := $(my_host_global_c_includes)
 $(LOCAL_INTERMEDIATE_TARGETS): PRIVATE_GLOBAL_C_SYSTEM_INCLUDES := $(my_host_global_c_system_includes)

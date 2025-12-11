@@ -50,8 +50,6 @@ pub use auto_generated::*;
 
 use anyhow::Result;
 use protobuf::Message;
-use std::io::Write;
-use tempfile::NamedTempFile;
 
 pub mod storage_record_pb {
     use super::*;
@@ -89,13 +87,6 @@ pub mod storage_record_pb {
         let mut binary_proto = Vec::new();
         storage_files.write_to_vec(&mut binary_proto)?;
         Ok(binary_proto)
-    }
-
-    pub fn write_proto_to_temp_file(text_proto: &str) -> Result<NamedTempFile> {
-        let bytes = get_binary_proto_from_text_proto(text_proto).unwrap();
-        let mut file = NamedTempFile::new()?;
-        let _ = file.write_all(&bytes);
-        Ok(file)
     }
 }
 

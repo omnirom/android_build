@@ -61,6 +61,10 @@ public class DependencyMapperTest {
     public static String PERM_DATA_PATH = "frameworks/base/core/permission/PermissionSources$Data.java";
     public static String PERM_DATA_PACKAGE = "com.android.permission.PermissionSources$Data";
 
+    public static String KT_DEP_DATA_PATH = "src/com/android/ktdep/DepOnKotlin.java";
+    public static String KT_DEP_DATA_PACKAGE = "com.android.ktdep.DepOnKotlin";
+    public static String KT_DEP_KT_CLASS = "com.android.ktdept.KtClass";
+
     static {
         JavaSourceData audioConstants = new JavaSourceData(AUDIO_CONS_PATH, AUDIO_CONS_PACKAGE + ".java");
         JavaSourceData audioToneConstants =
@@ -69,46 +73,57 @@ public class DependencyMapperTest {
         JavaSourceData permManager = new JavaSourceData(PERM_MANAGER_PATH, PERM_MANAGER_PACKAGE + ".java");
         JavaSourceData permSource = new JavaSourceData(PERM_SOURCE_PATH, PERM_SOURCE_PACKAGE + ".java");
         JavaSourceData permSourceData = new JavaSourceData(PERM_DATA_PATH, PERM_DATA_PACKAGE + ".java");
+        JavaSourceData ktDepSourceData = new JavaSourceData(KT_DEP_DATA_PATH, KT_DEP_DATA_PACKAGE + ".java");
 
         JavaSourceData sourceNotPresentInClass =
                 new JavaSourceData(SOURCE_ANNO_PATH, SOURCE_ANNO_PACKAGE);
 
         mJavaSourceData.addAll(List.of(audioConstants, audioToneConstants, stManager,
-                permManager, permSource, permSourceData, sourceNotPresentInClass));
+                permManager, permSource, permSourceData, sourceNotPresentInClass, ktDepSourceData));
 
         ClassDependencyData audioConstantsDeps =
                 new ClassDependencyData(AUDIO_CONS_PACKAGE + ".java",
                         AUDIO_CONS_PACKAGE, new HashSet<>(), false,
-                        new HashSet<>(List.of(AUDIO_CONS)), new HashSet<>());
+                        new HashSet<>(List.of(AUDIO_CONS)), new HashSet<>(),
+                        new HashSet<>());
 
         ClassDependencyData audioToneConstantsDeps =
                 new ClassDependencyData(AUDIO_TONE_CONS_PACKAGE + ".java",
                         AUDIO_TONE_CONS_PACKAGE, new HashSet<>(), false,
                         new HashSet<>(List.of(AUDIO_TONE_CONS_1, AUDIO_TONE_CONS_2)),
-                        new HashSet<>());
+                        new HashSet<>(), new HashSet<>());
 
         ClassDependencyData stManagerDeps =
                 new ClassDependencyData(ST_MANAGER_PACKAGE + ".java",
                         ST_MANAGER_PACKAGE, new HashSet<>(List.of(PERM_SOURCE_PACKAGE)), false,
-                        new HashSet<>(), new HashSet<>(List.of(AUDIO_CONS, AUDIO_TONE_CONS_1)));
+                        new HashSet<>(), new HashSet<>(List.of(AUDIO_CONS, AUDIO_TONE_CONS_1)),
+                        new HashSet<>());
 
         ClassDependencyData permManagerDeps =
                 new ClassDependencyData(PERM_MANAGER_PACKAGE + ".java", PERM_MANAGER_PACKAGE,
                         new HashSet<>(List.of(PERM_SOURCE_PACKAGE, PERM_DATA_PACKAGE)), false,
-                        new HashSet<>(), new HashSet<>(List.of(CONST_OUTSIDE_SCOPE)));
+                        new HashSet<>(), new HashSet<>(List.of(CONST_OUTSIDE_SCOPE)),
+                        new HashSet<>());
 
         ClassDependencyData permSourceDeps =
                 new ClassDependencyData(PERM_SOURCE_PACKAGE + ".java",
                         PERM_SOURCE_PACKAGE, new HashSet<>(), false,
-                        new HashSet<>(), new HashSet<>());
+                        new HashSet<>(), new HashSet<>(), new HashSet<>());
 
         ClassDependencyData permSourceDataDeps =
                 new ClassDependencyData(PERM_DATA_PACKAGE + ".java",
                         PERM_DATA_PACKAGE, new HashSet<>(), false,
-                        new HashSet<>(), new HashSet<>());
+                        new HashSet<>(), new HashSet<>(), new HashSet<>());
+
+        ClassDependencyData dependsonKotlinDataDeps =
+                new ClassDependencyData(KT_DEP_DATA_PACKAGE + ".java",
+                        KT_DEP_DATA_PACKAGE, new HashSet<>(), false,
+                        new HashSet<>(), new HashSet<>(), new HashSet<>(List.of(KT_DEP_KT_CLASS)));
+
 
         mClassDependencyData.addAll(List.of(audioConstantsDeps, audioToneConstantsDeps,
-                stManagerDeps, permManagerDeps, permSourceDeps, permSourceDataDeps));
+                stManagerDeps, permManagerDeps, permSourceDeps, permSourceDataDeps,
+                dependsonKotlinDataDeps));
     }
 
     @BeforeClass
@@ -123,49 +138,90 @@ public class DependencyMapperTest {
         DependencyProto.FileDependency audioDepsActual = mFileDependencyMap.get(AUDIO_CONS_PATH);
         assertNotNull(AUDIO_CONS_PATH + " not found in dependencyList", audioDepsActual);
         // This file should have 0 dependencies.
-        validateDependencies(audioDepsActual, AUDIO_CONS_PATH, 0, new ArrayList<>());
+        validateDependencies(
+                audioDepsActual, AUDIO_CONS_PATH, 0, new ArrayList<>(), new ArrayList<>());
 
         // Test for AUDIO_TONE_CONS_PATH
         DependencyProto.FileDependency audioToneDepsActual =
                 mFileDependencyMap.get(AUDIO_TONE_CONS_PATH);
-        assertNotNull(AUDIO_TONE_CONS_PATH + " not found in dependencyList", audioDepsActual);
+        assertNotNull(AUDIO_TONE_CONS_PATH + " not found in dependencyList", audioToneDepsActual);
         // This file should have 0 dependencies.
-        validateDependencies(audioToneDepsActual, AUDIO_TONE_CONS_PATH, 0, new ArrayList<>());
+        validateDependencies(
+                audioToneDepsActual,
+                AUDIO_TONE_CONS_PATH,
+                0,
+                new ArrayList<>(),
+                new ArrayList<>());
 
         // Test for ST_MANAGER_PATH
         DependencyProto.FileDependency stManagerDepsActual =
                 mFileDependencyMap.get(ST_MANAGER_PATH);
-        assertNotNull(ST_MANAGER_PATH + " not found in dependencyList", audioDepsActual);
+        assertNotNull(ST_MANAGER_PATH + " not found in dependencyList", stManagerDepsActual);
         // This file should have 3 dependencies.
-        validateDependencies(stManagerDepsActual, ST_MANAGER_PATH, 3,
-                new ArrayList<>(List.of(AUDIO_CONS_PATH, AUDIO_TONE_CONS_PATH, PERM_SOURCE_PATH)));
+        validateDependencies(
+                stManagerDepsActual,
+                ST_MANAGER_PATH,
+                3,
+                new ArrayList<>(List.of(AUDIO_CONS_PATH, AUDIO_TONE_CONS_PATH, PERM_SOURCE_PATH)),
+                new ArrayList<>());
 
         // Test for PERM_MANAGER_PATH
         DependencyProto.FileDependency permManagerDepsActual =
                 mFileDependencyMap.get(PERM_MANAGER_PATH);
-        assertNotNull(PERM_MANAGER_PATH + " not found in dependencyList", audioDepsActual);
+        assertNotNull(PERM_MANAGER_PATH + " not found in dependencyList", permManagerDepsActual);
         // This file should have 2 dependencies.
-        validateDependencies(permManagerDepsActual, PERM_MANAGER_PATH, 2,
-                new ArrayList<>(List.of(PERM_SOURCE_PATH, PERM_DATA_PATH)));
+        validateDependencies(
+                permManagerDepsActual,
+                PERM_MANAGER_PATH,
+                2,
+                new ArrayList<>(List.of(PERM_SOURCE_PATH, PERM_DATA_PATH)),
+                new ArrayList<>());
 
         // Test for PERM_SOURCE_PATH
         DependencyProto.FileDependency permSourceDepsActual =
                 mFileDependencyMap.get(PERM_SOURCE_PATH);
-        assertNotNull(PERM_SOURCE_PATH + " not found in dependencyList", audioDepsActual);
+        assertNotNull(PERM_SOURCE_PATH + " not found in dependencyList", permSourceDepsActual);
         // This file should have 0 dependencies.
-        validateDependencies(permSourceDepsActual, PERM_SOURCE_PATH, 0, new ArrayList<>());
+        validateDependencies(
+                permSourceDepsActual, PERM_SOURCE_PATH, 0, new ArrayList<>(), new ArrayList<>());
 
         // Test for PERM_DATA_PATH
         DependencyProto.FileDependency permDataDepsActual =
                 mFileDependencyMap.get(PERM_DATA_PATH);
-        assertNotNull(PERM_DATA_PATH + " not found in dependencyList", audioDepsActual);
+        assertNotNull(PERM_DATA_PATH + " not found in dependencyList", permDataDepsActual);
         // This file should have 0 dependencies.
-        validateDependencies(permDataDepsActual, PERM_DATA_PATH, 0, new ArrayList<>());
+        validateDependencies(
+                permDataDepsActual, PERM_DATA_PATH, 0, new ArrayList<>(), new ArrayList<>());
+
+        // Test for KT_DEP_DATA_PATH
+        DependencyProto.FileDependency ktDepDataDepsActual =
+                mFileDependencyMap.get(KT_DEP_DATA_PATH);
+        assertNotNull(KT_DEP_DATA_PATH + " not found in dependencyList", ktDepDataDepsActual);
+        // This file should have 0 dependencies.
+        validateDependencies(
+                ktDepDataDepsActual,
+                KT_DEP_DATA_PATH,
+                0,
+                new ArrayList<>(),
+                new ArrayList<>(List.of(KT_DEP_KT_CLASS)));
     }
 
-    private void validateDependencies(DependencyProto.FileDependency dependency, String fileName, int fileDepsCount, List<String> fileDeps) {
-        assertEquals(fileName + " does not have expected dependencies", fileDepsCount, dependency.getFileDependenciesCount());
-        assertTrue(fileName + " does not have expected dependencies", dependency.getFileDependenciesList().containsAll(fileDeps));
+    private void validateDependencies(
+            DependencyProto.FileDependency dependency,
+            String fileName,
+            int fileDepsCount,
+            List<String> fileDeps,
+            List<String> crossModuleClassDeps) {
+        assertEquals(
+                fileName + " does not have expected dependencies",
+                fileDepsCount,
+                dependency.getFileDependenciesCount());
+        assertTrue(
+                fileName + " does not have expected dependencies",
+                dependency.getFileDependenciesList().containsAll(fileDeps));
+        assertTrue(
+                fileName + " does not have expected cross-module class dependencies : " + String.join(",", dependency.getCrossModuleClassDepsList()),
+                dependency.getCrossModuleClassDepsList().containsAll(crossModuleClassDeps));
     }
 
     private static Map<String, DependencyProto.FileDependency> buildActualDepsMap(
@@ -192,6 +248,9 @@ public class DependencyMapperTest {
             }
             if (fileDependency.getFilePath().equals(SOURCE_ANNO_PATH)) {
                 dependencyMap.put(SOURCE_ANNO_PATH, fileDependency);
+            }
+            if (fileDependency.getFilePath().equals(KT_DEP_DATA_PATH)) {
+                dependencyMap.put(KT_DEP_DATA_PATH, fileDependency);
             }
         }
         assertFalse(SOURCE_ANNO_PATH + " found in dependencyList",

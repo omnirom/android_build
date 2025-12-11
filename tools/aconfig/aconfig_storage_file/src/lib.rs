@@ -38,6 +38,7 @@ pub mod flag_value;
 pub mod package_table;
 pub mod protos;
 pub mod sip_hasher13;
+#[cfg(any(test, feature = "test_utils"))]
 pub mod test_utils;
 
 use anyhow::anyhow;
@@ -59,11 +60,11 @@ use crate::AconfigStorageError::{
 
 /// The max storage file version from which we can safely read/write. May be
 /// experimental.
-pub const MAX_SUPPORTED_FILE_VERSION: u32 = 2;
+pub const MAX_SUPPORTED_FILE_VERSION: u32 = 3;
 
 /// The newest fully-released version. Unless otherwise specified, this is the
 /// version we will write.
-pub const DEFAULT_FILE_VERSION: u32 = 1;
+pub const DEFAULT_FILE_VERSION: u32 = 2;
 
 /// Good hash table prime number
 pub(crate) const HASH_PRIMES: [u32; 29] = [

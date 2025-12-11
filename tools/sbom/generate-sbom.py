@@ -19,7 +19,7 @@ Generate the SBOM of the current target product in SPDX format.
 Usage example:
   generate-sbom.py --output_file out/target/product/vsoc_x86_64/sbom.spdx \
                    --metadata out/target/product/vsoc_x86_64/sbom-metadata.csv \
-                   --build_version $(cat out/target/product/vsoc_x86_64/build_fingerprint.txt) \
+                   --build_version $(cat out/target/product/vsoc_x86_64/build_fingerprint-${TARGET_PRODUCT}.txt) \
                    --product_mfr=Google
 """
 

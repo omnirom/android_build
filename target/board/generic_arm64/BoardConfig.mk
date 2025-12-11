@@ -62,13 +62,6 @@ include build/make/target/board/BoardConfigGsiCommon.mk
 # Some vendors still haven't cleaned up all device specific directories under
 # root!
 
-# TODO(b/111434759, b/111287060) SoC specific hacks
-BOARD_ROOT_EXTRA_SYMLINKS += /vendor/lib/dsp:/dsp
-BOARD_ROOT_EXTRA_SYMLINKS += /mnt/vendor/persist:/persist
-BOARD_ROOT_EXTRA_SYMLINKS += /vendor/firmware_mnt:/firmware
-# for Android.bp
-TARGET_ADD_ROOT_EXTRA_VENDOR_SYMLINKS := true
-
 # TODO(b/36764215): remove this setting when the generic system image
 # no longer has QCOM-specific directories under /.
 BOARD_SEPOLICY_DIRS += build/make/target/board/generic_arm64/sepolicy

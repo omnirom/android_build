@@ -336,9 +336,9 @@ $(eval _dump_variables_rbc_excluded := \
   TOPDIR \
   TRACE_BEGIN_SOONG \
   USER)
-$(file >$(OUT_DIR)/dump-variables-rbc-temp.txt,$(subst $(space),$(newline),$(sort $(filter-out $(_dump_variables_rbc_excluded),$(.VARIABLES)))))
+$(file >$(OUT_DIR)/dump-variables-rbc-temp-$(TARGET_PRODUCT).txt,$(subst $(space),$(newline),$(sort $(filter-out $(_dump_variables_rbc_excluded),$(.VARIABLES)))))
 $(file >$(1),\
-$(foreach v, $(shell grep -he "^[A-Z][A-Z0-9_]*$$" $(OUT_DIR)/dump-variables-rbc-temp.txt),\
+$(foreach v, $(shell grep -he "^[A-Z][A-Z0-9_]*$$" $(OUT_DIR)/dump-variables-rbc-temp-$(TARGET_PRODUCT).txt),\
 $(v) := $(strip $($(v)))$(newline))\
 $(foreach ns,$(sort $(SOONG_CONFIG_NAMESPACES)),\
 $(foreach v,$(sort $(SOONG_CONFIG_$(ns))),\
@@ -415,7 +415,6 @@ HOST_OUT_RENDERSCRIPT_BITCODE := $(HOST_OUT_SHARED_LIBRARIES)
 HOST_OUT_JAVA_LIBRARIES := $(HOST_OUT)/framework
 HOST_OUT_SDK_ADDON := $(HOST_OUT)/sdk_addon
 HOST_OUT_NATIVE_TESTS := $(HOST_OUT)/nativetest64
-HOST_OUT_COVERAGE := $(HOST_OUT)/coverage
 HOST_OUT_TESTCASES := $(HOST_OUT)/testcases
 HOST_OUT_ETC := $(HOST_OUT)/etc
 .KATI_READONLY := \
@@ -425,20 +424,17 @@ HOST_OUT_ETC := $(HOST_OUT)/etc
   HOST_OUT_JAVA_LIBRARIES \
   HOST_OUT_SDK_ADDON \
   HOST_OUT_NATIVE_TESTS \
-  HOST_OUT_COVERAGE \
   HOST_OUT_TESTCASES \
   HOST_OUT_ETC
 
 HOST_CROSS_OUT_EXECUTABLES := $(HOST_CROSS_OUT)/bin
 HOST_CROSS_OUT_SHARED_LIBRARIES := $(HOST_CROSS_OUT)/lib
 HOST_CROSS_OUT_NATIVE_TESTS := $(HOST_CROSS_OUT)/nativetest
-HOST_CROSS_OUT_COVERAGE := $(HOST_CROSS_OUT)/coverage
 HOST_CROSS_OUT_TESTCASES := $(HOST_CROSS_OUT)/testcases
 .KATI_READONLY := \
   HOST_CROSS_OUT_EXECUTABLES \
   HOST_CROSS_OUT_SHARED_LIBRARIES \
   HOST_CROSS_OUT_NATIVE_TESTS \
-  HOST_CROSS_OUT_COVERAGE \
   HOST_CROSS_OUT_TESTCASES
 
 HOST_OUT_INTERMEDIATES := $(HOST_OUT)/obj
@@ -987,24 +983,19 @@ $(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_SYSTEM_EXT_APPS_PRIVILEGED := $(TARGET_O
   $(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_SYSTEM_EXT_APPS \
   $(TARGET_2ND_ARCH_VAR_PREFIX)TARGET_OUT_SYSTEM_EXT_APPS_PRIVILEGED
 
-TARGET_OUT_BREAKPAD := $(PRODUCT_OUT)/breakpad
-.KATI_READONLY := TARGET_OUT_BREAKPAD
-
 TARGET_OUT_UNSTRIPPED := $(PRODUCT_OUT)/symbols
 TARGET_OUT_EXECUTABLES_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)/system/bin
 TARGET_OUT_SHARED_LIBRARIES_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)/system/lib
 TARGET_OUT_VENDOR_SHARED_LIBRARIES_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)/$(TARGET_COPY_OUT_VENDOR)/lib
 TARGET_ROOT_OUT_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)
 TARGET_ROOT_OUT_BIN_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)/bin
-TARGET_OUT_COVERAGE := $(PRODUCT_OUT)/coverage
 .KATI_READONLY := \
   TARGET_OUT_UNSTRIPPED \
   TARGET_OUT_EXECUTABLES_UNSTRIPPED \
   TARGET_OUT_SHARED_LIBRARIES_UNSTRIPPED \
   TARGET_OUT_VENDOR_SHARED_LIBRARIES_UNSTRIPPED \
   TARGET_ROOT_OUT_UNSTRIPPED \
-  TARGET_ROOT_OUT_BIN_UNSTRIPPED \
-  TARGET_OUT_COVERAGE
+  TARGET_ROOT_OUT_BIN_UNSTRIPPED
 
 TARGET_RAMDISK_OUT := $(PRODUCT_OUT)/$(TARGET_COPY_OUT_RAMDISK)
 TARGET_RAMDISK_OUT_UNSTRIPPED := $(TARGET_OUT_UNSTRIPPED)
@@ -1059,3 +1050,30 @@ PER_ARCH_MODULE_CLASSES := SHARED_LIBRARIES STATIC_LIBRARIES EXECUTABLES GYP REN
 ifeq ($(CALLED_FROM_SETUP),true)
 PRINT_BUILD_CONFIG ?= true
 endif
+
+# CTS-specific config.
+-include cts/build/config.mk
+# device-tests-specific-config.
+-include tools/tradefederation/build/suites/device-tests/config.mk
+# general-tests-specific-config.
+-include tools/tradefederation/build/suites/general-tests/config.mk
+# STS-specific config.
+-include test/sts/tools/sts-tradefed/build/config.mk
+# CTS-Instant-specific config
+-include test/suite_harness/tools/cts-instant-tradefed/build/config.mk
+# MTS-specific config.
+-include test/mts/tools/build/config.mk
+# VTS-Core-specific config.
+-include test/vts/tools/vts-core-tradefed/build/config.mk
+# CSUITE-specific config.
+-include test/app_compat/csuite/tools/build/config.mk
+# CATBox-specific config.
+-include test/catbox/tools/build/config.mk
+# CTS-Root-specific config.
+-include test/cts-root/tools/build/config.mk
+# WVTS-specific config.
+-include test/wvts/tools/build/config.mk
+# DTS-specific config.
+-include test/dts/tools/build/config.mk
+# Include the google-specific config
+-include vendor/google/build/config.mk

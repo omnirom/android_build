@@ -18,7 +18,7 @@
 
 use aconfig_storage_file::{
     list_flags, list_flags_with_info, read_file_to_bytes, AconfigStorageError, FlagInfoList,
-    FlagTable, FlagValueList, PackageTable, StorageFileType,
+    FlagTable, FlagValueList, PackageTable, StorageFileType, MAX_SUPPORTED_FILE_VERSION,
 };
 use clap::{builder::ArgAction, Arg, Command};
 use serde::Serialize;
@@ -89,6 +89,23 @@ fn cli() -> Command {
                         .long("type")
                         .required(true)
                         .value_parser(|s: &str| StorageFileType::try_from(s)),
+                ),
+        )
+        .subcommand(
+            Command::new("update-version")
+                // File path to update.
+                .arg(Arg::new("file").long("file").required(true).action(ArgAction::Set))
+                .arg(
+                    Arg::new("type")
+                        .long("type")
+                        .required(true)
+                        .value_parser(|s: &str| StorageFileType::try_from(s)),
+                )
+                .arg(
+                    Arg::new("version")
+                        .long("version")
+                        .required(true)
+                        .value_parser(|s: &str| s.parse::<u32>()),
                 ),
         )
 }
@@ -197,6 +214,51 @@ fn main() -> Result<(), AconfigStorageError> {
 
             let output_file_path = sub_matches.get_one::<String>("output-file").unwrap();
             let file = File::create(output_file_path);
+            if file.is_err() {
+                panic!("can't make file");
+            }
+            let _ = file.unwrap().write_all(&output_bytes);
+        }
+        // Reads in bytes, updates the version code, and writes out the bytes.
+        // Use the json if there are any changes to the file for this version.
+        // Intended to update the version code of files not affected by the
+        // version change.
+        // In other words, this is meant for host-side use to set up files for
+        // testing only.
+        Some(("update-version", sub_matches)) => {
+            let version = sub_matches.get_one::<u32>("version").unwrap();
+            if *version > MAX_SUPPORTED_FILE_VERSION {
+                panic!("version {} is not supported", version);
+            }
+            let file_path = sub_matches.get_one::<String>("file").unwrap();
+            let bytes = read_file_to_bytes(file_path)?;
+
+            let file_type = sub_matches.get_one::<StorageFileType>("type").unwrap();
+            let output_bytes: Vec<u8>;
+            match file_type {
+                StorageFileType::FlagVal => {
+                    let mut list = FlagValueList::from_bytes(&bytes)?;
+                    list.header.version = *version;
+                    output_bytes = list.into_bytes();
+                }
+                StorageFileType::FlagInfo => {
+                    let mut list = FlagInfoList::from_bytes(&bytes)?;
+                    list.header.version = *version;
+                    output_bytes = list.into_bytes();
+                }
+                StorageFileType::FlagMap => {
+                    let mut table = FlagTable::from_bytes(&bytes)?;
+                    table.header.version = *version;
+                    output_bytes = table.into_bytes();
+                }
+                StorageFileType::PackageMap => {
+                    let mut table = PackageTable::from_bytes(&bytes)?;
+                    table.header.version = *version;
+                    output_bytes = table.into_bytes();
+                }
+            }
+
+            let file = File::create(file_path);
             if file.is_err() {
                 panic!("can't make file");
             }

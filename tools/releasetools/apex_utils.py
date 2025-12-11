@@ -425,15 +425,12 @@ def SignCompressedApex(avbtool, apex_file, payload_key, container_key,
   Returns:
     The path to the signed APEX file.
   """
-  debugfs_path = os.path.join(OPTIONS.search_path, 'bin', 'debugfs_static')
-
   # 1. Decompress original_apex inside compressed apex.
   original_apex_file = common.MakeTempFile(prefix='original-apex-',
                                            suffix='.apex')
   # Decompression target path should not exist
   os.remove(original_apex_file)
-  common.RunAndCheckOutput(['deapexer', '--debugfs_path', debugfs_path,
-                            'decompress', '--input', apex_file,
+  common.RunAndCheckOutput(['deapexer', 'decompress', '--input', apex_file,
                             '--output', original_apex_file])
 
   # 2. Sign original_apex
@@ -495,9 +492,7 @@ def SignApex(avbtool, apex_data, payload_key, container_key, container_pw,
   with open(apex_file, 'wb') as output_fp:
     output_fp.write(apex_data)
 
-  debugfs_path = os.path.join(OPTIONS.search_path, 'bin', 'debugfs_static')
-  cmd = ['deapexer', '--debugfs_path', debugfs_path,
-         'info', '--print-type', apex_file]
+  cmd = ['deapexer', 'info', '--print-type', apex_file]
 
   try:
     apex_type = common.RunAndCheckOutput(cmd).strip()
@@ -571,10 +566,6 @@ def GetApexInfoForPartition(input_file, partition):
 
   apex_infos = []
 
-  debugfs_path = "debugfs"
-  if OPTIONS.search_path:
-    debugfs_path = os.path.join(OPTIONS.search_path, "bin", "debugfs_static")
-
   deapexer = 'deapexer'
   if OPTIONS.search_path:
     deapexer_path = os.path.join(OPTIONS.search_path, "bin", "deapexer")
@@ -594,8 +585,7 @@ def GetApexInfoForPartition(input_file, partition):
     apex_info.version = manifest.version
     # Check if the file is compressed or not
     apex_type = RunAndCheckOutput([
-        deapexer, "--debugfs_path", debugfs_path,
-        'info', '--print-type', apex_filepath]).rstrip()
+        deapexer, 'info', '--print-type', apex_filepath]).rstrip()
     if apex_type == 'COMPRESSED':
       apex_info.is_compressed = True
     elif apex_type == 'UNCOMPRESSED':

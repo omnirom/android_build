@@ -3,11 +3,9 @@
 ## Soong genrules are now sandboxed
 
 Previously, soong genrules could access any files in the source tree, without specifying them as
-inputs. This makes them incorrect in incremental builds, and incompatible with RBE and Bazel.
+inputs. This makes them incorrect in incremental builds, and incompatible with RBE.
 
-Now, genrules are sandboxed so they can only access their listed srcs. Modules denylisted in
-genrule/allowlists.go are exempt from this. You can also set `BUILD_BROKEN_GENRULE_SANDBOXING`
-in board config to disable this behavior.
+Now, genrules are sandboxed so they can only access their listed srcs.
 
 ## Partitions are no longer affected by previous builds
 
@@ -774,11 +772,6 @@ usage.
 In order to fix any issues brought up by these checks, the best way to fix them
 is to use tools checked into the tree -- either as prebuilts, or building them
 as host tools during the build.
-
-As a temporary measure, you can set `TEMPORARY_DISABLE_PATH_RESTRICTIONS=true`
-in your environment to temporarily turn off the error checks and allow any tool
-to be used (with logging). Beware that GCC didn't work well with the interposer
-used for logging, so this may not help in all cases.
 
 ## Deprecating / obsoleting envsetup.sh variables in Makefiles
 

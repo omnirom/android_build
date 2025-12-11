@@ -31,4 +31,23 @@
         <install-in user-type="PROFILE" />
         <do-not-install-in user-type="android.os.usertype.profile.CLONE" />
     </install-in-user-type>
+
+    <!--  Blocked Number Provider (BlockedNumberProvider) -->
+    <install-in-user-type package="com.android.providers.blockednumber">
+        <install-in user-type="FULL" />
+        <install-in user-type="android.os.usertype.profile.MANAGED" />
+    </install-in-user-type>
+
+    <!-- Contactspicker App, only install in full users -->
+    <install-in-user-type package="com.android.contactspicker">
+        <install-in user-type="FULL" />
+    </install-in-user-type>
+
+    <!-- EyeDropper App that implements a public API in the form of an intent action. -->
+    <install-in-user-type package="com.android.eyedropper">
+        <install-in user-type="FULL" />
+        <install-in user-type="android.os.usertype.profile.CLONE" />
+        <install-in user-type="android.os.usertype.profile.MANAGED" />
+        <install-in user-type="android.os.usertype.profile.PRIVATE" />
+    </install-in-user-type>
 </config>

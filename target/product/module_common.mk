@@ -35,3 +35,6 @@ ifneq (,$(strip $(wildcard frameworks/base/Android.bp)))
 endif
 
 PRODUCT_BRAND := Android
+
+# Only run soong (and not make), for faster builds
+PRODUCT_SOONG_ONLY := true

@@ -21,8 +21,10 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -45,9 +47,12 @@ type context struct {
 	stripPrefix []string
 	title       string
 	deps        *[]string
+	filter      bool
+	filterTo    map[string]struct{}
+	replace     []stringPair
 }
 
-func (ctx context) strip(installPath string) string {
+func (ctx context) postprocessInstallPath(installPath string) string {
 	for _, prefix := range ctx.stripPrefix {
 		if strings.HasPrefix(installPath, prefix) {
 			p := strings.TrimPrefix(installPath, prefix)
@@ -57,7 +62,14 @@ func (ctx context) strip(installPath string) string {
 			if 0 == len(p) {
 				continue
 			}
-			return p
+			installPath = p
+			break
+		}
+	}
+	for _, replace := range ctx.replace {
+		if strings.Contains(installPath, replace.first) {
+			installPath = strings.Replace(installPath, replace.first, replace.second, 1)
+			break
 		}
 	}
 	return installPath
@@ -75,6 +87,56 @@ type multiString []string
 
 func (ms *multiString) String() string     { return strings.Join(*ms, ", ") }
 func (ms *multiString) Set(s string) error { *ms = append(*ms, s); return nil }
+
+// newMultiStringPair creates a flag that allows multiple values in an array.
+// Each value must be a pair separated by ":::".
+func newMultiStringPair(flags *flag.FlagSet, name, usage string) *multiStringPair {
+	var f multiStringPair
+	flags.Var(&f, name, usage)
+	return &f
+}
+
+type stringPair struct {
+	first string
+	second string
+}
+
+// multiString implements the flag `Value` interface for multiple strings.
+type multiStringPair []stringPair
+
+func (ms *multiStringPair) String() string {
+	var parts []string
+	for _, p := range *ms {
+		parts = append(parts, p.first + ":::" + p.second)
+	}
+	return strings.Join(parts, ", ")
+}
+func (ms *multiStringPair) Set(s string) error {
+	parts := strings.Split(s, ":::")
+	if len(parts) != 2 {
+		return fmt.Errorf("argument must contain exactly 1 \":::\", found: %q", s)
+	}
+	*ms = append(*ms, stringPair{parts[0], parts[1]})
+	return nil
+}
+
+
+// newMultiStringSet creates a flag that allows multiple values in an set.
+func newMultiStringSet(flags *flag.FlagSet, name, usage string) *multiStringSet {
+	f := make(multiStringSet)
+	flags.Var(&f, name, usage)
+	return &f
+}
+
+// multiString implements the flag `Value` interface for multiple strings.
+type multiStringSet map[string]struct{}
+
+func (ms *multiStringSet) String() string {
+	keys := slices.Collect(maps.Keys(*ms))
+	sort.Strings(keys)
+	return strings.Join(keys, ", ")
+}
+func (ms *multiStringSet) Set(s string) error { (*ms)[s] = struct{}{}; return nil }
 
 func main() {
 	var expandedArgs []string
@@ -114,9 +176,18 @@ Options:
 	depsFile := flags.String("d", "", "Where to write the deps file")
 	product := flags.String("product", "", "The name of the product for which the notice is generated.")
 	stripPrefix := newMultiString(flags, "strip_prefix", "Prefix to remove from paths. i.e. path to root (multiple allowed)")
+	filter := flags.Bool("filter", false, "Enabling flag for filtering. Should be accompanied by filter_to to specify the filter")
+	filterTo := newMultiStringSet(flags, "filter_to", "Only list these files in the notice file. Only active if -filter is true. (to allow filtering to empty lists)")
+	replace := newMultiStringPair(flags, "replace", "A src:::dst formatted replacement to apply to the filepaths.")
 	title := flags.String("title", "", "The title of the notice file.")
 
 	flags.Parse(expandedArgs)
+
+	// Cannot use -filter_to without -filter
+	if len(*filterTo) > 0 && !*filter {
+		flags.Usage()
+		os.Exit(2)
+	}
 
 	// Must specify at least one root target.
 	if flags.NArg() == 0 {
@@ -160,7 +231,18 @@ Options:
 
 	var deps []string
 
-	ctx := &context{ofile, os.Stderr, compliance.FS, *product, *stripPrefix, *title, &deps}
+	ctx := &context{
+		stdout: ofile,
+		stderr: os.Stderr,
+		rootFS: compliance.FS,
+		product: *product,
+		stripPrefix: *stripPrefix,
+		title: *title,
+		deps: &deps,
+		filter: *filter,
+		filterTo: *filterTo,
+		replace: *replace,
+	}
 
 	err := textNotice(ctx, flags.Args()...)
 	if err != nil {
@@ -219,11 +301,20 @@ func textNotice(ctx *context, files ...string) error {
 		fmt.Fprintf(ctx.stdout, "%s\n\n", ctx.title)
 	}
 	for h := range ni.Hashes() {
+		if ctx.filter && !ni.ContainsInstall(h, ctx.filterTo) {
+			continue
+		}
 		fmt.Fprintln(ctx.stdout, "==============================================================================")
 		for _, libName := range ni.HashLibs(h) {
+			if ctx.filter && !ni.ContainsInstallForLib(h, libName, ctx.filterTo) {
+				continue
+			}
 			fmt.Fprintf(ctx.stdout, "%s used by:\n", libName)
 			for _, installPath := range ni.HashLibInstalls(h, libName) {
-				fmt.Fprintf(ctx.stdout, "  %s\n", ctx.strip(installPath))
+				if _, ok := ctx.filterTo[installPath]; ctx.filter && !ok {
+					continue
+				}
+				fmt.Fprintf(ctx.stdout, "  %s\n", ctx.postprocessInstallPath(installPath))
 			}
 			fmt.Fprintln(ctx.stdout)
 		}

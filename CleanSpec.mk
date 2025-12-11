@@ -794,6 +794,9 @@ $(call add-clean-step, rm -f $(PRODUCT_OUT)/dexpreopt_config/dexpreopt_soong.con
 # Clear out Soong .intermediates directory regarding removal of hashed subdir
 $(call add-clean-step, rm -rf $(OUT_DIR)/soong/.intermediates)
 
+# Prefer the version of build-flag in build/soong/bin
+$(call add-clean-step, rm -f $(HOST_OUT)/bin/build-flag)
+
 # ************************************************
 # NEWER CLEAN STEPS MUST BE AT THE END OF THE LIST
 # ************************************************

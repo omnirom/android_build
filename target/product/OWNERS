@@ -1,4 +1,5 @@
-per-file runtime_libart.mk = mast@google.com, ngeoffray@google.com, rpl@google.com, vmarko@google.com
+per-file runtime_libart.mk = file:platform/art:main:/OWNERS
+per-file default_art_config.mk = file:platform/art:main:/OWNERS
 
 # GSI
 per-file gsi_release.mk = file:/target/product/gsi/OWNERS

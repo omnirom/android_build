@@ -79,9 +79,9 @@ mod tests {
     use aconfig_storage_file::{test_utils::create_test_package_table, DEFAULT_FILE_VERSION};
 
     #[test]
-    // this test point locks down table query
+    // this test point locks down table query - v1 files.
     fn test_package_query() {
-        let package_table = create_test_package_table(DEFAULT_FILE_VERSION).into_bytes();
+        let package_table = create_test_package_table(1).into_bytes();
         let package_context =
             find_package_read_context(&package_table[..], "com.android.aconfig.storage.test_1")
                 .unwrap()
@@ -106,7 +106,7 @@ mod tests {
     }
 
     #[test]
-    // this test point locks down table query
+    // this test point locks down table query - v2 files.
     fn test_package_query_v2() {
         let package_table = create_test_package_table(2).into_bytes();
         let package_context =

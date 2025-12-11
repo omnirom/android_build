@@ -1,0 +1,34 @@
+package {package_name};
+{{ -if runtime_lookup_required }}
+import android.provider.DeviceConfig;
+{{ -endif }}  {#- end of runtime_lookup_required#}
+/** @hide */
+public final class FeatureFlagsImpl implements FeatureFlags \{
+{{ -for flag in flag_elements }}
+    @Override
+{{ -if not library_exported }}
+    @com.android.aconfig.annotations.AconfigFlagAccessor
+{{ -endif }}{#- end of not library_exported #}
+    public boolean {flag.method_name}() \{
+{{ -if flag.is_read_write }}
+        try \{
+            return DeviceConfig.getBoolean(
+                "{flag.device_config_namespace}",
+                Flags.FLAG_{flag.flag_name_constant_suffix},
+                {flag.default_value});
+        } catch (NullPointerException e) \{
+            throw new RuntimeException(
+                "Cannot read value from namespace {flag.device_config_namespace} "
+                + "from DeviceConfig. It could be that the code using flag "
+                + "executed before SettingsProvider initialization. Please use "
+                + "fixed read-only flag by adding is_fixed_read_only: true in "
+                + "flag declaration.",
+                e
+            );
+        }
+{{ -else }} {#- else is_read_write #}
+        return {flag.default_value};
+{{ -endif }}{#- end of is_read_write #}
+    }
+{{ endfor }}
+}

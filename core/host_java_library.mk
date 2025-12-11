@@ -66,8 +66,6 @@ java_sources_deps := \
 $(java_source_list_file): $(java_sources_deps)
 	$(write-java-source-list)
 
-# TODO(b/143658984): goma can't handle the --system argument to javac.
-#$(full_classes_compiled_jar): .KATI_NINJA_POOL := $(GOMA_POOL)
 $(full_classes_compiled_jar): PRIVATE_JAVACFLAGS := $(LOCAL_JAVACFLAGS) $(annotation_processor_flags)
 $(full_classes_compiled_jar): PRIVATE_JAR_EXCLUDE_FILES :=
 $(full_classes_compiled_jar): PRIVATE_JAR_PACKAGES :=

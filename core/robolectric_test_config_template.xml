@@ -36,6 +36,7 @@
 
         <option name="jar" value="{MODULE}.jar" />
         <option name="java-flags" value="--add-modules=jdk.compiler"/>
+        <option name="java-flags" value="--add-opens=java.base/jdk.internal.ref=ALL-UNNAMED"/>
         <option name="java-flags" value="--add-opens=java.base/java.lang=ALL-UNNAMED"/>
         <option name="java-flags" value="--add-opens=java.base/java.lang.reflect=ALL-UNNAMED"/>
         <!-- b/238100560 -->

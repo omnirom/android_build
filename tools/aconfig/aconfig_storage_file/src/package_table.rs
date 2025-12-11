@@ -101,6 +101,7 @@ pub struct PackageTableNode {
     pub package_name: String,
     pub package_id: u32,
     pub fingerprint: u64,
+    pub redact_exported_reads: bool,
     // The index of the first boolean flag in this aconfig package among all boolean
     // flags in this container.
     pub boolean_start_index: u32,
@@ -112,10 +113,11 @@ impl fmt::Debug for PackageTableNode {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         writeln!(
             f,
-            "Package: {}, Id: {}, Fingerprint: {}, Boolean flag start index: {}, Next: {:?}",
+            "Package: {}, Id: {}, Fingerprint: {}, Redact Exported Reads: {}, Boolean flag start index: {}, Next: {:?}",
             self.package_name,
             self.package_id,
             self.fingerprint,
+            self.redact_exported_reads,
             self.boolean_start_index,
             self.next_offset
         )?;
@@ -129,6 +131,7 @@ impl PackageTableNode {
         match version {
             1 => Self::into_bytes_v1(self),
             2 => Self::into_bytes_v2(self),
+            3 => Self::into_bytes_v3(self),
             // TODO(b/316357686): into_bytes should return a Result.
             _ => Self::into_bytes_v2(&self),
         }
@@ -157,11 +160,25 @@ impl PackageTableNode {
         result
     }
 
+    fn into_bytes_v3(&self) -> Vec<u8> {
+        let mut result = Vec::new();
+        let name_bytes = self.package_name.as_bytes();
+        result.extend_from_slice(&(name_bytes.len() as u32).to_le_bytes());
+        result.extend_from_slice(name_bytes);
+        result.extend_from_slice(&self.package_id.to_le_bytes());
+        result.extend_from_slice(&self.fingerprint.to_le_bytes());
+        result.extend_from_slice(&u8::from(self.redact_exported_reads).to_le_bytes());
+        result.extend_from_slice(&self.boolean_start_index.to_le_bytes());
+        result.extend_from_slice(&self.next_offset.unwrap_or(0).to_le_bytes());
+        result
+    }
+
     /// Deserialize from bytes based on file version.
     pub fn from_bytes(bytes: &[u8], version: u32) -> Result<Self, AconfigStorageError> {
         match version {
             1 => Self::from_bytes_v1(bytes),
             2 => Self::from_bytes_v2(bytes),
+            3 => Self::from_bytes_v3(bytes),
             _ => {
                 return Err(AconfigStorageError::BytesParseFail(anyhow!(
                     "Binary file is an unsupported version: {}",
@@ -183,7 +200,14 @@ impl PackageTableNode {
             val => Some(val),
         };
 
-        let node = Self { package_name, package_id, fingerprint, boolean_start_index, next_offset };
+        let node = Self {
+            package_name,
+            package_id,
+            fingerprint,
+            redact_exported_reads: false,
+            boolean_start_index,
+            next_offset,
+        };
         Ok(node)
     }
 
@@ -198,7 +222,38 @@ impl PackageTableNode {
             val => Some(val),
         };
 
-        let node = Self { package_name, package_id, fingerprint, boolean_start_index, next_offset };
+        let node = Self {
+            package_name,
+            package_id,
+            fingerprint,
+            redact_exported_reads: false,
+            boolean_start_index,
+            next_offset,
+        };
+        Ok(node)
+    }
+
+    fn from_bytes_v3(bytes: &[u8]) -> Result<Self, AconfigStorageError> {
+        let mut head = 0;
+        let package_name = read_str_from_bytes(bytes, &mut head)?;
+        let package_id = read_u32_from_bytes(bytes, &mut head)?;
+        let fingerprint = read_u64_from_bytes(bytes, &mut head)?;
+        let redact_exported_reads_bytes = read_u8_from_bytes(bytes, &mut head)?;
+        let redact_exported_reads = redact_exported_reads_bytes == 1;
+        let boolean_start_index = read_u32_from_bytes(bytes, &mut head)?;
+        let next_offset = match read_u32_from_bytes(bytes, &mut head)? {
+            0 => None,
+            val => Some(val),
+        };
+
+        let node = Self {
+            package_name,
+            package_id,
+            fingerprint,
+            redact_exported_reads,
+            boolean_start_index,
+            next_offset,
+        };
         Ok(node)
     }
 

@@ -14,6 +14,8 @@
 # limitations under the License.
 #
 
+# This task is implemented in build/soong/filesystem/find_shareduid_violation_check.go.
+# It can be removed after only supporting Soong.
 shareduid_violation_modules_filename := $(PRODUCT_OUT)/shareduid_violation_modules.json
 
 $(shareduid_violation_modules_filename): $(INSTALLED_SYSTEMIMAGE_TARGET) \

@@ -185,7 +185,7 @@ def main(argv):
         tagsort = lambda tag: tag
 
     # Sort the summaries
-    summaries.sort(key=lambda s: (s[1]["date"], s[1]["branch"], tagsort(s[1]["tag"])))
+    summaries.sort(key=lambda s: (s[1]["date"], s[1]["branch"], tagsort(s[1]["tag"] or "")))
 
     # group the benchmarks by column and iteration
     def bm_key(b):

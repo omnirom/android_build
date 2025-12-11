@@ -16,10 +16,12 @@
 
 use anyhow::Result;
 use std::fs;
+use std::path::PathBuf;
 use tempfile::NamedTempFile;
 
 /// Create temp file copy
-pub(crate) fn copy_to_temp_file(source_file: &str, read_only: bool) -> Result<NamedTempFile> {
+pub(crate) fn copy_to_temp_file(relative_path: &str, read_only: bool) -> Result<NamedTempFile> {
+    let source_file = get_test_data_path(relative_path);
     let file = NamedTempFile::new()?;
     fs::copy(source_file, file.path())?;
     if read_only {
@@ -29,4 +31,20 @@ pub(crate) fn copy_to_temp_file(source_file: &str, read_only: bool) -> Result<Na
         fs::set_permissions(file.path(), perms.clone()).unwrap();
     }
     Ok(file)
+}
+
+fn get_test_data_path(relative_path: &str) -> PathBuf {
+    if let Ok(manifest_dir) = std::env::var("CARGO_MANIFEST_DIR") {
+        // Running with cargo, construct the path to the data files
+        // relative to aconfig_storage_read_api's manifest.
+        let mut path = PathBuf::from(manifest_dir);
+        path.pop(); // .../aconfig
+        path.push("aconfig_storage_file");
+        path.push("tests");
+        path.push(relative_path);
+        path
+    } else {
+        // Running with atest, test data is in the current directory
+        PathBuf::from(relative_path)
+    }
 }

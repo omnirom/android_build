@@ -69,16 +69,16 @@ def analyze_has_conditional(line):
           or line.startswith("ifdef") or line.startswith("ifndef"))
 
 NORMAL_INCLUDES = [re.compile(pattern) for pattern in (
-  "include \$+\(CLEAR_VARS\)", # These are in defines which are tagged separately
-  "include \$+\(BUILD_.*\)",
-  "include \$\(call first-makefiles-under, *\$\(LOCAL_PATH\)\)",
-  "include \$\(call all-subdir-makefiles\)",
-  "include \$\(all-subdir-makefiles\)",
-  "include \$\(call all-makefiles-under, *\$\(LOCAL_PATH\)\)",
-  "include \$\(call all-makefiles-under, *\$\(call my-dir\).*\)",
-  "include \$\(BUILD_SYSTEM\)/base_rules.mk", # called out separately
-  "include \$\(call all-named-subdir-makefiles,.*\)",
-  "include \$\(subdirs\)",
+  r"include \$+\(CLEAR_VARS\)", # These are in defines which are tagged separately
+  r"include \$+\(BUILD_.*\)",
+  r"include \$\(call first-makefiles-under, *\$\(LOCAL_PATH\)\)",
+  r"include \$\(call all-subdir-makefiles\)",
+  r"include \$\(all-subdir-makefiles\)",
+  r"include \$\(call all-makefiles-under, *\$\(LOCAL_PATH\)\)",
+  r"include \$\(call all-makefiles-under, *\$\(call my-dir\).*\)",
+  r"include \$\(BUILD_SYSTEM\)/base_rules.mk", # called out separately
+  r"include \$\(call all-named-subdir-makefiles,.*\)",
+  r"include \$\(subdirs\)",
 )]
 def analyze_has_wacky_include(line):
   if not (line.startswith("include") or line.startswith("-include")
@@ -89,7 +89,7 @@ def analyze_has_wacky_include(line):
       return False
   return True
 
-BASE_RULES_RE = re.compile("include \$\(BUILD_SYSTEM\)/base_rules.mk")
+BASE_RULES_RE = re.compile(r"include \$\(BUILD_SYSTEM\)/base_rules.mk")
 
 class Analyzer(object):
   def __init__(self, title, func):

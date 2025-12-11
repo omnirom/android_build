@@ -22,12 +22,12 @@ pub mod package_table;
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 
-use crate::commands::compute_flags_fingerprint;
+use crate::commands::{compute_flags_fingerprint, should_include_flag};
 use crate::storage::{
     flag_info::create_flag_info, flag_table::create_flag_table, flag_value::create_flag_value,
     package_table::create_package_table,
 };
-use aconfig_protos::{ProtoFlagPermission, ProtoFlagState, ProtoParsedFlag, ProtoParsedFlags};
+use aconfig_protos::{ProtoParsedFlag, ProtoParsedFlags};
 use aconfig_storage_file::StorageFileType;
 
 #[derive(Clone)]
@@ -35,6 +35,7 @@ pub struct FlagPackage<'a> {
     pub package_name: &'a str,
     pub package_id: u32,
     pub fingerprint: u64,
+    pub redact_exported_reads: bool,
     pub flag_names: HashSet<&'a str>,
     pub boolean_flags: Vec<&'a ProtoParsedFlag>,
     // The index of the first boolean flag in this aconfig package among all boolean
@@ -48,6 +49,7 @@ impl<'a> FlagPackage<'a> {
             package_name,
             package_id,
             fingerprint: 0,
+            redact_exported_reads: false,
             flag_names: HashSet::new(),
             boolean_flags: vec![],
             boolean_start_index: 0,
@@ -70,21 +72,15 @@ where
     let mut package_index: HashMap<&str, usize> = HashMap::new();
     for parsed_flags in parsed_flags_vec_iter {
         for parsed_flag in parsed_flags.parsed_flag.iter() {
+            // exclude both platform ro disabled flags as well as flags using device config
+            if !should_include_flag(parsed_flag) {
+                continue;
+            }
+
             let index = *(package_index.entry(parsed_flag.package()).or_insert(packages.len()));
             if index == packages.len() {
                 packages.push(FlagPackage::new(parsed_flag.package(), index as u32));
             }
-
-            // Exclude system/vendor/product flags that are RO+disabled.
-            if (parsed_flag.container == Some("system".to_string())
-                || parsed_flag.container == Some("vendor".to_string())
-                || parsed_flag.container == Some("product".to_string()))
-                && parsed_flag.permission == Some(ProtoFlagPermission::READ_ONLY.into())
-                && parsed_flag.state == Some(ProtoFlagState::DISABLED.into())
-            {
-                continue;
-            }
-
             packages[index].insert(parsed_flag);
         }
     }
@@ -100,6 +96,10 @@ where
                 p.flag_names.clone().into_iter().map(String::from).collect::<Vec<_>>();
             let fingerprint = compute_flags_fingerprint(&mut flag_names_vec);
             p.fingerprint = fingerprint;
+        }
+
+        if version >= 3 {
+            p.redact_exported_reads = cfg!(feature = "default_exported_reads_to_disabled");
         }
     }
 
@@ -139,10 +139,9 @@ where
 
 #[cfg(test)]
 mod tests {
-    use aconfig_storage_file::DEFAULT_FILE_VERSION;
 
     use super::*;
-    use crate::Input;
+    use crate::commands::Input;
 
     pub fn parse_all_test_flags() -> Vec<ProtoParsedFlags> {
         let aconfig_files = [
@@ -171,19 +170,24 @@ mod tests {
         aconfig_files
             .into_iter()
             .map(|(pkg, aconfig_file, aconfig_content, value_file, value_content)| {
+                let extended_permissions_options = crate::commands::ExtendedPermissionsOptions {
+                    default_permission: crate::commands::DEFAULT_FLAG_PERMISSION,
+                    allow_read_write: true,
+                    force_read_only: false,
+                };
                 let bytes = crate::commands::parse_flags(
                     pkg,
-                    Some("system"),
+                    "system",
                     vec![Input {
-                        source: format!("tests/{}", aconfig_file).to_string(),
+                        source: format!("tests/{aconfig_file}").to_string(),
                         reader: Box::new(aconfig_content),
                     }],
                     vec![Input {
-                        source: format!("tests/{}", value_file).to_string(),
+                        source: format!("tests/{value_file}").to_string(),
                         reader: Box::new(value_content),
                     }],
-                    crate::commands::DEFAULT_FLAG_PERMISSION,
-                    true,
+                    None,
+                    extended_permissions_options,
                 )
                 .unwrap();
                 aconfig_protos::parsed_flags::try_from_binary_proto(&bytes).unwrap()
@@ -191,10 +195,11 @@ mod tests {
             .collect()
     }
 
+    // Storage file v1.
     #[test]
     fn test_flag_package() {
         let caches = parse_all_test_flags();
-        let packages = group_flags_by_package(caches.iter(), DEFAULT_FILE_VERSION);
+        let packages = group_flags_by_package(caches.iter(), 1);
 
         for pkg in packages.iter() {
             let pkg_name = pkg.package_name;
@@ -234,6 +239,7 @@ mod tests {
         assert_eq!(packages[2].fingerprint, 0);
     }
 
+    // Storage file v2.
     #[test]
     fn test_flag_package_with_fingerprint() {
         let caches = parse_all_test_flags();
@@ -275,5 +281,101 @@ mod tests {
         assert!(packages[2].flag_names.contains("enabled_fixed_ro"));
         assert_eq!(packages[2].boolean_start_index, 6);
         assert_eq!(packages[2].fingerprint, 16233229917711622375u64);
+    }
+
+    // Storage file v3.
+    #[cfg(feature = "default_exported_reads_to_disabled")]
+    #[test]
+    fn test_flag_package_with_redaction_on() {
+        let caches = parse_all_test_flags();
+        let packages = group_flags_by_package(caches.iter(), 3);
+
+        for pkg in packages.iter() {
+            let pkg_name = pkg.package_name;
+            assert_eq!(pkg.flag_names.len(), pkg.boolean_flags.len());
+            for pf in pkg.boolean_flags.iter() {
+                assert!(pkg.flag_names.contains(pf.name()));
+                assert_eq!(pf.package(), pkg_name);
+            }
+        }
+
+        assert_eq!(packages.len(), 3);
+
+        assert_eq!(packages[0].package_name, "com.android.aconfig.storage.test_1");
+        assert_eq!(packages[0].package_id, 0);
+        assert_eq!(packages[0].flag_names.len(), 3);
+        assert!(packages[0].flag_names.contains("enabled_rw"));
+        assert!(packages[0].flag_names.contains("disabled_rw"));
+        assert!(packages[0].flag_names.contains("enabled_ro"));
+        assert_eq!(packages[0].boolean_start_index, 0);
+        assert_eq!(packages[0].fingerprint, 15248948510590158086u64);
+        assert!(packages[0].redact_exported_reads);
+
+        assert_eq!(packages[1].package_name, "com.android.aconfig.storage.test_2");
+        assert_eq!(packages[1].package_id, 1);
+        assert_eq!(packages[1].flag_names.len(), 3);
+        assert!(packages[1].flag_names.contains("enabled_ro"));
+        assert!(packages[1].flag_names.contains("disabled_rw"));
+        assert!(packages[1].flag_names.contains("enabled_fixed_ro"));
+        assert_eq!(packages[1].boolean_start_index, 3);
+        assert_eq!(packages[1].fingerprint, 4431940502274857964u64);
+        assert!(packages[1].redact_exported_reads);
+
+        assert_eq!(packages[2].package_name, "com.android.aconfig.storage.test_4");
+        assert_eq!(packages[2].package_id, 2);
+        assert_eq!(packages[2].flag_names.len(), 2);
+        assert!(packages[2].flag_names.contains("enabled_rw"));
+        assert!(packages[2].flag_names.contains("enabled_fixed_ro"));
+        assert_eq!(packages[2].boolean_start_index, 6);
+        assert_eq!(packages[2].fingerprint, 16233229917711622375u64);
+        assert!(packages[2].redact_exported_reads);
+    }
+
+    // Storage file v3.
+    #[cfg(not(feature = "default_exported_reads_to_disabled"))]
+    #[test]
+    fn test_flag_package_with_redaction_off() {
+        let caches = parse_all_test_flags();
+        let packages = group_flags_by_package(caches.iter(), 3);
+
+        for pkg in packages.iter() {
+            let pkg_name = pkg.package_name;
+            assert_eq!(pkg.flag_names.len(), pkg.boolean_flags.len());
+            for pf in pkg.boolean_flags.iter() {
+                assert!(pkg.flag_names.contains(pf.name()));
+                assert_eq!(pf.package(), pkg_name);
+            }
+        }
+
+        assert_eq!(packages.len(), 3);
+
+        assert_eq!(packages[0].package_name, "com.android.aconfig.storage.test_1");
+        assert_eq!(packages[0].package_id, 0);
+        assert_eq!(packages[0].flag_names.len(), 3);
+        assert!(packages[0].flag_names.contains("enabled_rw"));
+        assert!(packages[0].flag_names.contains("disabled_rw"));
+        assert!(packages[0].flag_names.contains("enabled_ro"));
+        assert_eq!(packages[0].boolean_start_index, 0);
+        assert_eq!(packages[0].fingerprint, 15248948510590158086u64);
+        assert!(!packages[0].redact_exported_reads);
+
+        assert_eq!(packages[1].package_name, "com.android.aconfig.storage.test_2");
+        assert_eq!(packages[1].package_id, 1);
+        assert_eq!(packages[1].flag_names.len(), 3);
+        assert!(packages[1].flag_names.contains("enabled_ro"));
+        assert!(packages[1].flag_names.contains("disabled_rw"));
+        assert!(packages[1].flag_names.contains("enabled_fixed_ro"));
+        assert_eq!(packages[1].boolean_start_index, 3);
+        assert_eq!(packages[1].fingerprint, 4431940502274857964u64);
+        assert!(!packages[1].redact_exported_reads);
+
+        assert_eq!(packages[2].package_name, "com.android.aconfig.storage.test_4");
+        assert_eq!(packages[2].package_id, 2);
+        assert_eq!(packages[2].flag_names.len(), 2);
+        assert!(packages[2].flag_names.contains("enabled_rw"));
+        assert!(packages[2].flag_names.contains("enabled_fixed_ro"));
+        assert_eq!(packages[2].boolean_start_index, 6);
+        assert_eq!(packages[2].fingerprint, 16233229917711622375u64);
+        assert!(!packages[2].redact_exported_reads);
     }
 }

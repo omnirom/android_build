@@ -49,7 +49,6 @@ $(check_elf_files_stamp): $(my_prebuilt_src_file) $(my_check_elf_file_shared_lib
 	$(hide) mkdir -p $(dir $@)
 	$(hide) rm -f $@
 	$(hide) $(CHECK_ELF_FILE) \
-	    --skip-bad-elf-magic \
 	    --skip-unknown-elf-machine \
 	    $(if $(PRIVATE_MAX_PAGE_SIZE),--max-page-size=$(PRIVATE_MAX_PAGE_SIZE)) \
 	    $(if $(PRIVATE_SONAME),--soname $(PRIVATE_SONAME)) \

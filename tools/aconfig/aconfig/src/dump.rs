@@ -130,12 +130,12 @@ fn create_filter_predicate_single(filter: &str) -> Result<Box<DumpPredicate>> {
         T: std::fmt::Debug + Copy,
     {
         for candidate in expected.iter() {
-            if s == format!("{:?}", candidate) {
+            if s == format!("{candidate:?}") {
                 return Ok(*candidate);
             }
         }
         let expected =
-            expected.iter().map(|state| format!("{:?}", state)).collect::<Vec<_>>().join(", ");
+            expected.iter().map(|state| format!("{state:?}")).collect::<Vec<_>>().join(", ");
         bail!("\"{s}\": not a valid flag state, expected one of {expected}");
     }
 
@@ -151,8 +151,13 @@ fn create_filter_predicate_single(filter: &str) -> Result<Box<DumpPredicate>> {
             Ok(Box::new(move |flag: &ProtoParsedFlag| flag.name() == expected))
         }
         "namespace" => {
-            let expected = arg.to_owned();
-            Ok(Box::new(move |flag: &ProtoParsedFlag| flag.namespace() == expected))
+            if let Some(arg_val) = arg.strip_prefix("!") {
+                let expected = arg_val.to_owned();
+                Ok(Box::new(move |flag: &ProtoParsedFlag| flag.namespace() != expected))
+            } else {
+                let expected = arg.to_owned();
+                Ok(Box::new(move |flag: &ProtoParsedFlag| flag.namespace() == expected))
+            }
         }
         // description: not supported yet
         "bug" => {
@@ -333,6 +338,19 @@ mod tests {
         assert_create_filter_predicate!(
             "namespace:other_namespace",
             &["com.android.aconfig.test.disabled_rw_in_other_namespace"]
+        );
+        assert_create_filter_predicate!(
+            "namespace:!other_namespace",
+            &[
+                "com.android.aconfig.test.disabled_ro",
+                "com.android.aconfig.test.disabled_rw",
+                "com.android.aconfig.test.disabled_rw_exported",
+                "com.android.aconfig.test.enabled_fixed_ro",
+                "com.android.aconfig.test.enabled_fixed_ro_exported",
+                "com.android.aconfig.test.enabled_ro",
+                "com.android.aconfig.test.enabled_ro_exported",
+                "com.android.aconfig.test.enabled_rw",
+            ]
         );
         // description: not supported yet
         assert_create_filter_predicate!("bug:123", &["com.android.aconfig.test.disabled_ro",]);

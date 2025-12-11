@@ -27,6 +27,8 @@ import java.util.List;
 
 /**
  * @hide
+ *
+ * Note this class does _not_ work on Ravenwood (yet). Contact g/ravenwood if you need it.
  */
 public class DeviceProtos {
 	public static final String[] PATHS = {

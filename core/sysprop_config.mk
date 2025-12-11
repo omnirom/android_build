@@ -52,15 +52,14 @@ ifdef TARGET_RECOVERY_PIXEL_FORMAT
 ADDITIONAL_VENDOR_PROPERTIES += \
     ro.minui.pixel_format=$(TARGET_RECOVERY_PIXEL_FORMAT)
 endif
+ifdef TARGET_RECOVERY_NO_INITIAL_MODSET_FLUSH
+ADDITIONAL_VENDOR_PROPERTIES += \
+    ro.minui.no_initial_modset_flush=$(TARGET_RECOVERY_NO_INITIAL_MODSET_FLUSH)
+endif
 
 ifdef PRODUCT_USE_DYNAMIC_PARTITIONS
 ADDITIONAL_VENDOR_PROPERTIES += \
     ro.boot.dynamic_partitions=$(PRODUCT_USE_DYNAMIC_PARTITIONS)
-endif
-
-ifdef PRODUCT_RETROFIT_DYNAMIC_PARTITIONS
-ADDITIONAL_VENDOR_PROPERTIES += \
-    ro.boot.dynamic_partitions_retrofit=$(PRODUCT_RETROFIT_DYNAMIC_PARTITIONS)
 endif
 
 ifdef PRODUCT_SHIPPING_API_LEVEL
@@ -69,8 +68,11 @@ ADDITIONAL_VENDOR_PROPERTIES += \
 endif
 
 ifdef PRODUCT_SHIPPING_VENDOR_API_LEVEL
-ADDITIONAL_VENDOR_PROPERTIES += \
-    ro.vendor.api_level=$(PRODUCT_SHIPPING_VENDOR_API_LEVEL)
+# PRODUCT_SHIPPING_VENDOR_API_LEVEL was used to set ro.vendor.api_level
+# manually for testing. To prevent using this variable for product release,
+# remove this variable and show an error message.
+$(error PRODUCT_SHIPPING_VENDOR_API_LEVEL is not available. ro.vendor.api_level\
+  property must not be set manually)
 endif
 
 ifneq ($(TARGET_BUILD_VARIANT),user)
@@ -94,6 +96,9 @@ ifdef BOARD_API_LEVEL
   ADDITIONAL_VENDOR_PROPERTIES += \
     ro.board.api_level?=$(BOARD_API_LEVEL)
   ifdef BOARD_API_LEVEL_PROP_OVERRIDE
+    # This must be used only for testing purpose. Product must not be released
+    # with the modified api level value.
+    $(warning BOARD_API_LEVEL_PROP_OVERRIDE can be defined only for testing purpose)
     ADDITIONAL_VENDOR_PROPERTIES += \
       ro.board.api_level=$(BOARD_API_LEVEL_PROP_OVERRIDE)
   endif
@@ -109,13 +114,6 @@ endif
 ifeq ($(BOARD_DONT_USE_VABC_OTA),true)
 ADDITIONAL_VENDOR_PROPERTIES += \
     ro.vendor.build.dont_use_vabc=true
-endif
-
-# Set the flag in vendor. So VTS would know if the new fingerprint format is in use when
-# the system images are replaced by GSI.
-ifeq ($(BOARD_USE_VBMETA_DIGTEST_IN_FINGERPRINT),true)
-ADDITIONAL_VENDOR_PROPERTIES += \
-    ro.vendor.build.fingerprint_has_digest=1
 endif
 
 ADDITIONAL_VENDOR_PROPERTIES += \

@@ -50,8 +50,40 @@ PARTITION_TAG_PATTERN = re.compile(r'partition="(.*?)"')
 # The sorting algorithm for apexkeys.txt and apkcerts.txt does not include the
 # ".apex" or ".apk" suffix, so we use the following pattern to extract a key.
 
+def LoadKeyValueText(path):
+  keyvalue_store = {}
+  if os.path.exists(path):
+    with open(path) as fp:
+      for line in fp.readlines():
+        components = line.strip().split("=", 1)
+        if len(components) == 2:
+          keyvalue_store[components[0]] = components[1]
+  return keyvalue_store
+
+
 MODULE_KEY_PATTERN = re.compile(r'name="(.+)\.(apex|apk)"')
 
+def MergePostinstallConfig(framework_meta_dir, vendor_meta_dir,
+                            merged_meta_dir):
+  _CONFIG_NAME = 'postinstall_config.txt'
+  _SYSTEM_PARTITIONS = ["system", "system_ext", "product", "init_boot"]
+  _SYSTEM_PARTITIONS_PREFIXED = [ "_" + p for p in _SYSTEM_PARTITIONS ]
+  framework_config_path = os.path.join(framework_meta_dir, _CONFIG_NAME)
+  vendor_config_path = os.path.join(vendor_meta_dir, _CONFIG_NAME)
+  merged_config_path = os.path.join(merged_meta_dir, _CONFIG_NAME)
+  framework_config = LoadKeyValueText(framework_config_path)
+  vendor_config = LoadKeyValueText(vendor_config_path)
+  merged_config = {}
+  merged_config.update(framework_config)
+  key: str
+  for (key, val) in vendor_config.items():
+    # only allow vendor postinstall config to override non-system postinstall
+    # configs
+    if not key.endswith(tuple(_SYSTEM_PARTITIONS_PREFIXED)):
+      merged_config[key] = val
+
+  # TODO: might want to consider sorting according to suffix to group per partition
+  merge_utils.WriteSortedData(merged_config, merged_config_path)
 
 def MergeUpdateEngineConfig(framework_meta_dir, vendor_meta_dir,
                             merged_meta_dir):
@@ -134,6 +166,7 @@ def MergeMetaFiles(temp_dir, merged_dir, framework_partitions):
   if OPTIONS.merged_misc_info.get('ab_update') == 'true':
     MergeUpdateEngineConfig(
         framework_meta_dir, vendor_meta_dir, merged_meta_dir)
+    MergePostinstallConfig(framework_meta_dir, vendor_meta_dir, merged_meta_dir)
 
   # Write the now-finalized OPTIONS.merged_misc_info.
   merge_utils.WriteSortedData(

@@ -106,7 +106,17 @@ message flag_metadata {
     PURPOSE_BUGFIX = 2;
   }
 
+  // storage backend for flag
+  enum flag_storage_backend {
+    UNSPECIFIED = 0;    // unspecified, let aconfig choose one
+    ACONFIGD = 1;       // aconfigd based new storage
+    DEVICE_CONFIG = 2;  // device config based legacy storage
+    NONE = 3;           // no need for flag storage
+  }
+
   optional flag_purpose purpose = 1;
+
+  optional flag_storage_backend storage = 2;
 
   // TODO(b/315025930): Add field to designate intended target device form factor(s), such as phone, watch or other.
 }

@@ -60,9 +60,6 @@ ALL_SDK_FILES:=
 # Files for dalvik.  This is often build without building the rest of the OS.
 INTERNAL_DALVIK_MODULES:=
 
-# All findbugs xml files
-ALL_FINDBUGS_FILES:=
-
 # Packages with certificate violation
 CERTIFICATE_VIOLATION_MODULES :=
 
@@ -1433,7 +1430,7 @@ $(hide) $(PRIVATE_CXX_LINK) -fuse-ld=lld -target $(CLANG_TARGET_TRIPLE) -shared 
   -Wl,-rpath,\$$ORIGIN/../lib \
   $(dir $@)/$(notdir $(<:.bc=.o)) \
   $(RS_PREBUILT_COMPILER_RT) \
-  -o $@ $(CLANG_TARGET_GLOBAL_LLDFLAGS) -Wl,--hash-style=sysv \
+  -o $@ $(CLANG_TARGET_GLOBAL_LDFLAGS) -Wl,--hash-style=sysv \
   -L $(SOONG_OUT_DIR)/ndk/platforms/android-$(PRIVATE_SDK_VERSION)/arch-$(TARGET_ARCH)/usr/lib64 \
   -L $(SOONG_OUT_DIR)/ndk/platforms/android-$(PRIVATE_SDK_VERSION)/arch-$(TARGET_ARCH)/usr/lib \
   $(call intermediates-dir-for,SHARED_LIBRARIES,libRSSupport)/libRSSupport.so \
@@ -2995,38 +2992,6 @@ $(hide) \
   mv $@.compressed $@;
 endef
 
-ifeq ($(HOST_OS),linux)
-# Runs appcompat and store logs in $(PRODUCT_OUT)/appcompat
-define extract-package
-$(AAPT2) dump resources $@ | awk -F ' |=' '/^Package/{print $$3; exit}' >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log &&
-endef
-define appcompat-header
-$(hide) \
-  mkdir -p $(PRODUCT_OUT)/appcompat && \
-  rm -f $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  echo -n "Package name: " >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  $(extract-package) \
-  echo "Module name in Android tree: $(PRIVATE_MODULE)" >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  echo "Local path in Android tree: $(PRIVATE_PATH)" >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  echo "Install path: $(patsubst $(PRODUCT_OUT)/%,%,$(PRIVATE_INSTALLED_MODULE))" >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  echo >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log
-endef
-ART_VERIDEX_APPCOMPAT:=$(HOST_OUT)/bin/appcompat
-define run-appcompat
-$(hide) \
-  echo "appcompat output:" >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log && \
-  ANDROID_LOG_TAGS="*:e" $(ART_VERIDEX_APPCOMPAT) --dex-file=$@ 2>&1 >> $(PRODUCT_OUT)/appcompat/$(PRIVATE_MODULE).log
-endef
-appcompat-files = \
-  $(AAPT2) \
-  $(ART_VERIDEX_APPCOMPAT) \
-else
-appcompat-header =
-run-appcompat =
-appcompat-files =
-endif  # HOST_OS == linux
-.KATI_READONLY: appcompat-header run-appcompat appcompat-files
-
 # Remove dynamic timestamps from packages
 #
 define remove-timestamps-from-package
@@ -3680,39 +3645,16 @@ $(foreach suite, $(LOCAL_COMPATIBILITY_SUITE), \
   $(eval COMPATIBILITY.$(suite).ARCH_DIRS.$(my_register_name) := $(my_compat_module_arch_dir_$(suite).$(my_register_name))) \
   $(eval COMPATIBILITY.$(suite).API_MAP_FILES += $$(my_compat_api_map_$(suite))) \
   $(eval COMPATIBILITY.$(suite).SOONG_INSTALLED_COMPATIBILITY_SUPPORT_FILES += $(LOCAL_SOONG_INSTALLED_COMPATIBILITY_SUPPORT_FILES)) \
-  $(eval ALL_COMPATIBILITY_DIST_FILES += $$(my_compat_dist_$(suite))) \
+  $(if $(LOCAL_IS_SOONG_MODULE),, \
+    $(eval ALL_COMPATIBILITY_DIST_FILES += $$(my_compat_dist_$(suite)))) \
   $(eval COMPATIBILITY.$(suite).MODULES += $$(my_register_name))) \
 $(eval $(my_all_targets) : \
   $(sort $(foreach suite,$(LOCAL_COMPATIBILITY_SUITE), \
     $(foreach f,$(my_compat_dist_$(suite)), $(call word-colon,2,$(f))))) \
-  $(call copy-many-xml-files-checked, \
-    $(sort $(foreach suite,$(LOCAL_COMPATIBILITY_SUITE),$(my_compat_dist_config_$(suite))))))
-endef
-
-# Define symbols.zip and symbols-mapping.textproto build rule per test suite
-#
-# $(1): Name of the test suite to create the zip and mapping build rules
-define create-suite-symbols-map
-_suite_symbols_zip := $$(subst -tests-,-tests_-,$$(PRODUCT_OUT)/$(1)-symbols.zip)
-_suite_symbols_mapping := $$(subst -tests-,-tests_-,$$(PRODUCT_OUT)/$(1)-symbols-mapping.textproto)
-_suite_modules_symbols_files := $$(foreach m,$$(COMPATIBILITY.$(1).MODULES),$$(ALL_MODULES.$$(m).SYMBOLIC_OUTPUT_PATH))
-_suite_modules_mapping_files := $$(foreach m,$$(COMPATIBILITY.$(1).MODULES),$$(ALL_MODULES.$$(m).ELF_SYMBOL_MAPPING_PATH))
-
-$$(_suite_symbols_zip): PRIVATE_SUITE_SYMBOLS_MAPPING := $$(_suite_symbols_mapping)
-$$(_suite_symbols_zip): PRIVATE_SUITE_MODULES_SYMBOLS_FILES := $$(_suite_modules_symbols_files)
-$$(_suite_symbols_zip): PRIVATE_SUITE_MODULES_MAPPING_FILES := $$(_suite_modules_mapping_files)
-$$(_suite_symbols_zip): $$(SOONG_ZIP) $$(SYMBOLS_MAP) $$(_suite_modules_symbols_files) $$(_suite_modules_mapping_files)
-	@echo "Package $(1) symbols: $$@"
-	$(hide) rm -rf $$@ $$@.symbols_list $$@.mapping_list
-	echo "$$(PRIVATE_SUITE_MODULES_SYMBOLS_FILES)" | tr " " "\n" | sort > $$@.symbols_list
-	$(hide) $$(SOONG_ZIP) -d -o $$@ -l $$@.symbols_list
-	echo "$$(PRIVATE_SUITE_MODULES_MAPPING_FILES)" | tr " " "\n" | sort > $$@.mapping_list
-	$(hide) $$(SYMBOLS_MAP) -merge $$(PRIVATE_SUITE_SYMBOLS_MAPPING) @$$@.mapping_list
-$$(_suite_symbols_zip): .KATI_IMPLICIT_OUTPUTS := $$(_suite_symbols_mapping)
-
-.PHONY: $(1)
-$(1): $$(_suite_symbols_zip) $$(_suite_symbols_mapping)
-$$(call dist-for-goals-with-filenametag,$(1), $$(_suite_symbols_zip) $$(_suite_symbols_mapping))
+  $(if $(LOCAL_IS_SOONG_MODULE), \
+    $(sort $(foreach p,$(foreach suite,$(LOCAL_COMPATIBILITY_SUITE),$(my_compat_dist_config_$(suite))),$(call word-colon,2,$(p)))), \
+    $(call copy-many-xml-files-checked, \
+      $(sort $(foreach suite,$(LOCAL_COMPATIBILITY_SUITE),$(my_compat_dist_config_$(suite)))))))
 endef
 
 ###########################################################

@@ -26,7 +26,7 @@ public class ClassRelevancyFilter implements Predicate<String> {
     private final Set<String> mAllowlistedClassNames;
 
     public ClassRelevancyFilter(Set<String> allowlistedClassNames) {
-        this.mAllowlistedClassNames = allowlistedClassNames;
+        mAllowlistedClassNames = allowlistedClassNames;
     }
 
     @Override

@@ -52,9 +52,10 @@ IMPORTING_ENVSETUP=true source $T/build/make/shell_utils.sh
 function build_build_var_cache()
 {
     local T=$(gettop)
+    local one_true_awk=$T/prebuilts/build-tools/$(get_host_prebuilt_prefix)/bin/one-true-awk
     # Grep out the variable names from the script.
-    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/omni/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/_get_build_var_cached/) print $(i+1)}' | sort -u | tr '\n' ' '`)
-    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/omni/build/envsetup.sh | tr '()' '  ' | awk '{for(i=1;i<=NF;i++) if($i~/_get_abs_build_var_cached/) print $(i+1)}' | sort -u | tr '\n' ' '`)
+    cached_vars=(`cat $T/build/envsetup.sh $T/vendor/omni/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_build_var_cached/) print $(i+1)}' | sort -u | tr '\n' ' '`)
+    cached_abs_vars=(`cat $T/build/envsetup.sh $T/vendor/omni/build/envsetup.sh | tr '()' '  ' | $one_true_awk '{for(i=1;i<=NF;i++) if($i~/_get_abs_build_var_cached/) print $(i+1)}' | sort -u | tr '\n' ' '`)
     # Call the build system to dump the "<val>=<value>" pairs as a shell script.
     build_dicts_script=`\builtin cd $T; build/soong/soong_ui.bash --dumpvars-mode \
                         --vars="${cached_vars[*]}" \
@@ -184,8 +185,13 @@ function set_lunch_paths()
     fi
 
     # And in with the new...
-    ANDROID_LUNCH_BUILD_PATHS=$(_get_abs_build_var_cached SOONG_HOST_OUT_EXECUTABLES)
-    ANDROID_LUNCH_BUILD_PATHS+=:$(_get_abs_build_var_cached HOST_OUT_EXECUTABLES)
+    local SOONG_HOST_OUT_EXECUTABLES=$(_get_abs_build_var_cached SOONG_HOST_OUT_EXECUTABLES)
+    local HOST_OUT_EXECUTABLES=$(_get_abs_build_var_cached HOST_OUT_EXECUTABLES)
+    # Binaries in build/soong/bin should always be preferred over any build path.
+    ANDROID_LUNCH_BUILD_PATHS=$T/build/soong/bin:${SOONG_HOST_OUT_EXECUTABLES}
+    if [ "${HOST_OUT_EXECUTABLES}" != "${SOONG_HOST_OUT_EXECUTABLES}" ]; then
+        ANDROID_LUNCH_BUILD_PATHS+=:${HOST_OUT_EXECUTABLES}
+    fi
 
     # Append llvm binutils prebuilts path to ANDROID_LUNCH_BUILD_PATHS.
     local ANDROID_LLVM_BINUTILS=$(_get_abs_build_var_cached ANDROID_CLANG_PREBUILTS)/llvm-binutils-stable
@@ -273,7 +279,7 @@ function set_global_paths()
 
     # Out with the old...
     if [ -n "$ANDROID_GLOBAL_BUILD_PATHS" ] ; then
-        export PATH=${PATH/$ANDROID_GLOBAL_BUILD_PATHS/}
+        export PATH=${PATH/$ANDROID_GLOBAL_BUILD_PATHS:/}
     fi
 
     # And in with the new...
@@ -445,6 +451,7 @@ function _lunch_meat()
     TARGET_PRODUCT=$product \
     TARGET_RELEASE=$release \
     TARGET_BUILD_VARIANT=$variant \
+    TARGET_BUILD_APPS= \
     build_build_var_cache
     if [ $? -ne 0 ]
     then
@@ -478,6 +485,8 @@ function _lunch_meat()
     export TARGET_RELEASE=$release
     # Note this is the string "release", not the value of the variable.
     export TARGET_BUILD_TYPE=release
+    # Undo any previous tapas or banchan setup
+    export TARGET_BUILD_APPS=
 
     local prebuilt_kernel=$(_get_build_var_cached TARGET_PREBUILT_KERNEL)
     if [ -z "$prebuilt_kernel" ]; then
@@ -544,10 +553,22 @@ function _lunch_usage()
         echo "Note that the previous interactive menu and list of hard-coded"
         echo "list of curated targets has been removed. If you would like the"
         echo "list of products, release configs for a particular product, or"
-        echo "variants, run list_products list_releases or list_variants"
+        echo "variants, run the following as individual commands:"
+        echo "list_products, list_releases, or list_variants"
         echo "respectively."
         echo
     ) 1>&2
+}
+
+function _lunch_store_leftovers()
+{
+    local product=$1
+    local release=$2
+    local variant=$3
+
+    local dot_leftovers="$(getoutdir)/.leftovers"
+    rm -f $dot_leftovers
+    echo "$product $release $variant" > $dot_leftovers
 }
 
 function lunch()
@@ -594,6 +615,54 @@ function lunch()
 
     # Validate the selection and set all the environment stuff
     _lunch_meat $product $release $variant
+
+    _lunch_store_leftovers $product $release $variant
+}
+
+function leftovers()
+{
+    if [ -t 1 ] && [ $(tput colors) -ge 8 ]; then
+        local style_reset="$(tput sgr0)"
+        local style_red="$(tput setaf 1)"
+        local style_green="$(tput setaf 2)"
+        local style_bold="$(tput bold)"
+    fi
+    local FAIL="${style_bold}${style_red}ERROR${style_reset}"
+    local INFO="${style_bold}${style_green}INFO${style_reset}"
+
+    if [[ $# -eq 1 && ($1 = "--help" || $1 == "-h" || $1 == "help") ]]; then
+        (
+            echo "The leftovers command restores your previous lunch choices, if found."
+            echo
+            echo "Set ${style_bold}USE_LEFTOVERS=1${style_reset} in your environment to automatically run this"
+            echo "from ${style_bold}build/envsetup.sh${style_reset}."
+        ) 1>&2
+        return
+    fi
+
+    local dot_leftovers="$(getoutdir)/.leftovers"
+
+    # seamlessly migrate old .leftovers location
+    local old_leftovers="$(gettop)/.leftovers"
+    if [[ -e $old_leftovers ]]
+    then
+        if [[ -e $dot_leftovers ]]; then
+            rm $old_leftovers
+        else
+            mv $old_leftovers $dot_leftovers
+        fi
+    fi
+
+    if [ ! -f $dot_leftovers ]; then
+        echo -e "$FAIL: .leftovers not found. Run ${style_bold}lunch${style_reset} first."
+        return 1
+    fi
+
+    local product release variant
+    IFS=" " read -r product release variant < "$dot_leftovers"
+
+    echo "$INFO: Loading previous lunch: ${style_bold}$product $release $variant${style_reset}"
+    lunch $product $release $variant
 }
 
 unset ANDROID_LUNCH_COMPLETION_PRODUCT_CACHE
@@ -1136,6 +1205,10 @@ validate_current_shell
 set_global_paths
 source_vendorsetup
 addcompletions
+
+if [[ "$USE_LEFTOVERS" -eq 1 ]]; then
+  leftovers
+fi
 
 export ANDROID_BUILD_TOP=$(gettop)
 

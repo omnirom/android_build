@@ -119,6 +119,31 @@ TEST(AconfigStorageFileTest, test_list_flag_v2) {
                "true", "ReadWriteBoolean");
 }
 
+// TODO: b/376256472 - Use parameterized tests.
+TEST(AconfigStorageFileTest, test_list_flag_v3) {
+  auto flag_list_result = get_flag_list_result("3");
+  ASSERT_TRUE(flag_list_result.ok());
+
+  auto const& flag_list = *flag_list_result;
+  ASSERT_EQ(flag_list.size(), 8);
+  verify_value(flag_list[0], "com.android.aconfig.storage.test_1",
+               "disabled_rw", "false", "ReadWriteBoolean");
+  verify_value(flag_list[1], "com.android.aconfig.storage.test_1", "enabled_ro",
+               "true", "ReadOnlyBoolean");
+  verify_value(flag_list[2], "com.android.aconfig.storage.test_1", "enabled_rw",
+               "true", "ReadWriteBoolean");
+  verify_value(flag_list[3], "com.android.aconfig.storage.test_2",
+               "disabled_rw", "false", "ReadWriteBoolean");
+  verify_value(flag_list[4], "com.android.aconfig.storage.test_2",
+               "enabled_fixed_ro", "true", "FixedReadOnlyBoolean");
+  verify_value(flag_list[5], "com.android.aconfig.storage.test_2", "enabled_ro",
+               "true", "ReadOnlyBoolean");
+  verify_value(flag_list[6], "com.android.aconfig.storage.test_4",
+               "enabled_fixed_ro", "true", "FixedReadOnlyBoolean");
+  verify_value(flag_list[7], "com.android.aconfig.storage.test_4", "enabled_rw",
+               "true", "ReadWriteBoolean");
+}
+
 TEST(AconfigStorageFileTest, test_list_flag_with_info) {
   auto flag_list_result = get_flag_list_result_with_info("1");
   ASSERT_TRUE(flag_list_result.ok());
@@ -153,6 +178,38 @@ TEST(AconfigStorageFileTest, test_list_flag_with_info) {
 
 TEST(AconfigStorageFileTest, test_list_flag_with_info_v2) {
   auto flag_list_result = get_flag_list_result_with_info("2");
+  ASSERT_TRUE(flag_list_result.ok());
+
+  auto const& flag_list = *flag_list_result;
+  ASSERT_EQ(flag_list.size(), 8);
+  verify_value_info(flag_list[0], "com.android.aconfig.storage.test_1",
+                    "disabled_rw", "false", "ReadWriteBoolean", true, false,
+                    false);
+  verify_value_info(flag_list[1], "com.android.aconfig.storage.test_1",
+                    "enabled_ro", "true", "ReadOnlyBoolean", false, false,
+                    false);
+  verify_value_info(flag_list[2], "com.android.aconfig.storage.test_1",
+                    "enabled_rw", "true", "ReadWriteBoolean", true, false,
+                    false);
+  verify_value_info(flag_list[3], "com.android.aconfig.storage.test_2",
+                    "disabled_rw", "false", "ReadWriteBoolean", true, false,
+                    false);
+  verify_value_info(flag_list[4], "com.android.aconfig.storage.test_2",
+                    "enabled_fixed_ro", "true", "FixedReadOnlyBoolean", false,
+                    false, false);
+  verify_value_info(flag_list[5], "com.android.aconfig.storage.test_2",
+                    "enabled_ro", "true", "ReadOnlyBoolean", false, false,
+                    false);
+  verify_value_info(flag_list[6], "com.android.aconfig.storage.test_4",
+                    "enabled_fixed_ro", "true", "FixedReadOnlyBoolean", false,
+                    false, false);
+  verify_value_info(flag_list[7], "com.android.aconfig.storage.test_4",
+                    "enabled_rw", "true", "ReadWriteBoolean", true, false,
+                    false);
+}
+
+TEST(AconfigStorageFileTest, test_list_flag_with_info_v3) {
+  auto flag_list_result = get_flag_list_result_with_info("3");
   ASSERT_TRUE(flag_list_result.ok());
 
   auto const& flag_list = *flag_list_result;

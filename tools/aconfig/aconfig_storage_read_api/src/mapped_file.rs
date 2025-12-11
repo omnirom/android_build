@@ -72,6 +72,8 @@ mod tests {
     use std::fs;
     use std::io::Read;
 
+    use aconfig_storage_file::test_utils::get_test_data_path;
+
     fn map_and_verify(storage_dir: &str, file_type: StorageFileType, actual_file: &str) {
         let mut opened_file = File::open(actual_file).unwrap();
         let mut content = Vec::new();
@@ -80,7 +82,8 @@ mod tests {
         assert_eq!(mmaped_file[..], content[..]);
     }
 
-    fn create_test_storage_files() -> String {
+    #[test]
+    fn test_mapped_file_contents() {
         let mut rng = rand::thread_rng();
         let number: u32 = rng.gen();
         let storage_dir = String::from("/tmp/") + &number.to_string();
@@ -97,20 +100,24 @@ mod tests {
         let flag_map = storage_dir.clone() + "/maps/mockup.flag.map";
         let flag_val = storage_dir.clone() + "/boot/mockup.val";
         let flag_info = storage_dir.clone() + "/boot/mockup.info";
-        fs::copy("./tests/data/v1/package_v1.map", &package_map).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.map", &flag_map).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.val", &flag_val).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.info", &flag_info).unwrap();
 
-        return storage_dir;
-    }
+        let package_map_path = get_test_data_path(StorageFileType::PackageMap, 1);
+        let flag_map_path = get_test_data_path(StorageFileType::FlagMap, 1);
+        let flag_val_path = get_test_data_path(StorageFileType::FlagVal, 1);
+        let flag_info_path = get_test_data_path(StorageFileType::FlagInfo, 1);
 
-    #[test]
-    fn test_mapped_file_contents() {
-        let storage_dir = create_test_storage_files();
-        map_and_verify(&storage_dir, StorageFileType::PackageMap, "./tests/data/v1/package_v1.map");
-        map_and_verify(&storage_dir, StorageFileType::FlagMap, "./tests/data/v1/flag_v1.map");
-        map_and_verify(&storage_dir, StorageFileType::FlagVal, "./tests/data/v1/flag_v1.val");
-        map_and_verify(&storage_dir, StorageFileType::FlagInfo, "./tests/data/v1/flag_v1.info");
+        fs::copy(package_map_path.clone(), &package_map).unwrap();
+        fs::copy(flag_map_path.clone(), &flag_map).unwrap();
+        fs::copy(flag_val_path.clone(), &flag_val).unwrap();
+        fs::copy(flag_info_path.clone(), &flag_info).unwrap();
+
+        map_and_verify(
+            &storage_dir,
+            StorageFileType::PackageMap,
+            package_map_path.to_str().unwrap(),
+        );
+        map_and_verify(&storage_dir, StorageFileType::FlagMap, flag_map_path.to_str().unwrap());
+        map_and_verify(&storage_dir, StorageFileType::FlagVal, flag_val_path.to_str().unwrap());
+        map_and_verify(&storage_dir, StorageFileType::FlagInfo, flag_info_path.to_str().unwrap());
     }
 }

@@ -19,6 +19,7 @@ package android.os;
 public class Build {
     public static class VERSION {
         public static final int SDK_INT = placeholder();
+        public static final int SDK_INT_FULL = placeholder();
         private static int placeholder() {
             throw new UnsupportedOperationException("Stub!");
         }

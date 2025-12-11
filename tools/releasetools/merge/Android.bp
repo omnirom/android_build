@@ -50,10 +50,12 @@ python_binary_host {
         "releasetools_ota_from_target_files",
     ],
     required: [
+        "aapt2",
         "apexd_host",
         "checkvintf",
         "host_init_verifier",
         "secilc",
+        "treble_labeling_tests",
     ],
     target: {
         darwin: {
@@ -72,5 +74,24 @@ python_binary_host {
     libs: [
         "releasetools_build_super_image",
         "releasetools_common",
+    ],
+}
+
+python_library_host {
+    name: "merge_compatibility_checks",
+    srcs: [
+        "merge_compatibility_checks.py",
+    ],
+    libs: [
+        "releasetools_check_target_files_vintf",
+        "releasetools_common",
+        "releasetools_find_shareduid_violation",
+    ],
+    required: [
+        "aapt2",
+        "checkvintf",
+        "host_init_verifier",
+        "secilc",
+        "treble_labeling_tests",
     ],
 }

@@ -693,7 +693,15 @@ func Test(t *testing.T) {
 
 			var deps []string
 
-			ctx := context{stdout, stderr, compliance.GetFS(tt.outDir), "", []string{tt.stripPrefix}, "", &deps}
+			ctx := context{
+				stdout: stdout,
+				stderr: stderr,
+				rootFS: compliance.GetFS(tt.outDir),
+				product: "",
+				stripPrefix: []string{tt.stripPrefix},
+				title: "",
+				deps: &deps,
+			}
 
 			err := textNotice(&ctx, rootFiles...)
 			if err != nil {

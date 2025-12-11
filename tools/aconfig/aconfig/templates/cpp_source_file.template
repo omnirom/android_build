@@ -13,6 +13,7 @@
 #include <string>
 {{ -else- }}
 {{ if readwrite- }}
+#include <atomic>
 #include <vector>
 {{ -endif }}
 {{ -endif }}
@@ -30,6 +31,10 @@ namespace {cpp_namespace} \{
         std::unique_ptr<aconfig_storage::MappedStorageFile> flag_value_file_;
 
         bool package_exists_in_storage_;
+
+        {{ if use_package_fingerprint- }}
+        bool fingerprint_matches_;
+        {{ -endif }}{#- end of use_package_fingerprint #}
     {{ -endif }}
 
     public:
@@ -38,20 +43,30 @@ namespace {cpp_namespace} \{
             : overrides_()
             , boolean_start_index_()
             , flag_value_file_(nullptr)
+            {{ if use_package_fingerprint- }}
+            , package_exists_in_storage_(true)
+            , fingerprint_matches_(true) \{
+            {{ -else }}
             , package_exists_in_storage_(true) \{
+            {{ -endif }}{#- end of use_package_fingerprint #}
 
-            auto package_map_file = aconfig_storage::get_mapped_file(
+// Storage files are only available on Android, not on host.
+#ifndef __ANDROID__
+            package_exists_in_storage_ = false;
+            return;
+#endif
+            auto package_map_file_ret = aconfig_storage::get_mapped_file(
                  "{container}",
                  aconfig_storage::StorageFileType::package_map);
 
-            if (!package_map_file.ok()) \{
-                ALOGE("error: failed to get package map file: %s", package_map_file.error().c_str());
+            if (!package_map_file_ret.ok()) \{
+                ALOGE("error: failed to get package map file: %s", package_map_file_ret.error().c_str());
                 package_exists_in_storage_ = false;
                 return;
             }
-
+            std::unique_ptr<aconfig_storage::MappedStorageFile> package_map_file(*package_map_file_ret);
             auto context = aconfig_storage::get_package_read_context(
-                **package_map_file, "{package}");
+                *package_map_file, "{package}");
 
             if (!context.ok()) \{
                 ALOGE("error: failed to get package read context: %s", context.error().c_str());
@@ -63,12 +78,17 @@ namespace {cpp_namespace} \{
                 package_exists_in_storage_ = false;
                 return;
             }
+            {{ if use_package_fingerprint- }}
+
+                if (context->fingerprint != { package_fingerprint }ULL) \{
+                    ALOGE("Fingerprint mismatch for package {package}.");
+                    fingerprint_matches_ = false;
+                    return;
+                }
+            {{ -endif }}{#- end of use_package_fingerprint #}
 
             // cache package boolean flag start index
             boolean_start_index_ = context->boolean_start_index;
-
-            // unmap package map file and free memory
-            delete *package_map_file;
 
             auto flag_value_file = aconfig_storage::get_mapped_file(
                 "{container}",
@@ -100,6 +120,13 @@ namespace {cpp_namespace} \{
                 if (!package_exists_in_storage_) \{
                     return {item.default_value};
                 }
+                {{ if use_package_fingerprint- }}
+
+                if (!fingerprint_matches_) \{
+                    ALOGE("error: package fingerprint mismtach, returning flag default value.");
+                    return {item.default_value};
+                }
+                {{ -endif }}{#- end of use_package_fingerprint #}
 
                 auto value = aconfig_storage::get_boolean_flag_value(
                     *flag_value_file_,
@@ -134,22 +161,35 @@ namespace {cpp_namespace} \{
 
         {{ if readwrite- }}
         flag_provider()
-            : cache_({readwrite_count}, -1)
+            : cache_({readwrite_count})
             , boolean_start_index_()
             , flag_value_file_(nullptr)
+            {{ if use_package_fingerprint- }}
+            , package_exists_in_storage_(true)
+            , fingerprint_matches_(true) \{
+            {{ -else }}
             , package_exists_in_storage_(true) \{
+            {{ -endif }}{#- end of use_package_fingerprint #}
+            for (size_t i = 0 ; i < {readwrite_count}; i++) \{
+                cache_[i] = -1;
+            }
 
-            auto package_map_file = aconfig_storage::get_mapped_file(
+// Storage files are only available on Android, not on host.
+#ifndef __ANDROID__
+            package_exists_in_storage_ = false;
+            return;
+#endif
+            auto package_map_file_ret = aconfig_storage::get_mapped_file(
                  "{container}",
                  aconfig_storage::StorageFileType::package_map);
-            if (!package_map_file.ok()) \{
-                ALOGE("error: failed to get package map file: %s", package_map_file.error().c_str());
+            if (!package_map_file_ret.ok()) \{
+                ALOGE("error: failed to get package map file: %s", package_map_file_ret.error().c_str());
                 package_exists_in_storage_ = false;
                 return;
             }
-
+            std::unique_ptr<aconfig_storage::MappedStorageFile> package_map_file(*package_map_file_ret);
             auto context = aconfig_storage::get_package_read_context(
-                **package_map_file, "{package}");
+                *package_map_file, "{package}");
             if (!context.ok()) \{
                 ALOGE("error: failed to get package read context: %s", context.error().c_str());
                 package_exists_in_storage_ = false;
@@ -160,12 +200,17 @@ namespace {cpp_namespace} \{
                 package_exists_in_storage_ = false;
                 return;
             }
+            {{ if use_package_fingerprint- }}
+
+                if (context->fingerprint != { package_fingerprint }ULL) \{
+                    ALOGE("Fingerprint mismatch for package {package}.");
+                    fingerprint_matches_ = false;
+                    return;
+                }
+            {{ -endif }}{#- end of use_package_fingerprint #}
 
             // cache package boolean flag start index
             boolean_start_index_ = context->boolean_start_index;
-
-            // unmap package map file and free memory
-            delete *package_map_file;
 
             auto flag_value_file = aconfig_storage::get_mapped_file(
                 "{container}",
@@ -186,10 +231,17 @@ namespace {cpp_namespace} \{
         {{ -for item in class_elements }}
         virtual bool {item.flag_name}() override \{
             {{ -if item.readwrite }}
-            if (cache_[{item.readwrite_idx}] == -1) \{
+            if (cache_[{item.readwrite_idx}].load(std::memory_order_relaxed) == -1) \{
                 if (!package_exists_in_storage_) \{
                     return {item.default_value};
                 }
+                {{ if use_package_fingerprint- }}
+
+                if (!fingerprint_matches_) \{
+                    ALOGE("error: package fingerprint mismtach, returning flag default value.");
+                    return {item.default_value};
+                }
+                {{ -endif }}{#- end of use_package_fingerprint #}
 
                 auto value = aconfig_storage::get_boolean_flag_value(
                     *flag_value_file_,
@@ -200,9 +252,9 @@ namespace {cpp_namespace} \{
                     return {item.default_value};
                 }
 
-                cache_[{item.readwrite_idx}] = *value;
+                cache_[{item.readwrite_idx}].store(*value, std::memory_order_relaxed);
             }
-            return cache_[{item.readwrite_idx}];
+            return cache_[{item.readwrite_idx}].load(std::memory_order_relaxed);
             {{ -else }}
             {{ -if item.is_fixed_read_only }}
             return {package_macro}_{item.flag_macro};
@@ -215,21 +267,29 @@ namespace {cpp_namespace} \{
 
     {{ if readwrite- }}
     private:
-        std::vector<int8_t> cache_ = std::vector<int8_t>({readwrite_count}, -1);
+        std::vector<std::atomic_int8_t> cache_;
 
         uint32_t boolean_start_index_;
 
         std::unique_ptr<aconfig_storage::MappedStorageFile> flag_value_file_;
 
         bool package_exists_in_storage_;
+        {{ if use_package_fingerprint- }}
+
+        bool fingerprint_matches_;
+        {{ -endif }}{#- end of use_package_fingerprint #}
     {{ -endif }}
 
     };
 
 {{ -endif }}
 
-std::unique_ptr<flag_provider_interface> provider_ =
-    std::make_unique<flag_provider>();
+    static flag_provider_interface* get_provider_instance() \{
+        static flag_provider* instance_ = new flag_provider();
+        return instance_;
+    }
+
+    std::unique_ptr<flag_provider_interface> provider_(get_provider_instance());
 }
 
 {{ for item in class_elements }}

@@ -33,7 +33,7 @@ PRODUCT_ART_TARGET_INCLUDE_DEBUG_BUILD := false
 PRODUCT_MINIMIZE_JAVA_DEBUG_INFO := true
 
 # Use the low memory allocator outside of eng builds to save RSS.
-ifneq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
+ifeq (,$(filter eng, $(TARGET_BUILD_VARIANT)))
   MALLOC_LOW_MEMORY := true
 endif
 

@@ -18,6 +18,7 @@ package android.aconfig.storage;
 
 import java.nio.ByteBuffer;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class FlagValueList {
 
     private Header mHeader;

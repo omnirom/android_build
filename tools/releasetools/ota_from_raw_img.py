@@ -21,21 +21,25 @@ Given a series of .img files, produces an OTA package that installs thoese image
 import sys
 import os
 import argparse
+import shutil
 import subprocess
 import tempfile
 import logging
 import zipfile
 
 import common
+import ota_metadata_pb2
 from payload_signer import PayloadSigner
-from ota_utils import PayloadGenerator
+from ota_utils import PayloadGenerator, FinalizeMetadata
 from ota_signing_utils import AddSigningArgumentParse
 
 
 logger = logging.getLogger(__name__)
 
 
-def ResolveBinaryPath(filename, search_path):
+def ResolveBinaryPath(filename, search_path, bin_path):
+  if bin_path is not None:
+    return bin_path
   if not search_path:
     return filename
   if not os.path.exists(search_path):
@@ -49,6 +53,30 @@ def ResolveBinaryPath(filename, search_path):
   return path
 
 
+def UpdateDynamicPartitionInfo(contents, in_file):
+    with open(in_file, 'r') as fp:
+        for line in fp.readlines():
+            parts = line.split('=', maxsplit=1)
+            if len(parts) != 2:
+                continue
+            contents[parts[0]] = parts[1]
+
+
+def WriteDynamicPartitionInfo(in_file, out_fp):
+    keyvalues = {
+        "virtual_ab": "true",
+        "virtual_ab_compression": "true",
+        "virtual_ab_compression_method": "none",
+        "super_partition_groups": "",
+    }
+    if in_file is not None:
+        UpdateDynamicPartitionInfo(keyvalues, in_file)
+    for key in keyvalues:
+        line = "{}={}\n".format(key, keyvalues[key])
+        out_fp.write(line.encode("utf-8"))
+    out_fp.flush()
+
+
 def main(argv):
   parser = argparse.ArgumentParser(
       prog=argv[0], description="Given a series of .img files, produces a full OTA package that installs thoese images")
@@ -60,6 +88,12 @@ def main(argv):
                       help='Paths to output merged ota', required=True)
   parser.add_argument('--max_timestamp', type=int,
                       help='Maximum build timestamp allowed to install this OTA')
+  parser.add_argument("--metadata_proto_file", type=str,
+                      help="Optional OTA metadata proto to use for signing")
+  parser.add_argument("--dynamic_partition_info_file", type=str,
+                      help="Optional dynamic partition info file")
+  parser.add_argument("--delta_generator_path", type=str,
+                      help="Path to delta_generator")
   parser.add_argument("-v", action="store_true",
                       help="Enable verbose logging", dest="verbose")
   AddSigningArgumentParse(parser)
@@ -79,10 +113,8 @@ def main(argv):
   else:
     args.partition_names = args.partition_names.split(",")
   with tempfile.NamedTemporaryFile() as unsigned_payload, tempfile.NamedTemporaryFile() as dynamic_partition_info_file:
-    dynamic_partition_info_file.writelines(
-        [b"virtual_ab=true\n", b"super_partition_groups=\n"])
-    dynamic_partition_info_file.flush()
-    cmd = [ResolveBinaryPath("delta_generator", args.search_path)]
+    WriteDynamicPartitionInfo(args.dynamic_partition_info_file, dynamic_partition_info_file)
+    cmd = [ResolveBinaryPath("delta_generator", args.search_path, args.delta_generator_path)]
     cmd.append("--partition_names=" + ":".join(args.partition_names))
     cmd.append("--dynamic_partition_info_file=" +
                dynamic_partition_info_file.name)
@@ -119,6 +151,13 @@ def main(argv):
     with zipfile.ZipFile(args.output, "w") as zfp:
       generator.WriteToZip(zfp)
 
+    if args.package_key and args.metadata_proto_file:
+      temp_zip = common.MakeTempFile(prefix="temp-", suffix=".zip")
+      metadata = ota_metadata_pb2.OtaMetadata()
+      with open(args.metadata_proto_file, "rb") as fp:
+          metadata.ParseFromString(fp.read())
+      shutil.copy(args.output, temp_zip)
+      FinalizeMetadata(metadata, temp_zip, args.output, package_key=args.package_key)
 
 if __name__ == "__main__":
   logging.basicConfig()

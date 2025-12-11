@@ -16,6 +16,7 @@
 
 package android.aconfig.storage;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public enum FlagType {
     ReadWriteBoolean (0),
     ReadOnlyBoolean(1),

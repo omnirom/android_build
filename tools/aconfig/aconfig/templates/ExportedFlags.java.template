@@ -37,7 +37,7 @@ public final class ExportedFlags \{
 {{ -for flag in flag_elements }}
     public static boolean {flag.method_name}() \{
         {{ -if flag.finalized_sdk_present }}
-        if (Build.VERSION.SDK_INT >= {flag.finalized_sdk_value}) \{
+        if ({flag.finalized_sdk_check|unescaped}) \{
           return true;
         }
         {{ -endif}}  {#- end finalized_sdk_present#}

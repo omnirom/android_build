@@ -49,6 +49,7 @@ struct PackageReadContext {
   bool package_exists;
   uint32_t package_id;
   uint32_t boolean_start_index;
+  uint64_t fingerprint;
 };
 
 /// Flag read context query result

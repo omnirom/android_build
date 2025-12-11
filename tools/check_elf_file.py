@@ -413,6 +413,10 @@ class Checker(object):
         sys.exit(0)
       else:
         self._error('File "{}" must have a valid ELF magic word.'.format(path))
+        self._note()
+        self._note('If the file is not an elf file, bypass this check with:')
+        self._note('  Android.bp: check_elf_files: false,')
+        self._note('  Android.mk: LOCAL_CHECK_ELF_FILES := false')
         sys.exit(2)
     except:
       self._error('An unknown error occurred while opening "{}".'.format(path))

@@ -1,0 +1,24 @@
+package: "com.android.aconfig.test.mainline_beta"
+container: "com.android.mainline_beta_mockup"
+
+flag {
+    name: "beta_disabled_rw"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "disabled rw mainline beta flag."
+    bug: "123456789"
+}
+
+flag {
+    name: "beta_enabled_rw"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "enabled rw mainline beta flag."
+    bug: "123456789"
+}
+
+flag {
+    name: "beta_disabled_fixed_ro"
+    namespace: "com_android_mainline_beta_mockup"
+    description: "fixed read only mainline beta flag."
+    is_fixed_read_only: true
+    bug: "123456789"
+}

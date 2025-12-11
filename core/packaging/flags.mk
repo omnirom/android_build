@@ -119,10 +119,9 @@ define generate-partition-aconfig-storage-file
 $(eval $(strip $(1)): PRIVATE_OUT := $(strip $(1)))
 $(eval $(strip $(1)): PRIVATE_IN := $(strip $(9)))
 
-ifneq (,$(RELEASE_FINGERPRINT_ACONFIG_PACKAGES))
-STORAGE_FILE_VERSION := 2
-else
-STORAGE_FILE_VERSION := 1
+STORAGE_FILE_VERSION := $(RELEASE_ACONFIG_STORAGE_VERSION)
+ifeq (,$(STORAGE_FILE_VERSION))
+STORAGE_FILE_VERSION := "2"
 endif
 
 $(strip $(1)): $(ACONFIG) $(strip $(9))

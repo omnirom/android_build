@@ -1,1 +1,0 @@
-virtual_ab_ota/retrofit.mk

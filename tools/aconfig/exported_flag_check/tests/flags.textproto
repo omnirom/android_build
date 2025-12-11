@@ -1,0 +1,115 @@
+  parsed_flag {
+    package   : "record_finalized_flags.test"
+    name      : "bar"
+    namespace : "test"
+    description       : "This is a finalized flag for API"
+    bug       : ""
+    state     : DISABLED
+    permission: READ_WRITE
+    trace {
+      source    : "flags.declarations"
+      state     : DISABLED
+      permission: READ_WRITE
+    }
+    is_fixed_read_only: false
+    is_exported       : true
+    container : "system"
+    metadata {
+      purpose: PURPOSE_UNSPECIFIED
+      storage: ACONFIGD
+    }
+  }
+  parsed_flag {
+    package   : "record_finalized_flags.test"
+    name      : "boo"
+    namespace : "test"
+    description       : "This is a flag not for API, but allowed"
+    bug       : ""
+    state     : DISABLED
+    permission: READ_WRITE
+    trace {
+      source    : "flags.declarations"
+      state     : DISABLED
+      permission: READ_WRITE
+    }
+    is_fixed_read_only: false
+    is_exported       : true
+    container : "system"
+    metadata {
+      purpose: PURPOSE_UNSPECIFIED
+      storage: ACONFIGD
+    }
+  }
+  parsed_flag {
+    package   : "record_finalized_flags.test"
+    name      : "far"
+    namespace : "test"
+    description       : "This is a flag is not exported"
+    bug       : ""
+    state     : DISABLED
+    permission: READ_WRITE
+    trace {
+      source    : "flags.declarations"
+      state     : DISABLED
+      permission: READ_WRITE
+    }
+    is_fixed_read_only: false
+    is_exported       : false
+    container : "system"
+    metadata {
+      purpose: PURPOSE_UNSPECIFIED
+      storage: ACONFIGD
+    }
+  }
+  parsed_flag {
+    package   : "record_finalized_flags.test"
+    name      : "foo"
+    namespace : "test"
+    description       : "This is allow_list flag for API in the signature file"
+    bug       : ""
+    state     : ENABLED
+    permission: READ_ONLY
+    trace {
+      source    : "flags.declarations"
+      state     : DISABLED
+      permission: READ_WRITE
+    }
+    trace {
+      source    : "flags.values"
+      state     : ENABLED
+      permission: READ_ONLY
+    }
+    is_fixed_read_only: false
+    is_exported       : true
+    container : "system"
+    metadata {
+      purpose: PURPOSE_UNSPECIFIED
+      storage: NONE
+    }
+  }
+  parsed_flag {
+    package   : "record_finalized_flags.test"
+    name      : "not_enabled"
+    namespace : "test"
+    description       : "This is a flag exported, but not for API"
+    bug       : ""
+    state     : DISABLED
+    permission: READ_ONLY
+    trace {
+      source    : "flags.declarations"
+      state     : DISABLED
+      permission: READ_WRITE
+    }
+    trace {
+      source    : "flags.values"
+      state     : DISABLED
+      permission: READ_ONLY
+    }
+    is_fixed_read_only: false
+    is_exported       : true
+    container : "system"
+    metadata {
+      purpose: PURPOSE_UNSPECIFIED
+      storage: NONE
+    }
+  }

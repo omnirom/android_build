@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 
-use crate::commands::assign_flag_ids;
+use crate::commands::{assign_flag_ids, should_include_flag};
 use crate::storage::FlagPackage;
-use aconfig_protos::{ProtoFlagPermission, ProtoFlagState};
+use aconfig_protos::ProtoFlagPermission;
 use aconfig_storage_file::{FlagInfoHeader, FlagInfoList, FlagInfoNode, StorageFileType};
 use anyhow::{anyhow, Result};
 
@@ -38,13 +38,8 @@ pub fn create_flag_info(
 ) -> Result<FlagInfoList> {
     // Exclude system/vendor/product flags that are RO+disabled.
     let mut filtered_packages = packages.to_vec();
-    if container == "system" || container == "vendor" || container == "product" {
-        for package in filtered_packages.iter_mut() {
-            package.boolean_flags.retain(|b| {
-                !(b.state == Some(ProtoFlagState::DISABLED.into())
-                    && b.permission == Some(ProtoFlagPermission::READ_ONLY.into()))
-            });
-        }
+    for package in filtered_packages.iter_mut() {
+        package.boolean_flags.retain(|b| should_include_flag(b));
     }
 
     let num_flags = filtered_packages.iter().map(|pkg| pkg.boolean_flags.len() as u32).sum();

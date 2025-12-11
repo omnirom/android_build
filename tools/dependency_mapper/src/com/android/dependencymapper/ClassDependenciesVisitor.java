@@ -37,29 +37,35 @@ public class ClassDependenciesVisitor extends ClassVisitor {
 
     private final static int API = Opcodes.ASM9;
 
-    private final Set<String> mClassTypes;
-    private final Set<Object> mConstantsDefined;
-    private final Set<Object> mInlinedUsages;
+    private final Set<String> mClassTypes = new HashSet<>();
+    private final Set<String> mCrossModuleClassTypes = new HashSet<>();
+    private final Set<Object> mConstantsDefined = new HashSet<>();
+    private final Set<Object> mInlinedUsages = new HashSet<>();
     private String mSource;
     private boolean isAnnotationType;
     private boolean mIsDependencyToAll;
-    private final RetentionPolicyVisitor retentionPolicyVisitor;
+    private final RetentionPolicyVisitor mRetentionPolicyVisitor = new RetentionPolicyVisitor();
 
     private final ClassRelevancyFilter mClassFilter;
+    private final ClassRelevancyFilter mCrossModuleFilter;
 
-    private ClassDependenciesVisitor(ClassReader reader, ClassRelevancyFilter filter) {
+    private ClassDependenciesVisitor(
+            ClassReader reader,
+            ClassRelevancyFilter filter,
+            ClassRelevancyFilter crossModuleFilter) {
         super(API);
-        this.mClassTypes = new HashSet<>();
-        this.mConstantsDefined = new HashSet<>();
-        this.mInlinedUsages =  new HashSet<>();
-        this.retentionPolicyVisitor = new RetentionPolicyVisitor();
-        this.mClassFilter = filter;
+        mClassFilter = filter;
+        mCrossModuleFilter = crossModuleFilter;
         collectRemainingClassDependencies(reader);
     }
 
     public static ClassDependencyData analyze(
-            String className, ClassReader reader, ClassRelevancyFilter filter) {
-        ClassDependenciesVisitor visitor = new ClassDependenciesVisitor(reader, filter);
+            String className,
+            ClassReader reader,
+            ClassRelevancyFilter filter,
+            ClassRelevancyFilter crossModuleFilter) {
+        ClassDependenciesVisitor visitor = new ClassDependenciesVisitor(
+                reader, filter, crossModuleFilter);
         reader.accept(visitor, ClassReader.SKIP_FRAMES);
         // Sometimes a class may contain references to the same class, we remove such cases to
         // prevent circular dependency.
@@ -67,8 +73,9 @@ public class ClassDependenciesVisitor extends ClassVisitor {
         return new ClassDependencyData(Utils.buildPackagePrependedClassSource(
                 className, visitor.getSource()), className, visitor.getClassTypes(),
                 visitor.isDependencyToAll(), visitor.getConstantsDefined(),
-                visitor.getInlinedUsages());
+                visitor.getInlinedUsages(), visitor.getCrossModuleClassTypes());
     }
+
 
     @Override
     public void visitSource(String source, String debug) {
@@ -79,16 +86,16 @@ public class ClassDependenciesVisitor extends ClassVisitor {
     public void visit(int version, int access, String name, String signature, String superName,
             String[] interfaces) {
         isAnnotationType = isAnnotationType(interfaces);
-        maybeAddClassTypesFromSignature(signature, mClassTypes);
+        maybeAddClassTypesFromSignature(signature, mClassTypes, mCrossModuleClassTypes);
         if (superName != null) {
             // superName can be null if what we are analyzing is `java.lang.Object`
             // which can happen when a custom Java SDK is on classpath (typically, android.jar)
             Type type = Type.getObjectType(superName);
-            maybeAddClassType(mClassTypes, type);
+            maybeAddClassType(mClassTypes, mCrossModuleClassTypes, type);
         }
         for (String s : interfaces) {
             Type interfaceType = Type.getObjectType(s);
-            maybeAddClassType(mClassTypes, interfaceType);
+            maybeAddClassType(mClassTypes, mCrossModuleClassTypes, interfaceType);
         }
     }
 
@@ -103,25 +110,26 @@ public class ClassDependenciesVisitor extends ClassVisitor {
                 // A CONSTANT_Class entry, read the class descriptor
                 String classDescriptor = reader.readUTF8(itemOffset, charBuffer);
                 Type type = Type.getObjectType(classDescriptor);
-                maybeAddClassType(mClassTypes, type);
+                maybeAddClassType(mClassTypes, mCrossModuleClassTypes, type);
             }
         }
     }
 
-    private void maybeAddClassTypesFromSignature(String signature, Set<String> types) {
+    private void maybeAddClassTypesFromSignature(String signature, Set<String> types,
+            Set<String> crossModuleTypes) {
         if (signature != null) {
             SignatureReader signatureReader = new SignatureReader(signature);
             signatureReader.accept(new SignatureVisitor(API) {
                 @Override
                 public void visitClassType(String className) {
                     Type type = Type.getObjectType(className);
-                    maybeAddClassType(types, type);
+                    maybeAddClassType(types, crossModuleTypes, type);
                 }
             });
         }
     }
 
-    protected void maybeAddClassType(Set<String> types, Type type) {
+    protected void maybeAddClassType(Set<String> types, Set<String> crossModuleTypes, Type type) {
         while (type.getSort() == Type.ARRAY) {
             type = type.getElementType();
         }
@@ -132,6 +140,8 @@ public class ClassDependenciesVisitor extends ClassVisitor {
         String name = type.getClassName();
         if (mClassFilter.test(name)) {
             types.add(name);
+        } else if (mCrossModuleFilter.test(name)) {
+            crossModuleTypes.add(name);
         }
     }
 
@@ -141,6 +151,10 @@ public class ClassDependenciesVisitor extends ClassVisitor {
 
     public Set<String> getClassTypes() {
         return mClassTypes;
+    }
+
+    private Set<String> getCrossModuleClassTypes() {
+        return mCrossModuleClassTypes;
     }
 
     public Set<Object> getConstantsDefined() {
@@ -158,33 +172,33 @@ public class ClassDependenciesVisitor extends ClassVisitor {
     @Override
     public FieldVisitor visitField(
             int access, String name, String desc, String signature, Object value) {
-        maybeAddClassTypesFromSignature(signature, mClassTypes);
-        maybeAddClassType(mClassTypes, Type.getType(desc));
+        maybeAddClassTypesFromSignature(signature, mClassTypes, mCrossModuleClassTypes);
+        maybeAddClassType(mClassTypes, mCrossModuleClassTypes, Type.getType(desc));
         if (isAccessibleConstant(access, value)) {
             mConstantsDefined.add(value);
         }
-        return new FieldVisitor(mClassTypes);
+        return new FieldVisitor(mClassTypes, mCrossModuleClassTypes);
     }
 
     @Override
     public MethodVisitor visitMethod(
             int access, String name, String desc, String signature, String[] exceptions) {
-        maybeAddClassTypesFromSignature(signature, mClassTypes);
+        maybeAddClassTypesFromSignature(signature, mClassTypes, mCrossModuleClassTypes);
         Type methodType = Type.getMethodType(desc);
-        maybeAddClassType(mClassTypes, methodType.getReturnType());
+        maybeAddClassType(mClassTypes, mCrossModuleClassTypes, methodType.getReturnType());
         for (Type argType : methodType.getArgumentTypes()) {
-            maybeAddClassType(mClassTypes, argType);
+            maybeAddClassType(mClassTypes, mCrossModuleClassTypes, argType);
         }
-        return new MethodVisitor(mClassTypes);
+        return new MethodVisitor(mClassTypes, mCrossModuleClassTypes);
     }
 
     @Override
     public org.objectweb.asm.AnnotationVisitor visitAnnotation(String desc, boolean visible) {
         if (isAnnotationType && "Ljava/lang/annotation/Retention;".equals(desc)) {
-            return retentionPolicyVisitor;
+            return mRetentionPolicyVisitor;
         } else {
-            maybeAddClassType(mClassTypes, Type.getType(desc));
-            return new AnnotationVisitor(mClassTypes);
+            maybeAddClassType(mClassTypes, mCrossModuleClassTypes, Type.getType(desc));
+            return new AnnotationVisitor(mClassTypes, mCrossModuleClassTypes);
         }
     }
 
@@ -205,34 +219,38 @@ public class ClassDependenciesVisitor extends ClassVisitor {
     }
 
     private class FieldVisitor extends org.objectweb.asm.FieldVisitor {
-        private final Set<String> types;
+        private final Set<String> mTypes;
+        private final Set<String> mCrossModuleTypes;
 
-        public FieldVisitor(Set<String> types) {
+        public FieldVisitor(Set<String> types, Set<String> crossModuleTypes) {
             super(API);
-            this.types = types;
+            mTypes = types;
+            mCrossModuleTypes = crossModuleTypes;
         }
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitAnnotation(
                 String descriptor, boolean visible) {
-            maybeAddClassType(types, Type.getType(descriptor));
-            return new AnnotationVisitor(types);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
+            return new AnnotationVisitor(mTypes, mCrossModuleTypes);
         }
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitTypeAnnotation(int typeRef,
                 TypePath typePath, String descriptor, boolean visible) {
-            maybeAddClassType(types, Type.getType(descriptor));
-            return new AnnotationVisitor(types);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
+            return new AnnotationVisitor(mTypes, mCrossModuleTypes);
         }
     }
 
     private class MethodVisitor extends org.objectweb.asm.MethodVisitor {
-        private final Set<String> types;
+        private final Set<String> mTypes;
+        private final Set<String> mCrossModuleTypes;
 
-        protected MethodVisitor(Set<String> types) {
+        protected MethodVisitor(Set<String> types, Set<String> crossModuleTypes) {
             super(API);
-            this.types = types;
+            mTypes = types;
+            mCrossModuleTypes = crossModuleTypes;
         }
 
         @Override
@@ -244,30 +262,30 @@ public class ClassDependenciesVisitor extends ClassVisitor {
         @Override
         public void visitLocalVariable(
                 String name, String desc, String signature, Label start, Label end, int index) {
-            maybeAddClassTypesFromSignature(signature, mClassTypes);
-            maybeAddClassType(mClassTypes, Type.getType(desc));
+            maybeAddClassTypesFromSignature(signature, mTypes, mCrossModuleClassTypes);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(desc));
             super.visitLocalVariable(name, desc, signature, start, end, index);
         }
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitAnnotation(
                 String descriptor, boolean visible) {
-            maybeAddClassType(types, Type.getType(descriptor));
-            return new AnnotationVisitor(types);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
+            return new AnnotationVisitor(mTypes, mCrossModuleTypes);
         }
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitParameterAnnotation(
                 int parameter, String descriptor, boolean visible) {
-            maybeAddClassType(types, Type.getType(descriptor));
-            return new AnnotationVisitor(types);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
+            return new AnnotationVisitor(mTypes, mCrossModuleTypes);
         }
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitTypeAnnotation(
                 int typeRef, TypePath typePath, String descriptor, boolean visible) {
-            maybeAddClassType(types, Type.getType(descriptor));
-            return new AnnotationVisitor(types);
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
+            return new AnnotationVisitor(mTypes, mCrossModuleTypes);
         }
     }
 
@@ -288,17 +306,19 @@ public class ClassDependenciesVisitor extends ClassVisitor {
     }
 
     private class AnnotationVisitor extends org.objectweb.asm.AnnotationVisitor {
-        private final Set<String> types;
+        private final Set<String> mTypes;
+        private final Set<String> mCrossModuleTypes;
 
-        public AnnotationVisitor(Set<String> types) {
+        public AnnotationVisitor(Set<String> types, Set<String> crossModuleTypes) {
             super(ClassDependenciesVisitor.API);
-            this.types = types;
+            mTypes = types;
+            mCrossModuleTypes = crossModuleTypes;
         }
 
         @Override
         public void visit(String name, Object value) {
             if (value instanceof Type) {
-                maybeAddClassType(types, (Type) value);
+                maybeAddClassType(mTypes, mCrossModuleTypes, (Type) value);
             }
         }
 
@@ -309,7 +329,7 @@ public class ClassDependenciesVisitor extends ClassVisitor {
 
         @Override
         public org.objectweb.asm.AnnotationVisitor visitAnnotation(String name, String descriptor) {
-            maybeAddClassType(types, Type.getType(descriptor));
+            maybeAddClassType(mTypes, mCrossModuleTypes, Type.getType(descriptor));
             return this;
         }
     }

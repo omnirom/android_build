@@ -102,6 +102,9 @@ android_filesystem_defaults {
         "StorageManager",
         "SystemUI",
 
+        // Allowlist for handheld packages
+        "preinstalled-packages-handheld-system-ext.xml",
+
         // telephony packages
         "CarrierConfig",
 
@@ -118,7 +121,6 @@ android_filesystem_defaults {
         ///////////////////////////////////////////
         // VNDK
         ///////////////////////////////////////////
-        "com.android.vndk.v30",
         "com.android.vndk.v31",
         "com.android.vndk.v32",
         "com.android.vndk.v33",
@@ -131,6 +133,7 @@ android_filesystem_defaults {
         "Camera2",
         "Dialer",
         "LatinIME",
+        "messaging",
         "apns-full-conf.xml",
         "frameworks-base-overlays",
     ],
@@ -141,7 +144,6 @@ android_filesystem_defaults {
                 // AVF
                 ///////////////////////////////////////////
                 "com.android.compos",
-                "features_com.android.virt.xml",
             ],
         },
         both: {
@@ -165,7 +167,10 @@ android_system_image {
         // init-second-stage to load debug policy from system_ext.
         // This option is only meant to be set by compliance GSI targets.
         "system_ext_userdebug_plat_sepolicy.cil",
-    ],
+    ] + select(soong_config_variable("gsi", "import_usb_debugging_test_app"), {
+        true: ["UsbDisableDebugger"],
+        default: [],
+    }),
 }
 
 // system.img for aosp_{arch} targets
@@ -181,6 +186,7 @@ android_system_image {
         "EmergencyInfo",
 
         // handheld_product
+        "AvatarPicker",
         "Calendar",
         "Contacts",
         "DeskClock",
@@ -197,7 +203,6 @@ android_system_image {
 
         // more AOSP packages
         "initial-package-stopped-states-aosp.xml",
-        "messaging",
         "PhotoTable",
         "preinstalled-packages-platform-aosp-product.xml",
         "ThemePicker",
@@ -209,14 +214,4 @@ android_system_image {
         true: true,
         default: false,
     }),
-    multilib: {
-        common: {
-            deps: select(release_flag("RELEASE_AVATAR_PICKER_APP"), {
-                true: [
-                    "AvatarPicker", // handheld_system_ext (RELEASE_AVATAR_PICKER_APP)
-                ],
-                default: [],
-            }),
-        },
-    },
 }

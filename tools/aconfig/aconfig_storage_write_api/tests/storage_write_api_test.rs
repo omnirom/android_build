@@ -1,6 +1,6 @@
 #[cfg(not(feature = "cargo"))]
 mod aconfig_storage_write_api_test {
-    use aconfig_storage_file::{FlagInfoBit, FlagValueType};
+    use aconfig_storage_file::{FlagInfoBit, FlagValueType, StorageFileType};
     use aconfig_storage_read_api::flag_info_query::find_flag_attribute;
     use aconfig_storage_read_api::flag_value_query::find_boolean_flag_value;
     use aconfig_storage_write_api::{
@@ -13,7 +13,15 @@ mod aconfig_storage_write_api_test {
     use tempfile::NamedTempFile;
 
     /// Create temp file copy
-    fn copy_to_temp_rw_file(source_file: &str) -> NamedTempFile {
+    fn copy_to_temp_rw_file(file_type: StorageFileType, version: u32) -> NamedTempFile {
+        let source_file = match file_type {
+            StorageFileType::FlagVal => format!("data/v{version}/flag_v{version}.val"),
+            StorageFileType::FlagInfo => format!("data/v{version}/flag_v{version}.info"),
+            StorageFileType::PackageMap => {
+                format!("data/v{version}/package_v{version}.map")
+            }
+            StorageFileType::FlagMap => format!("data/v{version}/flag_v{version}.map"),
+        };
         let file = NamedTempFile::new().unwrap();
         fs::copy(source_file, file.path()).unwrap();
         file
@@ -38,7 +46,7 @@ mod aconfig_storage_write_api_test {
     #[test]
     /// Test to lock down flag value update api
     fn test_boolean_flag_value_update() {
-        let flag_value_file = copy_to_temp_rw_file("./flag.val");
+        let flag_value_file = copy_to_temp_rw_file(StorageFileType::FlagVal, 1);
         let flag_value_path = flag_value_file.path().display().to_string();
 
         // SAFETY:
@@ -59,7 +67,7 @@ mod aconfig_storage_write_api_test {
     #[test]
     /// Test to lock down flag has server override update api
     fn test_set_flag_has_server_override() {
-        let flag_info_file = copy_to_temp_rw_file("./flag.info");
+        let flag_info_file = copy_to_temp_rw_file(StorageFileType::FlagInfo, 1);
         let flag_info_path = flag_info_file.path().display().to_string();
 
         // SAFETY:
@@ -81,7 +89,7 @@ mod aconfig_storage_write_api_test {
     #[test]
     /// Test to lock down flag has local override update api
     fn test_set_flag_has_local_override() {
-        let flag_info_file = copy_to_temp_rw_file("./flag.info");
+        let flag_info_file = copy_to_temp_rw_file(StorageFileType::FlagInfo, 1);
         let flag_info_path = flag_info_file.path().display().to_string();
 
         // SAFETY:

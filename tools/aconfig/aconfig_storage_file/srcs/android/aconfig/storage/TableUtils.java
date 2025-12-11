@@ -16,6 +16,7 @@
 
 package android.aconfig.storage;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class TableUtils {
 
     private static final int[] HASH_PRIMES =

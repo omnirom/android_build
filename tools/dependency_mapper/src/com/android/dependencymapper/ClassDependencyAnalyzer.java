@@ -27,12 +27,15 @@ import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
 
 /**
- * An utility class that reads each class file present in the classes jar, then analyzes the same,
+ * A utility class that reads each class file present in the classes jar, then analyzes the same,
  * collecting the dependencies in {@link List<ClassDependencyData>}
  */
 public class ClassDependencyAnalyzer {
 
-    public static List<ClassDependencyData> analyze(Path classJar, ClassRelevancyFilter classFilter) {
+    public static List<ClassDependencyData> analyze(
+            Path classJar,
+            ClassRelevancyFilter classFilter,
+            ClassRelevancyFilter crossModuleClassFilter) {
         List<ClassDependencyData> classAnalysisList = new ArrayList<>();
         try (JarFile jarFile = new JarFile(classJar.toFile())) {
             Enumeration<JarEntry> entries = jarFile.entries();
@@ -42,7 +45,7 @@ public class ClassDependencyAnalyzer {
                     try (InputStream inputStream = jarFile.getInputStream(entry)) {
                         String name = Utils.trimAndConvertToPackageBasedPath(entry.getName());
                         ClassDependencyData classAnalysis = ClassDependenciesVisitor.analyze(name,
-                                new ClassReader(inputStream), classFilter);
+                                new ClassReader(inputStream), classFilter, crossModuleClassFilter);
                         classAnalysisList.add(classAnalysis);
                     }
                 }

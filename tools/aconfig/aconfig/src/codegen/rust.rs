@@ -14,38 +14,43 @@
  * limitations under the License.
  */
 
-use anyhow::Result;
+use anyhow::{ensure, Result};
 use serde::Serialize;
 use tinytemplate::TinyTemplate;
 
-use aconfig_protos::{ProtoFlagPermission, ProtoFlagState, ProtoParsedFlag};
+use aconfig_protos::{
+    ParsedFlagExt, ProtoFlagPermission, ProtoFlagState, ProtoFlagStorageBackend, ProtoParsedFlag,
+};
 
 use std::collections::HashMap;
 
-use crate::codegen;
-use crate::codegen::CodegenMode;
-use crate::commands::{should_include_flag, OutputFile};
+use crate::codegen::{self, get_flag_offset_in_storage_file, CodegenMode};
+use crate::commands::OutputFile;
 
 pub fn generate_rust_code<I>(
     package: &str,
     flag_ids: HashMap<String, u16>,
     parsed_flags_iter: I,
     codegen_mode: CodegenMode,
+    package_fingerprint: Option<u64>,
 ) -> Result<OutputFile>
 where
     I: Iterator<Item = ProtoParsedFlag>,
 {
-    let template_flags: Vec<TemplateParsedFlag> = parsed_flags_iter
+    let template_flags = parsed_flags_iter
         .map(|pf| TemplateParsedFlag::new(package, flag_ids.clone(), &pf))
-        .collect();
+        .collect::<Result<Vec<TemplateParsedFlag>>>()?;
     let has_readwrite = template_flags.iter().any(|item| item.readwrite);
     let container = (template_flags.first().expect("zero template flags").container).to_string();
+    let use_package_fingerprint = package_fingerprint.is_some();
     let context = TemplateContext {
         package: package.to_string(),
         template_flags,
         modules: package.split('.').map(|s| s.to_string()).collect::<Vec<_>>(),
         has_readwrite,
         container,
+        use_package_fingerprint,
+        package_fingerprint: package_fingerprint.unwrap_or_default(),
     };
     let mut template = TinyTemplate::new();
     template.add_template(
@@ -69,6 +74,8 @@ struct TemplateContext {
     pub modules: Vec<String>,
     pub has_readwrite: bool,
     pub container: String,
+    pub use_package_fingerprint: bool,
+    pub package_fingerprint: u64,
 }
 
 #[derive(Serialize)]
@@ -84,23 +91,13 @@ struct TemplateParsedFlag {
 
 impl TemplateParsedFlag {
     #[allow(clippy::nonminimal_bool)]
-    fn new(package: &str, flag_offsets: HashMap<String, u16>, pf: &ProtoParsedFlag) -> Self {
-        let flag_offset = match flag_offsets.get(pf.name()) {
-            Some(offset) => offset,
-            None => {
-                // System/vendor/product RO+disabled flags have no offset in storage files.
-                // Assign placeholder value.
-                if !should_include_flag(pf) {
-                    &0
-                }
-                // All other flags _must_ have an offset.
-                else {
-                    panic!("{}", format!("missing flag offset for {}", pf.name()));
-                }
-            }
-        };
-
-        Self {
+    fn new(package: &str, flag_ids: HashMap<String, u16>, pf: &ProtoParsedFlag) -> Result<Self> {
+        ensure!(
+            pf.metadata.storage() != ProtoFlagStorageBackend::DEVICE_CONFIG,
+            "device config storage backend cannot be used in native codegen for flag {}",
+            pf.fully_qualified_name()
+        );
+        Ok(Self {
             readwrite: pf.permission() == ProtoFlagPermission::READ_WRITE,
             default_value: match pf.state() {
                 ProtoFlagState::ENABLED => "true".to_string(),
@@ -108,11 +105,11 @@ impl TemplateParsedFlag {
             },
             name: pf.name().to_string(),
             container: pf.container().to_string(),
-            flag_offset: *flag_offset,
+            flag_offset: get_flag_offset_in_storage_file(&flag_ids, pf)?,
             device_config_namespace: pf.namespace().to_string(),
             device_config_flag: codegen::create_device_config_ident(package, pf.name())
                 .expect("values checked at flag parse time"),
-        }
+        })
     }
 }
 
@@ -131,10 +128,9 @@ use log::{log, LevelFilter, Level};
 /// flag provider
 pub struct FlagProvider;
 
-static PACKAGE_OFFSET: LazyLock<Result<Option<u32>, AconfigStorageError>> = LazyLock::new(|| unsafe {
+static PACKAGE_CONTEXT: LazyLock<Result<Option<PackageReadContext>, AconfigStorageError>> = LazyLock::new(|| unsafe {
     get_mapped_storage_file("system", StorageFileType::PackageMap)
     .and_then(|package_map| get_package_read_context(&package_map, "com.android.aconfig.test"))
-    .map(|context| context.map(|c| c.boolean_start_index))
 });
 
 static FLAG_VAL_MAP: LazyLock<Result<Mmap, AconfigStorageError>> = LazyLock::new(|| unsafe {
@@ -153,13 +149,13 @@ static CACHED_disabled_rw: LazyLock<bool> = LazyLock::new(|| {
         .as_ref()
         .map_err(|err| format!("failed to get flag val map: {err}"))
         .and_then(|flag_val_map| {
-            PACKAGE_OFFSET
-               .as_ref()
-               .map_err(|err| format!("failed to get package read offset: {err}"))
-               .and_then(|package_offset| {
-                   match package_offset {
-                       Some(offset) => {
-                           get_boolean_flag_value(&flag_val_map, offset + 0)
+            PACKAGE_CONTEXT
+              .as_ref()
+               .map_err(|err| format!("failed to get package read context: {err}"))
+               .and_then(|package_context| {
+                   match package_context {
+                       Some(context) => {
+                           get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 0)
                                .map_err(|err| format!("failed to get flag: {err}"))
                        },
                        None => {
@@ -193,13 +189,13 @@ static CACHED_disabled_rw_exported: LazyLock<bool> = LazyLock::new(|| {
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 1)
+                .map_err(|err| format!("failed to get package read context: {err}"))
+                .and_then(|package_context| {
+                    match package_context {
+                        Some(context) => {
+                           get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 1)
                                     .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
@@ -233,13 +229,13 @@ static CACHED_disabled_rw_in_other_namespace: LazyLock<bool> = LazyLock::new(|| 
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 2)
+                .map_err(|err| format!("failed to get package read context: {err}"))
+                .and_then(|package_context| {
+                    match package_context {
+                        Some(context) => {
+                           get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 2)
                                     .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
@@ -274,14 +270,14 @@ static CACHED_enabled_rw: LazyLock<bool> = LazyLock::new(|| {
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 7)
-                                    .map_err(|err| format!("failed to get flag: {err}"))
+                    .map_err(|err| format!("failed to get package read context: {err}"))
+                    .and_then(|package_context| {
+                      match package_context {
+                            Some(context) => {
+                              get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 7)
+                                      .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
                                 log!(Level::Error, "no context found for package com.android.aconfig.test");
@@ -426,10 +422,9 @@ pub struct FlagProvider {
     overrides: BTreeMap<&'static str, bool>,
 }
 
-static PACKAGE_OFFSET: LazyLock<Result<Option<u32>, AconfigStorageError>> = LazyLock::new(|| unsafe {
+static PACKAGE_CONTEXT: LazyLock<Result<Option<PackageReadContext>, AconfigStorageError>> = LazyLock::new(|| unsafe {
     get_mapped_storage_file("system", StorageFileType::PackageMap)
     .and_then(|package_map| get_package_read_context(&package_map, "com.android.aconfig.test"))
-    .map(|context| context.map(|c| c.boolean_start_index))
 });
 
 static FLAG_VAL_MAP: LazyLock<Result<Mmap, AconfigStorageError>> = LazyLock::new(|| unsafe {
@@ -448,13 +443,13 @@ static CACHED_disabled_rw: LazyLock<bool> = LazyLock::new(|| {
         .as_ref()
         .map_err(|err| format!("failed to get flag val map: {err}"))
         .and_then(|flag_val_map| {
-            PACKAGE_OFFSET
+            PACKAGE_CONTEXT
                .as_ref()
-               .map_err(|err| format!("failed to get package read offset: {err}"))
-               .and_then(|package_offset| {
-                   match package_offset {
-                       Some(offset) => {
-                           get_boolean_flag_value(&flag_val_map, offset + 0)
+                    .map_err(|err| format!("failed to get package read context: {err}"))
+                    .and_then(|package_context| {
+                      match package_context {
+                            Some(context) => {
+                              get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 0)
                                .map_err(|err| format!("failed to get flag: {err}"))
                        },
                        None => {
@@ -488,13 +483,13 @@ static CACHED_disabled_rw_exported: LazyLock<bool> = LazyLock::new(|| {
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 1)
+                    .map_err(|err| format!("failed to get package read context: {err}"))
+                    .and_then(|package_context| {
+                      match package_context {
+                            Some(context) => {
+                              get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 1)
                                     .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
@@ -528,13 +523,13 @@ static CACHED_disabled_rw_in_other_namespace: LazyLock<bool> = LazyLock::new(|| 
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 2)
+                    .map_err(|err| format!("failed to get package read context: {err}"))
+                    .and_then(|package_context| {
+                      match package_context {
+                            Some(context) => {
+                              get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 2)
                                     .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
@@ -569,13 +564,13 @@ static CACHED_enabled_rw: LazyLock<bool> = LazyLock::new(|| {
             .as_ref()
             .map_err(|err| format!("failed to get flag val map: {err}"))
             .and_then(|flag_val_map| {
-                PACKAGE_OFFSET
+                PACKAGE_CONTEXT
                     .as_ref()
-                    .map_err(|err| format!("failed to get package read offset: {err}"))
-                    .and_then(|package_offset| {
-                        match package_offset {
-                            Some(offset) => {
-                                get_boolean_flag_value(&flag_val_map, offset + 7)
+                    .map_err(|err| format!("failed to get package read context: {err}"))
+                    .and_then(|package_context| {
+                      match package_context {
+                            Some(context) => {
+                              get_boolean_flag_value(&flag_val_map, context.boolean_start_index + 7)
                                     .map_err(|err| format!("failed to get flag: {err}"))
                             },
                             None => {
@@ -926,15 +921,13 @@ pub fn enabled_rw() -> bool {
             flag_ids,
             modified_parsed_flags.into_iter(),
             mode,
+            None,
         )
         .unwrap();
         assert_eq!("src/lib.rs", format!("{}", generated.path.display()));
-        assert_eq!(
-            None,
-            crate::test::first_significant_code_diff(
-                expected,
-                &String::from_utf8(generated.contents).unwrap()
-            )
+        crate::test::assert_no_significant_code_diff(
+            expected,
+            &String::from_utf8(generated.contents).unwrap(),
         );
     }
 

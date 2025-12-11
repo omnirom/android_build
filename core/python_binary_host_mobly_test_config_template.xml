@@ -17,5 +17,5 @@
     <device name="AndroidRealDevice"></device>
 
     <option name="mobly_pkg" key="file" value="{MODULE}" />
-    <test class="MoblyAospPackageTest" />
+    <test class="MoblyAospTest" />
 </configuration>

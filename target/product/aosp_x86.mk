@@ -61,7 +61,6 @@ $(call inherit-product, $(SRC_TARGET_DIR)/product/gsi_release.mk)
 
 PRODUCT_SOONG_DEFINED_SYSTEM_IMAGE := aosp_system_image
 USE_SOONG_DEFINED_SYSTEM_IMAGE := true
-PRODUCT_USE_SOONG_NOTICE_XML := true
 
 endif
 

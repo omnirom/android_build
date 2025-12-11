@@ -20,6 +20,8 @@ import com.android.dependencymapper.DependencyProto;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
+import java.io.BufferedReader;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -32,12 +34,20 @@ import java.util.Map;
 import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class Utils {
+    private static final String FILE_PATH_REGEX = "'([^']*)'|(\\S+)";
 
     public static String trimAndConvertToPackageBasedPath(String fileBasedPath) {
         // Remove ".class" from the fileBasedPath, then replace "/" with "."
         return fileBasedPath.replaceAll("\\..*", "").replaceAll("/", ".");
+    }
+
+    public static String convertClassToFileBasedPath(String packageBasedClass) {
+        // Remove ".class" from the fileBasedPath, then replace "/" with "."
+        return packageBasedClass.replaceAll("\\.", "/") + ".class";
     }
 
     public static String buildPackagePrependedClassSource(String qualifiedClassPath,
@@ -52,8 +62,10 @@ public class Utils {
         Gson gson = new GsonBuilder().setPrettyPrinting().create();
         Map<String, Set<String>> jsonMap = new HashMap<>();
         for (DependencyProto.FileDependency fileDependency : contents.getFileDependencyList()) {
-            jsonMap.putIfAbsent(fileDependency.getFilePath(),
-                    Set.copyOf(fileDependency.getFileDependenciesList()));
+            jsonMap.putIfAbsent(fileDependency.getFilePath(), new HashSet<>(Set.copyOf(fileDependency.getFileDependenciesList())));
+            if (fileDependency.getIsDependencyToAll()) {
+                jsonMap.get(fileDependency.getFilePath()).add("isDepToAll");
+            }
         }
         String json = gson.toJson(jsonMap);
         try (FileWriter file = new FileWriter(jsonOut.toFile())) {
@@ -67,7 +79,7 @@ public class Utils {
     public static void writeContentsToProto(DependencyProto.FileDependencyList usages, Path protoOut) {
         try {
             OutputStream outputStream = Files.newOutputStream(protoOut);
-            usages.writeDelimitedTo(outputStream);
+            usages.writeTo(outputStream);
         } catch (IOException e) {
             System.err.println("Error writing proto output to: " + protoOut);
             throw new RuntimeException(e);
@@ -90,5 +102,32 @@ public class Utils {
             throw new RuntimeException(e);
         }
         return classes;
+    }
+
+    public static Set<String> parseRspFile(Path rspFile) {
+        Set<String> files = new HashSet<>();
+        if (!rspFile.toFile().exists()) {
+            return files;
+        }
+        try (BufferedReader reader = new BufferedReader(new FileReader(rspFile.toFile()))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                Pattern pattern = Pattern.compile(FILE_PATH_REGEX);
+                Matcher matcher = pattern.matcher(line);
+                while (matcher.find()) {
+                    if (matcher.group(1) != null) {
+                        // Group 1: Single-quoted string (without the quotes)
+                        files.add(matcher.group(1));
+                    } else {
+                        // Group 2: Non-whitespace sequence
+                        files.add(matcher.group(2));
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("Error reading rsp file at: " + rspFile);
+            throw new RuntimeException(e);
+        }
+        return files;
     }
 }

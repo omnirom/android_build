@@ -6,8 +6,6 @@
 ##
 ###########################################################
 
-include $(BUILD_SYSTEM)/use_lld_setup.mk
-
 ifneq ($(LOCAL_PREBUILT_LIBS),)
 $(call pretty-error,dont use LOCAL_PREBUILT_LIBS anymore)
 endif

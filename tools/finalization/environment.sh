@@ -22,16 +22,16 @@ export FINAL_MAINLINE_EXTENSION='13'
 # 'vintf' - VINTF is finalized
 # 'sdk' - VINTF and SDK/API are finalized
 # 'rel' - branch is finalized, switched to REL
-export FINAL_STATE='rel'
+export FINAL_STATE='unfinalized'
 
 export BUILD_FROM_SOURCE_STUB=true
 
 # FINAL versions for VINTF
 # TODO(b/323985297): The version must match with that from the release configuration.
 # Instead of hardcoding the version here, read it from a release configuration.
-export FINAL_BOARD_API_LEVEL='202504'
-export FINAL_CORRESPONDING_VERSION_LETTER='B'
-export FINAL_CORRESPONDING_PLATFORM_VERSION='16'
-export FINAL_NEXT_BOARD_API_LEVEL='202604'
-export FINAL_NEXT_CORRESPONDING_VERSION_LETTER='C'
-export FINAL_NEXT_CORRESPONDING_SDK_VERSION='37'
+export FINAL_BOARD_API_LEVEL='202604'
+export FINAL_CORRESPONDING_VERSION_LETTER='C'
+export FINAL_CORRESPONDING_PLATFORM_VERSION='17'
+export FINAL_NEXT_BOARD_API_LEVEL='202704'
+export FINAL_NEXT_CORRESPONDING_VERSION_LETTER='D'
+export FINAL_NEXT_CORRESPONDING_SDK_VERSION='38'

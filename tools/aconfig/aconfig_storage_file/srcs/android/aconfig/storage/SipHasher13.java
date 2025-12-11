@@ -16,6 +16,7 @@
 
 package android.aconfig.storage;
 
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class SipHasher13 {
     static class State {
         private long v0;

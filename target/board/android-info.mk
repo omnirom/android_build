@@ -6,6 +6,13 @@ LOCAL_PATH := $(call my-dir)
 
 -include $(TARGET_DEVICE_DIR)/AndroidBoard.mk
 
+ifdef BOARD_RADIO_IMAGE_PATH
+  INSTALLED_RADIOIMAGE_TARGET += $(PRODUCT_OUT)/radio.img
+  BOARD_INFO_CHECK += version-baseband:$(BOARD_RADIO_IMAGE_PATH)
+  $(PRODUCT_OUT)/radio.img : $(BOARD_RADIO_IMAGE_PATH)
+	$(transform-prebuilt-to-target)
+endif
+
 # Generate a file that contains various information about the
 # device we're building for.  This file is typically packaged up
 # with everything else.

@@ -36,6 +36,10 @@ PRODUCT_PACKAGES += \
     make_f2fs \
     requestsync \
 
+ifeq ($(RELEASE_PACKAGE_COMPUTER_CONTROL),true)
+  PRODUCT_PACKAGES += VirtualDeviceManager
+endif
+
 PRODUCT_HOST_PACKAGES += \
     fsck.f2fs \
 

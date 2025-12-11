@@ -14,5 +14,4 @@
 # limitations under the License.
 #
 
-PRODUCT_COPY_FILES += \
-    build/make/target/product/ramdisk_stub.mk:$(TARGET_COPY_OUT_VENDOR_RAMDISK)/nonempty
+PRODUCT_PACKAGES += nonempty_vendor_ramdisk

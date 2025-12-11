@@ -15,6 +15,6 @@ function finalize_main_step0_and_m() {
     source $top/build/make/tools/finalization/build-step-0.sh
     local m="$top/build/soong/soong_ui.bash --make-mode TARGET_PRODUCT=$1 TARGET_RELEASE=fina_0 TARGET_BUILD_VARIANT=userdebug"
     # This command tests the release state for AIDL.
-    AIDL_FROZEN_REL=true $m ${@:2}
+    $m ${@:2}
 }
 finalize_main_step0_and_m $@

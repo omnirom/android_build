@@ -40,6 +40,8 @@ $(call verify-module-name)
 my_test_data :=
 my_test_config :=
 
+LOCAL_IS_SOONG_MODULE := $(if $(filter $(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK)),true)
+
 LOCAL_IS_HOST_MODULE := $(strip $(LOCAL_IS_HOST_MODULE))
 ifdef LOCAL_IS_HOST_MODULE
   ifneq ($(LOCAL_IS_HOST_MODULE),true)
@@ -128,7 +130,7 @@ include $(BUILD_SYSTEM)/local_current_sdk.mk
 
 # Check if the use of System SDK is correct. Note that, for Soong modules, the system sdk version
 # check is done in Soong. No need to do it twice.
-ifneq ($(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK))
+ifeq (,$(LOCAL_IS_SOONG_MODULE))
 include $(BUILD_SYSTEM)/local_systemsdk.mk
 endif
 
@@ -176,6 +178,7 @@ my_module_path := $(strip $(LOCAL_MODULE_PATH))
 endif
 my_module_path := $(patsubst %/,%,$(my_module_path))
 my_module_relative_path := $(strip $(LOCAL_MODULE_RELATIVE_PATH))
+my_module_relative_path := $(patsubst %/,%,$(my_module_relative_path))
 
 ifdef LOCAL_IS_HOST_MODULE
   partition_tag :=
@@ -219,10 +222,11 @@ endif
 # LOCAL_SOONG_PROVIDER_TEST_SUITES (new, via TestSuiteInfoProvider instead of AndroidMk stuff),
 # modulo "null-sute", "mts", and "mcts". mts/mcts are automatically added if there's a different
 # suite starting with "m(c)ts-". null-suite seems useless and is sometimes automatically added
-# if no other suites are added.
-ifneq (,$(filter $(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK)))
-  a := $(filter-out null-suite mts mcts,$(sort $(LOCAL_COMPATIBILITY_SUITE)))
-  b := $(filter-out null-suite mts mcts,$(sort $(LOCAL_SOONG_PROVIDER_TEST_SUITES)))
+# if no other suites are added. host-unit-tests is added automatically  when the test is unit
+# test and host test.
+ifneq (,$(LOCAL_IS_SOONG_MODULE))
+  a := $(filter-out null-suite mts mcts host-unit-tests,$(sort $(LOCAL_COMPATIBILITY_SUITE)))
+  b := $(filter-out null-suite mts mcts host-unit-tests,$(sort $(LOCAL_SOONG_PROVIDER_TEST_SUITES)))
   ifneq ($(a),$(b))
     $(error $(LOCAL_MODULE): LOCAL_COMPATIBILITY_SUITE did not match LOCAL_SOONG_PROVIDER_TEST_SUITES$(newline)  LOCAL_COMPATIBILITY_SUITE: $(a)$(newline)  LOCAL_SOONG_PROVIDER_TEST_SUITES: $(b)$(newline))
   endif
@@ -355,7 +359,7 @@ include $(BUILD_SYSTEM)/configure_module_stem.mk
 LOCAL_BUILT_MODULE := $(intermediates)/$(my_built_module_stem)
 
 ifneq (,$(LOCAL_SOONG_INSTALLED_MODULE))
-  ifneq ($(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK))
+  ifeq (,$(LOCAL_IS_SOONG_MODULE))
     $(call pretty-error, LOCAL_MODULE_MAKEFILE can only be used from $(SOONG_ANDROID_MK))
   endif
   # Use the install path requested by Soong.
@@ -389,7 +393,7 @@ LOCAL_INTERMEDIATE_TARGETS += $(LOCAL_BUILT_MODULE)
 # Don't create .toc files for Soong shared libraries, that is handled in
 # Soong and soong_cc_prebuilt.mk
 ###########################################################
-ifneq ($(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK))
+ifeq (,$(LOCAL_IS_SOONG_MODULE))
 ifeq ($(LOCAL_MODULE_CLASS),SHARED_LIBRARIES)
 LOCAL_INTERMEDIATE_TARGETS += $(LOCAL_BUILT_MODULE).toc
 $(LOCAL_BUILT_MODULE).toc: $(LOCAL_BUILT_MODULE)
@@ -502,16 +506,12 @@ my_path_comp :=
 
 my_installed_symlinks :=
 
-ifneq (,$(LOCAL_SOONG_INSTALLED_MODULE))
-  # Soong already generated the copy rule, but make the installed location depend on the Make
-  # copy of the intermediates for now, as some rules that collect intermediates may expect
-  # them to exist.
-  $(LOCAL_INSTALLED_MODULE): $(LOCAL_BUILT_MODULE)
-else ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
+ifeq (,$(LOCAL_SOONG_INSTALLED_MODULE))
+ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
   $(LOCAL_INSTALLED_MODULE): PRIVATE_POST_INSTALL_CMD := $(LOCAL_POST_INSTALL_CMD)
   $(LOCAL_INSTALLED_MODULE): $(LOCAL_BUILT_MODULE)
 	@echo "Install: $@"
-  ifeq ($(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK))
+  ifneq (,$(LOCAL_IS_SOONG_MODULE))
 	$(copy-file-or-link-to-new-target)
   else
 	$(copy-file-to-new-target)
@@ -527,6 +527,7 @@ else ifneq (true,$(LOCAL_UNINSTALLABLE_MODULE))
   $(my_all_targets) : | $(my_installed_symlinks)
 
 endif # !LOCAL_UNINSTALLABLE_MODULE
+endif # !LOCAL_SOONG_INSTALLED_MODULE
 
 # Add dependencies on LOCAL_SOONG_INSTALL_SYMLINKS if we're installing any kind of module, not just
 # ones that set LOCAL_SOONG_INSTALLED_MODULE. This is so we can have a soong module that only
@@ -982,6 +983,15 @@ ALL_MODULES.$(my_register_name).SOONG_MODULE_TYPE := \
     $(ALL_MODULES.$(my_register_name).SOONG_MODULE_TYPE) $(LOCAL_SOONG_MODULE_TYPE)
 ALL_MODULES.$(my_register_name).IS_SOONG_MODULE := \
     $(if $(filter $(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK)),true)
+# .IS_SOONG_MODULE above will get reset to an empty string if it encounters a make module with the
+# same name as a soong module. The following 3 variables allow for more nuanced detection when it's
+# both a make and soong module.
+ALL_MODULES.$(my_register_name).IS_SOONG_MODULE_AND_POTENTIALLY_ALSO_MAKE_MODULE := \
+    $(or $(ALL_MODULES.$(my_register_name).IS_SOONG_MODULE_AND_POTENTIALLY_ALSO_MAKE_MODULE),$(if $(filter $(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK)),true))
+ALL_MODULES.$(my_register_name).IS_MAKE_MODULE_AND_POTENTIALLY_ALSO_SOONG_MODULE := \
+    $(or $(ALL_MODULES.$(my_register_name).IS_MAKE_MODULE_AND_POTENTIALLY_ALSO_SOONG_MODULE),$(if $(filter $(LOCAL_MODULE_MAKEFILE),$(SOONG_ANDROID_MK)),,true))
+ALL_MODULES.$(my_register_name).IS_MAKE_AND_SOONG_MODULE := \
+    $(and $(ALL_MODULES.$(my_register_name).IS_SOONG_MODULE_AND_POTENTIALLY_ALSO_MAKE_MODULE),$(ALL_MODULES.$(my_register_name).IS_MAKE_MODULE_AND_POTENTIALLY_ALSO_SOONG_MODULE))
 ifndef LOCAL_IS_HOST_MODULE
 ALL_MODULES.$(my_register_name).TARGET_BUILT := \
     $(ALL_MODULES.$(my_register_name).TARGET_BUILT) $(LOCAL_BUILT_MODULE)
@@ -1075,6 +1085,16 @@ endif
 ifdef LOCAL_FILESYSTEM_FILELIST
   ALL_MODULES.$(my_register_name).FILESYSTEM_FILELIST := \
       $(ALL_MODULES.$(my_register_name).FILESYSTEM_FILELIST) $(LOCAL_FILESYSTEM_FILELIST)
+endif
+
+ifdef LOCAL_FILESYSTEM_AVB_KEY_PATH
+  ALL_MODULES.$(my_register_name).FILESYSTEM_AVB_KEY_PATH := \
+      $(ALL_MODULES.$(my_register_name).FILESYSTEM_AVB_KEY_PATH) $(LOCAL_FILESYSTEM_AVB_KEY_PATH)
+endif
+
+ifdef LOCAL_FILESYSTEM_AVB_ALGORITHM
+  ALL_MODULES.$(my_register_name).FILESYSTEM_AVB_ALGORITHM := \
+      $(ALL_MODULES.$(my_register_name).FILESYSTEM_AVB_ALGORITHM) $(LOCAL_FILESYSTEM_AVB_ALGORITHM)
 endif
 
 ifndef LOCAL_SOONG_MODULE_INFO_JSON

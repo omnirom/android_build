@@ -41,17 +41,6 @@ endif  # LOCAL_COMPRESSED_MODULE
 include $(BUILD_SYSTEM)/base_rules.mk
 built_module := $(LOCAL_BUILT_MODULE)
 
-# Run veridex on product, system_ext and vendor modules.
-# We skip it for unbundled app builds where we cannot build veridex.
-module_run_appcompat :=
-ifeq (true,$(non_system_module))
-ifeq (,$(TARGET_BUILD_APPS))  # ! unbundled app build
-ifneq ($(UNSAFE_DISABLE_HIDDENAPI_FLAGS),true)
-  module_run_appcompat := true
-endif
-endif
-endif
-
 PACKAGES.$(LOCAL_MODULE).OVERRIDES := $(strip $(LOCAL_OVERRIDES_PACKAGES))
 
 my_extract_apk := $(strip $(LOCAL_EXTRACT_APK))
@@ -225,14 +214,6 @@ ifdef LOCAL_COMPRESSED_MODULE
 $(built_module) : $(GZIP)
 endif
 
-ifeq ($(module_run_appcompat),true)
-$(built_module) : $(appcompat-files)
-$(LOCAL_BUILT_MODULE): PRIVATE_INSTALLED_MODULE := $(LOCAL_INSTALLED_MODULE)
-endif
-
-ifeq ($(module_run_appcompat),true)
-$(built_module) : $(AAPT2)
-endif
 $(built_module) : $(my_prebuilt_src_file) | $(ZIPALIGN) $(ZIP2ZIP) $(SIGNAPK_JAR) $(SIGNAPK_JNI_LIBRARY_PATH)
 	$(transform-prebuilt-to-target)
 	$(uncompress-prebuilt-embedded-jni-libs)
@@ -241,10 +222,6 @@ ifeq (true, $(LOCAL_UNCOMPRESS_DEX))
 	$(uncompress-dexs)
 endif  # LOCAL_UNCOMPRESS_DEX
 ifneq ($(LOCAL_CERTIFICATE),PRESIGNED)
-ifeq ($(module_run_appcompat),true)
-	$(call appcompat-header, aapt2)
-	$(run-appcompat)
-endif  # module_run_appcompat
 	$(sign-package)
 	# No need for align-package because sign-package takes care of alignment
 else  # LOCAL_CERTIFICATE == PRESIGNED

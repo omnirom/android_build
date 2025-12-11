@@ -30,7 +30,6 @@ linked_module := $(intermediates)/LINKED/$(notdir $(my_installed_module_stem))
 LOCAL_INTERMEDIATE_TARGETS := $(linked_module)
 
 ###################################
-include $(BUILD_SYSTEM)/use_lld_setup.mk
 include $(BUILD_SYSTEM)/binary.mk
 ###################################
 
@@ -46,52 +45,10 @@ inject_module := $(linked_module)
 endif
 
 ###########################################################
-## Store a copy with symbols for symbolic debugging
-###########################################################
-ifeq ($(LOCAL_UNSTRIPPED_PATH),)
-my_unstripped_path := $(TARGET_OUT_UNSTRIPPED)/$(patsubst $(PRODUCT_OUT)/%,%,$(my_module_path))
-else
-my_unstripped_path := $(LOCAL_UNSTRIPPED_PATH)
-endif
-symbolic_input := $(inject_module)
-symbolic_output := $(my_unstripped_path)/$(my_installed_module_stem)
-elf_mapping_path := $(patsubst $(TARGET_OUT_UNSTRIPPED)/%,$(call intermediates-dir-for,PACKAGING,elf_symbol_mapping)/%,$(symbolic_output).textproto)
-
-ALL_MODULES.$(my_register_name).SYMBOLIC_OUTPUT_PATH := $(symbolic_output)
-ALL_MODULES.$(my_register_name).ELF_SYMBOL_MAPPING_PATH := $(elf_mapping_path)
-
-$(eval $(call copy-unstripped-elf-file-with-mapping,$(symbolic_input),$(symbolic_output),$(elf_mapping_path)))
-
-###########################################################
-## Store breakpad symbols
-###########################################################
-
-ifeq ($(BREAKPAD_GENERATE_SYMBOLS),true)
-my_breakpad_path := $(TARGET_OUT_BREAKPAD)/$(patsubst $(PRODUCT_OUT)/%,%,$(my_module_path))
-breakpad_input := $(inject_module)
-breakpad_output := $(my_breakpad_path)/$(my_installed_module_stem).sym
-$(breakpad_output) : $(breakpad_input) | $(BREAKPAD_DUMP_SYMS) $(PRIVATE_READELF)
-	@echo "target breakpad: $(PRIVATE_MODULE) ($@)"
-	@mkdir -p $(dir $@)
-	$(hide) if $(PRIVATE_READELF) -S $< > /dev/null 2>&1 ; then \
-	  $(BREAKPAD_DUMP_SYMS) -c $< > $@ ; \
-	else \
-	  echo "skipped for non-elf file."; \
-	  touch $@; \
-	fi
-$(LOCAL_BUILT_MODULE) : $(breakpad_output)
-endif
-
-###########################################################
 ## Strip
 ###########################################################
 strip_input := $(inject_module)
 strip_output := $(LOCAL_BUILT_MODULE)
-
-# Use an order-only dependency to ensure the unstripped file in the symbols
-# directory is copied when the module is built, but does not force the
-# module to be rebuilt when the symbols directory is cleaned by installclean.
-$(strip_output): | $(symbolic_output)
 
 my_strip_module := $(firstword \
   $(LOCAL_STRIP_MODULE_$($(my_prefix)$(LOCAL_2ND_ARCH_VAR_PREFIX)ARCH)) \
@@ -152,6 +109,5 @@ endif # my_strip_module
 $(cleantarget): PRIVATE_CLEAN_FILES += \
     $(linked_module) \
     $(inject_module) \
-    $(breakpad_output) \
     $(symbolic_output) \
     $(strip_output)

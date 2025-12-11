@@ -1,6 +1,8 @@
 package {package_name}; {#- CODEGEN FOR INTERNAL MODE FOR NEW STORAGE #}
+{{ if support_uau_annotation- }}
 // TODO(b/303773055): Remove the annotation after access issue is resolved.
 import android.compat.annotation.UnsupportedAppUsage;
+{{ -endif }}
 {{ -if runtime_lookup_required }}
 {{ if is_platform_container }}
 import android.os.flagging.PlatformAconfigPackageInternal;
@@ -47,7 +49,9 @@ public final class FeatureFlagsImpl implements FeatureFlags \{
 {{ -for flag in flag_elements }}
     @Override
     @com.android.aconfig.annotations.AconfigFlagAccessor
+{{ if support_uau_annotation- }}
     @UnsupportedAppUsage
+{{ -endif }}
     public boolean {flag.method_name}() \{
 {{ -if flag.is_read_write }}
         if (!isCached) \{

@@ -29,7 +29,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.JUnit4;
 
-import java.nio.file.Paths;
 import java.util.List;
 
 @RunWith(JUnit4.class)
@@ -41,11 +40,14 @@ public class StorageFileProviderTest {
                 new StorageFileProvider(TestDataUtils.TESTDATA_PATH, TestDataUtils.TESTDATA_PATH);
         String[] excludes = {};
         List<String> containers = p.listContainers(excludes);
-        assertEquals(2, containers.size());
+
+        // Each directory ("mock.v#") is considered its own container.
+        assertEquals(3, containers.size());
+        int originalSize = containers.size();
 
         excludes = new String[] {"mock.v1"};
         containers = p.listContainers(excludes);
-        assertEquals(1, containers.size());
+        assertEquals(originalSize - 1, containers.size());
 
         p = new StorageFileProvider("fake/path/", "fake/path/");
         containers = p.listContainers(excludes);

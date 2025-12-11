@@ -49,6 +49,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: NONE
   }
 }
 parsed_flag {
@@ -69,6 +70,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: ACONFIGD
   }
 }
 parsed_flag {
@@ -94,6 +96,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: ACONFIGD
   }
 }
 parsed_flag {
@@ -119,6 +122,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: ACONFIGD
   }
 }
 parsed_flag {
@@ -144,6 +148,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: NONE
   }
 }
 parsed_flag {
@@ -169,6 +174,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: NONE
   }
 }
 parsed_flag {
@@ -199,6 +205,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_BUGFIX
+    storage: NONE
   }
 }
 parsed_flag {
@@ -224,6 +231,7 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: NONE
   }
 }
 parsed_flag {
@@ -249,14 +257,20 @@ parsed_flag {
   container: "system"
   metadata {
     purpose: PURPOSE_UNSPECIFIED
+    storage: ACONFIGD
   }
 }
 "#;
 
     pub fn parse_read_only_test_flags() -> ProtoParsedFlags {
+        let extended_permissions_options = crate::commands::ExtendedPermissionsOptions {
+            default_permission: crate::commands::DEFAULT_FLAG_PERMISSION,
+            allow_read_write: true,
+            force_read_only: false,
+        };
         let bytes = crate::commands::parse_flags(
             "com.android.aconfig.test",
-            Some("system"),
+            "system",
             vec![Input {
                 source: "tests/read_only_test.aconfig".to_string(),
                 reader: Box::new(include_bytes!("../tests/read_only_test.aconfig").as_slice()),
@@ -265,17 +279,22 @@ parsed_flag {
                 source: "tests/read_only_test.values".to_string(),
                 reader: Box::new(include_bytes!("../tests/read_only_test.values").as_slice()),
             }],
-            crate::commands::DEFAULT_FLAG_PERMISSION,
-            true,
+            None,
+            extended_permissions_options,
         )
         .unwrap();
         aconfig_protos::parsed_flags::try_from_binary_proto(&bytes).unwrap()
     }
 
     pub fn parse_test_flags() -> ProtoParsedFlags {
+        let extended_permissions_options = crate::commands::ExtendedPermissionsOptions {
+            default_permission: crate::commands::DEFAULT_FLAG_PERMISSION,
+            allow_read_write: true,
+            force_read_only: false,
+        };
         let bytes = crate::commands::parse_flags(
             "com.android.aconfig.test",
-            Some("system"),
+            "system",
             vec![Input {
                 source: "tests/test.aconfig".to_string(),
                 reader: Box::new(include_bytes!("../tests/test.aconfig").as_slice()),
@@ -290,17 +309,22 @@ parsed_flag {
                     reader: Box::new(include_bytes!("../tests/second.values").as_slice()),
                 },
             ],
-            crate::commands::DEFAULT_FLAG_PERMISSION,
-            true,
+            None,
+            extended_permissions_options,
         )
         .unwrap();
         aconfig_protos::parsed_flags::try_from_binary_proto(&bytes).unwrap()
     }
 
     pub fn parse_second_package_flags() -> ProtoParsedFlags {
+        let extended_permissions_options = crate::commands::ExtendedPermissionsOptions {
+            default_permission: crate::commands::DEFAULT_FLAG_PERMISSION,
+            allow_read_write: true,
+            force_read_only: false,
+        };
         let bytes = crate::commands::parse_flags(
             "com.android.aconfig.second_test",
-            Some("system"),
+            "system",
             vec![Input {
                 source: "tests/test_second_package.aconfig".to_string(),
                 reader: Box::new(include_bytes!("../tests/test_second_package.aconfig").as_slice()),
@@ -309,8 +333,8 @@ parsed_flag {
                 source: "tests/third.values".to_string(),
                 reader: Box::new(include_bytes!("../tests/third.values").as_slice()),
             }],
-            crate::commands::DEFAULT_FLAG_PERMISSION,
-            true,
+            None,
+            extended_permissions_options,
         )
         .unwrap();
         aconfig_protos::parsed_flags::try_from_binary_proto(&bytes).unwrap()
@@ -331,6 +355,30 @@ parsed_flag {
             }
             None => None,
         }
+    }
+
+    /// Asserts that the two strings are equivalent. For use in tests. Fails
+    /// with formatted error message for easier debugging.
+    pub fn assert_no_significant_code_diff(expected: &str, actual: &str) {
+        let expected =
+            expected.lines().map(|line| line.trim_start()).filter(|line| !line.is_empty());
+        let actual = actual.lines().map(|line| line.trim_start()).filter(|line| !line.is_empty());
+        let fail_message: Option<String> =
+            match itertools::diff_with(expected, actual, |left, right| left == right) {
+                Some(itertools::Diff::FirstMismatch(_, mut left, mut right)) => Some(format!(
+                    "DOES NOT MATCH: 1) expected, 2) actual:\n{}\n{}",
+                    left.next().unwrap(),
+                    right.next().unwrap()
+                )),
+                Some(itertools::Diff::Shorter(_, mut left)) => {
+                    Some(format!("LHS trailing data: '{}'", left.next().unwrap()))
+                }
+                Some(itertools::Diff::Longer(_, mut right)) => {
+                    Some(format!("RHS trailing data: '{}'", right.next().unwrap()))
+                }
+                None => None,
+            };
+        assert!(fail_message.is_none(), "{}", fail_message.unwrap());
     }
 
     #[test]

@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = ["cargo"]
 cargo = []
+test_utils = []
 
 [dependencies]
 anyhow = "1.0.69"

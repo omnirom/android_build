@@ -1,0 +1,21 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+    default_team: "trendy_team_updatable_sdk_apis",
+}
+
+rust_binary_host {
+    name: "sdk-artifact-verifier",
+    edition: "2021",
+    clippy_lints: "android",
+    lints: "android",
+    srcs: [
+        "src/main.rs",
+    ],
+    rustlibs: [
+        "libanyhow",
+        "libclap",
+        "libitertools",
+        "libserde",
+        "libserde_xml_rs",
+    ],
+}

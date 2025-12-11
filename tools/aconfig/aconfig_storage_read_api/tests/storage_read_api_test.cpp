@@ -44,9 +44,9 @@ class AconfigStorageTest : public ::testing::Test {
     return {};
   }
 
-  void SetUp() override {
+  void setup_files_for_version(std::string version) {
     auto const test_base_dir = android::base::GetExecutableDirectory();
-    auto const test_dir = test_base_dir + "/data/v1";
+    auto const test_dir = test_base_dir + "/data/v" + version;
     storage_dir = std::string(root_dir.path);
     auto maps_dir = storage_dir + "/maps";
     auto boot_dir = storage_dir + "/boot";
@@ -56,10 +56,10 @@ class AconfigStorageTest : public ::testing::Test {
     flag_map = std::string(maps_dir) + "/mockup.flag.map";
     flag_val = std::string(boot_dir) + "/mockup.val";
     flag_info = std::string(boot_dir) + "/mockup.info";
-    copy_file(test_dir + "/package_v1.map", package_map);
-    copy_file(test_dir + "/flag_v1.map", flag_map);
-    copy_file(test_dir + "/flag_v1.val", flag_val);
-    copy_file(test_dir + "/flag_v1.info", flag_info);
+    copy_file(test_dir + "/package_v" + version + ".map", package_map);
+    copy_file(test_dir + "/flag_v" + version + ".map", flag_map);
+    copy_file(test_dir + "/flag_v" + version + ".val", flag_val);
+    copy_file(test_dir + "/flag_v" + version + ".info", flag_info);
   }
 
   void TearDown() override {
@@ -79,6 +79,7 @@ class AconfigStorageTest : public ::testing::Test {
 
 /// Test to lock down storage file version query api
 TEST_F(AconfigStorageTest, test_storage_version_query) {
+  setup_files_for_version("1");
   auto version = api::get_storage_file_version(package_map);
   ASSERT_TRUE(version.ok());
   ASSERT_EQ(*version, 1);
@@ -95,6 +96,7 @@ TEST_F(AconfigStorageTest, test_storage_version_query) {
 
 /// Negative test to lock down the error when mapping none exist storage files
 TEST_F(AconfigStorageTest, test_none_exist_storage_file_mapping) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "vendor", api::StorageFileType::package_map);
   ASSERT_FALSE(mapped_file_result.ok());
@@ -104,7 +106,8 @@ TEST_F(AconfigStorageTest, test_none_exist_storage_file_mapping) {
 }
 
 /// Test to lock down storage package context query api
-TEST_F(AconfigStorageTest, test_package_context_query) {
+TEST_F(AconfigStorageTest, test_package_context_query_v1) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::package_map);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -116,6 +119,7 @@ TEST_F(AconfigStorageTest, test_package_context_query) {
   ASSERT_TRUE(context->package_exists);
   ASSERT_EQ(context->package_id, 0);
   ASSERT_EQ(context->boolean_start_index, 0);
+  ASSERT_EQ(context->fingerprint, 0);
 
   context = api::get_package_read_context(
       *mapped_file, "com.android.aconfig.storage.test_2");
@@ -123,6 +127,7 @@ TEST_F(AconfigStorageTest, test_package_context_query) {
   ASSERT_TRUE(context->package_exists);
   ASSERT_EQ(context->package_id, 1);
   ASSERT_EQ(context->boolean_start_index, 3);
+  ASSERT_EQ(context->fingerprint, 0);
 
   context = api::get_package_read_context(
       *mapped_file, "com.android.aconfig.storage.test_4");
@@ -130,10 +135,45 @@ TEST_F(AconfigStorageTest, test_package_context_query) {
   ASSERT_TRUE(context->package_exists);
   ASSERT_EQ(context->package_id, 2);
   ASSERT_EQ(context->boolean_start_index, 6);
+  ASSERT_EQ(context->fingerprint, 0);
+}
+
+/// Test to lock down storage package context query api
+TEST_F(AconfigStorageTest, test_package_context_query_v2) {
+  setup_files_for_version("2");
+  auto mapped_file_result = private_api::get_mapped_file_impl(
+      storage_dir, "mockup", api::StorageFileType::package_map);
+  ASSERT_TRUE(mapped_file_result.ok());
+  auto mapped_file = std::unique_ptr<api::MappedStorageFile>(*mapped_file_result);
+
+  auto context = api::get_package_read_context(
+      *mapped_file, "com.android.aconfig.storage.test_1");
+  ASSERT_TRUE(context.ok());
+  ASSERT_TRUE(context->package_exists);
+  ASSERT_EQ(context->package_id, 0);
+  ASSERT_EQ(context->boolean_start_index, 0);
+  ASSERT_EQ(context->fingerprint, 15248948510590158086ULL);
+
+  context = api::get_package_read_context(
+      *mapped_file, "com.android.aconfig.storage.test_2");
+  ASSERT_TRUE(context.ok());
+  ASSERT_TRUE(context->package_exists);
+  ASSERT_EQ(context->package_id, 1);
+  ASSERT_EQ(context->boolean_start_index, 3);
+  ASSERT_EQ(context->fingerprint, 4431940502274857964ULL);
+
+  context = api::get_package_read_context(
+      *mapped_file, "com.android.aconfig.storage.test_4");
+  ASSERT_TRUE(context.ok());
+  ASSERT_TRUE(context->package_exists);
+  ASSERT_EQ(context->package_id, 2);
+  ASSERT_EQ(context->boolean_start_index, 6);
+  ASSERT_EQ(context->fingerprint, 16233229917711622375ULL);
 }
 
 /// Test to lock down when querying none exist package
 TEST_F(AconfigStorageTest, test_none_existent_package_context_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::package_map);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -147,6 +187,7 @@ TEST_F(AconfigStorageTest, test_none_existent_package_context_query) {
 
 /// Test to lock down storage flag context query api
 TEST_F(AconfigStorageTest, test_flag_context_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_map);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -173,6 +214,7 @@ TEST_F(AconfigStorageTest, test_flag_context_query) {
 
 /// Test to lock down when querying none exist flag
 TEST_F(AconfigStorageTest, test_none_existent_flag_context_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_map);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -189,6 +231,7 @@ TEST_F(AconfigStorageTest, test_none_existent_flag_context_query) {
 
 /// Test to lock down storage flag value query api
 TEST_F(AconfigStorageTest, test_boolean_flag_value_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_val);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -205,6 +248,7 @@ TEST_F(AconfigStorageTest, test_boolean_flag_value_query) {
 
 /// Negative test to lock down the error when querying flag value out of range
 TEST_F(AconfigStorageTest, test_invalid_boolean_flag_value_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_val);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -218,6 +262,7 @@ TEST_F(AconfigStorageTest, test_invalid_boolean_flag_value_query) {
 
 /// Test to lock down storage flag info query api
 TEST_F(AconfigStorageTest, test_boolean_flag_info_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_info);
   ASSERT_TRUE(mapped_file_result.ok());
@@ -237,6 +282,7 @@ TEST_F(AconfigStorageTest, test_boolean_flag_info_query) {
 
 /// Negative test to lock down the error when querying flag info out of range
 TEST_F(AconfigStorageTest, test_invalid_boolean_flag_info_query) {
+  setup_files_for_version("1");
   auto mapped_file_result = private_api::get_mapped_file_impl(
       storage_dir, "mockup", api::StorageFileType::flag_info);
   ASSERT_TRUE(mapped_file_result.ok());

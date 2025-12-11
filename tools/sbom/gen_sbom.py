@@ -36,6 +36,7 @@ import queue
 import metadata_file_pb2
 import sbom_data
 import sbom_writers
+import sys
 
 # Package type
 PKG_SOURCE = 'SOURCE'
@@ -139,6 +140,7 @@ def get_args():
   parser.add_argument('--build_version', required=True, help='The build version.')
   parser.add_argument('--product_mfr', required=True, help='The product manufacturer.')
   parser.add_argument('--json', action='store_true', default=False, help='Generated SBOM file in SPDX JSON format')
+  parser.add_argument('--unbundled_module', help='Module name, e.g. com.google.android.adbd, for which SBOM is generated')
 
   return parser.parse_args()
 
@@ -178,7 +180,11 @@ def is_soong_prebuilt_module(file_metadata):
 
 def is_source_package(file_metadata):
   module_path = file_metadata['module_path']
-  return module_path.startswith('external/') and not is_prebuilt_package(file_metadata)
+  is_source_package = False
+  if args.unbundled_module and os.path.exists(module_path + '/METADATA'):
+    # See b/272356272, change the logic of identifying source package for mainline modules for now.
+    is_source_package = True
+  return (module_path.startswith('external/') or is_source_package) and not is_prebuilt_package(file_metadata)
 
 
 def is_prebuilt_package(file_metadata):
@@ -186,7 +192,7 @@ def is_prebuilt_package(file_metadata):
   if module_path:
     return (module_path.startswith('prebuilts/') or
             is_soong_prebuilt_module(file_metadata) or
-            file_metadata['is_prebuilt_make_module'])
+            file_metadata.get('is_prebuilt_make_module'))
 
   kernel_module_copy_files = file_metadata['kernel_module_copy_files']
   if kernel_module_copy_files and not kernel_module_copy_files.startswith('ANDROID-GEN:'):
@@ -260,12 +266,22 @@ def get_metadata_file_path(file_metadata):
   return metadata_path
 
 
-def get_package_version(metadata_file_path):
+def get_package_version(metadata_file_path, is_src_package):
   """Return a package's version in its METADATA file."""
   if not metadata_file_path:
     return None
   metadata_proto = metadata_file_protos[metadata_file_path]
-  return metadata_proto.third_party.version
+
+  if is_src_package:
+    if metadata_proto.third_party.version:
+      return metadata_proto.third_party.version
+    for identifier in metadata_proto.third_party.identifier:
+      if identifier.primary_source:
+        return identifier.version
+    if metadata_proto.third_party.identifier:
+      return metadata_proto.third_party.identifier[0].version
+  else:  # prebuilt packages
+    return metadata_proto.third_party.version
 
 
 def get_package_homepage(metadata_file_path):
@@ -321,7 +337,6 @@ def get_sbom_fragments(installed_file_metadata, metadata_file_path):
 
   # Info from METADATA file
   homepage = get_package_homepage(metadata_file_path)
-  version = get_package_version(metadata_file_path)
   download_location = get_package_download_location(metadata_file_path)
 
   lics = db.get_package_licenses(installed_file_metadata['module_path'])
@@ -339,6 +354,7 @@ def get_sbom_fragments(installed_file_metadata, metadata_file_path):
 
   if is_source_package(installed_file_metadata):
     # Source fork packages
+    version = get_package_version(metadata_file_path, True)
     name, external_refs = get_source_package_info(installed_file_metadata, metadata_file_path)
     source_package_id = new_package_id(name, PKG_SOURCE)
     source_package = sbom_data.Package(id=source_package_id, name=name, version=args.build_version,
@@ -349,7 +365,7 @@ def get_sbom_fragments(installed_file_metadata, metadata_file_path):
     upstream_package_id = new_package_id(name, PKG_UPSTREAM)
     upstream_package = sbom_data.Package(id=upstream_package_id, name=name, version=version,
                                          supplier=(
-                                               'Organization: ' + homepage) if homepage else sbom_data.VALUE_NOASSERTION,
+                                             'Organization: ' + homepage) if homepage else sbom_data.VALUE_NOASSERTION,
                                          download_location=download_location)
     packages += [source_package, upstream_package]
     relationships.append(sbom_data.Relationship(id1=source_package_id,
@@ -362,6 +378,7 @@ def get_sbom_fragments(installed_file_metadata, metadata_file_path):
 
   elif is_prebuilt_package(installed_file_metadata):
     # Prebuilt fork packages
+    version = get_package_version(metadata_file_path, False)
     name = get_prebuilt_package_name(installed_file_metadata, metadata_file_path)
     prebuilt_package_id = new_package_id(name, PKG_PREBUILT)
     prebuilt_package = sbom_data.Package(id=prebuilt_package_id,
@@ -373,7 +390,7 @@ def get_sbom_fragments(installed_file_metadata, metadata_file_path):
     upstream_package_id = new_package_id(name, PKG_UPSTREAM)
     upstream_package = sbom_data.Package(id=upstream_package_id, name=name, version=version,
                                          supplier=(
-                                               'Organization: ' + homepage) if homepage else sbom_data.VALUE_NOASSERTION,
+                                             'Organization: ' + homepage) if homepage else sbom_data.VALUE_NOASSERTION,
                                          download_location=download_location)
     packages += [prebuilt_package, upstream_package]
     relationships.append(sbom_data.Relationship(id1=prebuilt_package_id,
@@ -515,7 +532,7 @@ def add_static_deps_of_file(file_id, file_metadata, doc):
     doc.add_relationship(sbom_data.Relationship(id1=file_id,
                                                 relationship=sbom_data.RelationshipType.STATIC_LINK,
                                                 id2=new_file_id(
-                                                  dep_file.removeprefix(args.soong_out + '/.intermediates/'))))
+                                                    dep_file.removeprefix(args.soong_out + '/.intermediates/'))))
 
 
 def add_licenses_of_file(file_id, file_metadata, doc):
@@ -570,6 +587,25 @@ def get_all_transitive_static_dep_files_of_installed_files(installed_files_metad
 
   return sorted(all_static_dep_files.keys())
 
+def get_license_of_product_copy_file(file_path):
+  # Provides license info for known AOSP files used in PRODUCT_COPY_FILES.
+  paths = {
+      'device/sample/etc/',
+      'frameworks/av/media/libeffects/data/',
+      'frameworks/av/media/libstagefright/data/',
+      'frameworks/av/services/audiopolicy/config/',
+      'frameworks/base/config/',
+      'frameworks/base/data/keyboards/',
+      'frameworks/base/data/sounds/',
+      'frameworks/native/data/etc/',
+      'hardware/google/camera/devices/EmulatedCamera/hwl/configs/',
+      'system/core/rootdir/etc/',
+  }
+  for p in paths:
+    if file_path.startswith(p):
+      return 'build/soong/licenses/LICENSE'
+
+  return ''
 
 def main():
   global args
@@ -595,18 +631,23 @@ def main():
                                       supplier='Organization: ' + args.product_mfr,
                                       files_analyzed=True)
   doc_name = args.build_version
+  if args.unbundled_module:
+    doc_name = f'{args.build_version}/{args.unbundled_module}'
   doc = sbom_data.Document(name=doc_name,
                            namespace=f'https://www.google.com/sbom/spdx/android/{doc_name}',
                            creators=['Organization: ' + args.product_mfr],
                            describes=product_package_id)
 
-  doc.packages.append(product_package)
-  doc.packages.append(sbom_data.Package(id=sbom_data.SPDXID_PLATFORM,
-                                        name=sbom_data.PACKAGE_NAME_PLATFORM,
-                                        download_location=sbom_data.VALUE_NONE,
-                                        version=args.build_version,
-                                        supplier='Organization: ' + args.product_mfr,
-                                        declared_license_ids=[sbom_data.SPDXID_LICENSE_APACHE]))
+  if not args.unbundled_module:
+    doc.packages.append(product_package)
+
+  platform_package = sbom_data.Package(id=sbom_data.SPDXID_PLATFORM,
+                                       name=sbom_data.PACKAGE_NAME_PLATFORM,
+                                       download_location=sbom_data.VALUE_NONE,
+                                       version=args.build_version,
+                                       supplier='Organization: ' + args.product_mfr,
+                                       declared_license_ids=[sbom_data.SPDXID_LICENSE_APACHE])
+  doc.packages.append(platform_package)
 
   # Report on some issues and information
   report = {
@@ -619,12 +660,17 @@ def main():
       INFO_METADATA_FOUND_FOR_PACKAGE: [],
   }
 
-  # Get installed files and corresponding make modules' metadata if an installed file is from a make module.
-  installed_files_metadata = db.get_installed_files()
+  if args.unbundled_module:
+    installed_files_metadata = db.get_installed_files_of_module(args.unbundled_module)
+  else:
+    # Get installed files and corresponding make modules' metadata if an installed file is from a make module.
+    installed_files_metadata = db.get_installed_files()
 
   # Find which Soong module an installed file is from and merge metadata from Make and Soong
   for installed_file_metadata in installed_files_metadata:
     soong_module = db.get_soong_module_of_installed_file(installed_file_metadata['installed_file'])
+    if not soong_module and args.unbundled_module:
+      soong_module = db.get_soong_module_of_built_file(installed_file_metadata['build_output_path'])
     if soong_module:
       # Merge soong metadata to make metadata
       installed_file_metadata.update(soong_module)
@@ -635,15 +681,19 @@ def main():
       installed_file_metadata['whole_static_dep_files'] = ''
 
   # Scan the metadata and create the corresponding package and file records in SPDX
-  for installed_file_metadata in installed_files_metadata:
+  include_static_deps = True
+  for index, installed_file_metadata in enumerate(installed_files_metadata):
     installed_file = installed_file_metadata['installed_file']
     module_path = installed_file_metadata['module_path']
-    product_copy_files = installed_file_metadata['product_copy_files']
-    kernel_module_copy_files = installed_file_metadata['kernel_module_copy_files']
+    product_copy_files = installed_file_metadata.get('product_copy_files')
+    kernel_module_copy_files = installed_file_metadata.get('kernel_module_copy_files')
+    is_platform_generated = installed_file_metadata.get('is_platform_generated')
     build_output_path = installed_file
+    if args.unbundled_module:
+      build_output_path = installed_file_metadata['build_output_path']
     installed_file = installed_file.removeprefix(args.product_out)
 
-    if not installed_file_has_metadata(installed_file_metadata, report):
+    if not args.unbundled_module and not installed_file_has_metadata(installed_file_metadata, report):
       continue
     if not (os.path.islink(build_output_path) or os.path.isfile(build_output_path)):
       report[ISSUE_INSTALLED_FILE_NOT_EXIST].append(installed_file)
@@ -654,16 +704,28 @@ def main():
     f = sbom_data.File(id=file_id, name=installed_file, checksum=sha1)
     doc.files.append(f)
     product_package.file_ids.append(file_id)
+    if args.unbundled_module:
+      if index == 0:
+        # The generated SBOM describes the APEX file which is the first record
+        doc.describes = file_id
+        # Do not include static deps in SBOM of APKs
+        if installed_file.endswith('.apk'):
+          include_static_deps = False
+      else:
+        # All other files are contained by the APEX file, so add a CONTAINS relationship for them
+        doc.add_relationship(sbom_data.Relationship(id1=product_package.file_ids[0],
+                                                    relationship=sbom_data.RelationshipType.CONTAINS,
+                                                    id2=file_id))
 
     if is_source_package(installed_file_metadata) or is_prebuilt_package(installed_file_metadata):
       add_package_of_file(file_id, installed_file_metadata, doc, report)
 
-    elif module_path or installed_file_metadata['is_platform_generated']:
+    elif module_path or is_platform_generated:
       # File from PLATFORM package
       doc.add_relationship(sbom_data.Relationship(id1=file_id,
                                                   relationship=sbom_data.RelationshipType.GENERATED_FROM,
                                                   id2=sbom_data.SPDXID_PLATFORM))
-      if installed_file_metadata['is_platform_generated']:
+      if is_platform_generated:
         f.concluded_license_ids = [sbom_data.SPDXID_LICENSE_APACHE]
 
     elif product_copy_files:
@@ -674,6 +736,8 @@ def main():
       doc.add_relationship(sbom_data.Relationship(id1=file_id,
                                                   relationship=sbom_data.RelationshipType.GENERATED_FROM,
                                                   id2=sbom_data.SPDXID_PLATFORM))
+      if not installed_file_metadata['license_text']:
+        installed_file_metadata['license_text'] = get_license_of_product_copy_file(src_path)
       if installed_file_metadata['license_text']:
         if installed_file_metadata['license_text'] == 'build/soong/licenses/LICENSE':
           f.concluded_license_ids = [sbom_data.SPDXID_LICENSE_APACHE]
@@ -691,43 +755,45 @@ def main():
                                                   id2=sbom_data.SPDXID_PLATFORM))
 
     # Process static dependencies of the installed file
-    add_static_deps_of_file(file_id, installed_file_metadata, doc)
+    if include_static_deps:
+      add_static_deps_of_file(file_id, installed_file_metadata, doc)
 
     # Add licenses of the installed file
     add_licenses_of_file(file_id, installed_file_metadata, doc)
 
   # Add all static library files to SBOM
-  for dep_file in get_all_transitive_static_dep_files_of_installed_files(installed_files_metadata, db, report):
-    filepath = dep_file.removeprefix(args.soong_out + '/.intermediates/')
-    file_id = new_file_id(filepath)
-    # SHA1 of empty string. Sometimes .a files might not be built.
-    sha1 = 'SHA1: da39a3ee5e6b4b0d3255bfef95601890afd80709'
-    if os.path.islink(dep_file) or os.path.isfile(dep_file):
-      sha1 = checksum(dep_file)
-    doc.files.append(sbom_data.File(id=file_id,
-                                    name=filepath,
-                                    checksum=sha1))
-    file_metadata = {
-        'installed_file': dep_file,
-        'is_prebuilt_make_module': False
-    }
-    soong_module = db.get_soong_module_of_built_file(dep_file)
-    if not soong_module:
-      continue
-    file_metadata.update(soong_module)
-    if is_source_package(file_metadata) or is_prebuilt_package(file_metadata):
-      add_package_of_file(file_id, file_metadata, doc, report)
-    else:
-      # Other static lib files are generated from the platform
-      doc.add_relationship(sbom_data.Relationship(id1=file_id,
-                                                  relationship=sbom_data.RelationshipType.GENERATED_FROM,
-                                                  id2=sbom_data.SPDXID_PLATFORM))
+  if include_static_deps:
+    for dep_file in get_all_transitive_static_dep_files_of_installed_files(installed_files_metadata, db, report):
+      filepath = dep_file.removeprefix(args.soong_out + '/.intermediates/')
+      file_id = new_file_id(filepath)
+      # SHA1 of empty string. Sometimes .a files might not be built.
+      sha1 = 'SHA1: da39a3ee5e6b4b0d3255bfef95601890afd80709'
+      if os.path.islink(dep_file) or os.path.isfile(dep_file):
+        sha1 = checksum(dep_file)
+      doc.files.append(sbom_data.File(id=file_id,
+                                      name=filepath,
+                                      checksum=sha1))
+      file_metadata = {
+          'installed_file': dep_file,
+          'is_prebuilt_make_module': False
+      }
+      soong_module = db.get_soong_module_of_built_file(dep_file)
+      if not soong_module:
+        continue
+      file_metadata.update(soong_module)
+      if is_source_package(file_metadata) or is_prebuilt_package(file_metadata):
+        add_package_of_file(file_id, file_metadata, doc, report)
+      else:
+        # Other static lib files are generated from the platform
+        doc.add_relationship(sbom_data.Relationship(id1=file_id,
+                                                    relationship=sbom_data.RelationshipType.GENERATED_FROM,
+                                                    id2=sbom_data.SPDXID_PLATFORM))
 
-    # Add relationships for static deps of static libraries
-    add_static_deps_of_file(file_id, file_metadata, doc)
+      # Add relationships for static deps of static libraries
+      add_static_deps_of_file(file_id, file_metadata, doc)
 
-    # Add licenses of the static lib
-    add_licenses_of_file(file_id, file_metadata, doc)
+      # Add licenses of the static lib
+      add_licenses_of_file(file_id, file_metadata, doc)
 
   # Save SBOM records to output file
   doc.generate_packages_verification_code()

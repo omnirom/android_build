@@ -15,7 +15,8 @@
 #
 
 # The base version of window_extensions.mk to be included on all non-wearable
-# devices. Devices that don't support multi-window can choose to drop this.
+# and non-TV devices. Devices that don't support multi-window can choose to
+# drop this.
 #
 # Note: by default the Activity Embedding feature is guarded by app's
 # targetSDK on Android 15 to avoid app compat impact.

@@ -27,16 +27,19 @@ public class ClassDependencyData {
     private final boolean mIsDependencyToAll;
     private final Set<Object> mConstantsDefined;
     private final Set<Object> mInlinedUsages;
+    private final Set<String> mCrossModuleClassDependencies;
 
-    public ClassDependencyData(String packagePrependedClassSource, String className,
+    public ClassDependencyData(
+            String packagePrependedClassSource, String className,
             Set<String> classDependencies, boolean isDependencyToAll, Set<Object> constantsDefined,
-            Set<Object> inlinedUsages) {
-        this.mPackagePrependedClassSource = packagePrependedClassSource;
-        this.mQualifiedName = className;
-        this.mClassDependencies = classDependencies;
-        this.mIsDependencyToAll = isDependencyToAll;
-        this.mConstantsDefined = constantsDefined;
-        this.mInlinedUsages = inlinedUsages;
+            Set<Object> inlinedUsages, Set<String> crossModuleClassDependencies) {
+        mPackagePrependedClassSource = packagePrependedClassSource;
+        mQualifiedName = className;
+        mClassDependencies = classDependencies;
+        mIsDependencyToAll = isDependencyToAll;
+        mConstantsDefined = constantsDefined;
+        mInlinedUsages = inlinedUsages;
+        mCrossModuleClassDependencies = crossModuleClassDependencies;
     }
 
     public String getPackagePrependedClassSource() {
@@ -49,6 +52,10 @@ public class ClassDependencyData {
 
     public Set<String> getClassDependencies() {
         return mClassDependencies;
+    }
+
+    public Set<String> getCrossModuleClassDependencies() {
+        return mCrossModuleClassDependencies;
     }
 
     public Set<Object> getConstantsDefined() {

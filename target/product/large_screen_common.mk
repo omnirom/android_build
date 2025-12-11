@@ -17,5 +17,5 @@
 $(call inherit-product, $(SRC_TARGET_DIR)/product/window_extensions.mk)
 
 # Enable Settings 2-pane optimization for large-screen
-PRODUCT_SYSTEM_PROPERTIES += \
+PRODUCT_PRODUCT_PROPERTIES += \
     persist.settings.large_screen_opt.enabled=true

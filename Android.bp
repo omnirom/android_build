@@ -34,3 +34,11 @@ genrule {
     out: ["envsetup.zip"],
     cmd: "$(location soong_zip) -o $(out) -D build/make",
 }
+
+prebuilt_root {
+    name: "nonempty_vendor_ramdisk",
+    src: "target/product/ramdisk_stub.mk",
+    filename: "nonempty",
+    vendor_ramdisk: true,
+    install_in_root: true,
+}

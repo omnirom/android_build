@@ -39,10 +39,6 @@
     //   "name": "aconfig.exported_mode.test.rust"
     // },
     {
-      // aflags CLI unit tests
-      "name": "aflags.test"
-    },
-    {
       // aconfig_protos unit tests
       "name": "aconfig_protos.test"
     },
@@ -78,10 +74,6 @@
     {
       // aconfig_storage write api rust integration tests
       "name": "aconfig_storage_write_api.test.rust"
-    },
-    {
-      // aconfig_storage write api cpp integration tests
-      "name": "aconfig_storage_write_api.test.cpp"
     },
     {
       // aconfig_storage read api rust integration tests

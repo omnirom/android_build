@@ -72,11 +72,10 @@ $(my_classes_to_report_on_path): $(my_unzipped_timestamp_path)
 	zip -q $@ \
 	  -r $(PRIVATE_UNZIPPED_PATH)
 
-# Make a rule to copy the jacoco-report-classes.jar to a packaging directory.
-$(eval $(call copy-one-file,$(my_classes_to_report_on_path),\
-  $(call local-packaging-dir,jacoco)/jacoco-report-classes.jar))
-$(call add-dependency,$(LOCAL_BUILT_MODULE),\
-  $(call local-packaging-dir,jacoco)/jacoco-report-classes.jar)
+ALL_MODULES.$(my_register_name).JACOCO_REPORT_FILES := $(my_classes_to_report_on_path)
+ALL_MODULES.$(my_register_name).JACOCO_REPORT_SOONG_ZIP_ARGUMENTS := \
+  -e out/target/common/obj/$(LOCAL_MODULE_CLASS)/$(LOCAL_MODULE)_intermediates/jacoco-report-classes.jar \
+  -f $(my_classes_to_report_on_path)
 
   # make a task that invokes instrumentation
   my_instrumented_path := $(my_files)/work/instrumented/classes

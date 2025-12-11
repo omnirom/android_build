@@ -3,7 +3,7 @@
 per-file proguard*.flags = jdduke@google.com
 
 # For version updates
-per-file version_defaults.mk = ankurbakshi@google.com,bkhalife@google.com,jainne@google.com,lokeshgoel@google.com,lubomir@google.com,pscovanner@google.com
+per-file version_defaults.mk =bkhalife@google.com,jainne@google.com,lokeshgoel@google.com,lubomir@google.com,pscovanner@google.com
 
 # For sdk extensions version updates
 per-file version_defaults.mk = amhk@google.com,gurpreetgs@google.com,mkhokhlova@google.com,robertogil@google.com
@@ -11,3 +11,5 @@ per-file version_defaults.mk = amhk@google.com,gurpreetgs@google.com,mkhokhlova@
 # For Ravenwood test configs
 per-file ravenwood_test_config_template.xml =omakoto@google.com
 
+# For ART configuration.
+per-file art_config.mk = file:platform/art:main:/OWNERS

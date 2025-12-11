@@ -185,6 +185,7 @@ mod ffi {
         pub package_exists: bool,
         pub package_id: u32,
         pub boolean_start_index: u32,
+        pub fingerprint: u64,
     }
 
     // Flag table query return for cc interlop
@@ -248,6 +249,7 @@ impl ffi::PackageReadContextQueryCXX {
                     package_exists: true,
                     package_id: offset.package_id,
                     boolean_start_index: offset.boolean_start_index,
+                    fingerprint: offset.fingerprint,
                 },
                 None => Self {
                     query_success: true,
@@ -255,6 +257,7 @@ impl ffi::PackageReadContextQueryCXX {
                     package_exists: false,
                     package_id: 0,
                     boolean_start_index: 0,
+                    fingerprint: 0,
                 },
             },
             Err(errmsg) => Self {
@@ -263,6 +266,7 @@ impl ffi::PackageReadContextQueryCXX {
                 package_exists: false,
                 package_id: 0,
                 boolean_start_index: 0,
+                fingerprint: 0,
             },
         }
     }
@@ -392,6 +396,7 @@ pub fn get_storage_file_version_cxx(file_path: &str) -> ffi::VersionNumberQueryC
 mod tests {
     use super::*;
     use crate::mapped_file::get_mapped_file;
+    use aconfig_storage_file::test_utils::get_test_data_path;
     use aconfig_storage_file::{FlagInfoBit, StoredFlagType};
     use rand::Rng;
     use std::fs;
@@ -413,10 +418,10 @@ mod tests {
         let flag_map = storage_dir.clone() + "/maps/mockup.flag.map";
         let flag_val = storage_dir.clone() + "/boot/mockup.val";
         let flag_info = storage_dir.clone() + "/boot/mockup.info";
-        fs::copy("./tests/data/v1/package_v1.map", &package_map).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.map", &flag_map).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.val", &flag_val).unwrap();
-        fs::copy("./tests/data/v1/flag_v1.info", &flag_info).unwrap();
+        fs::copy(get_test_data_path(StorageFileType::PackageMap, 1), &package_map).unwrap();
+        fs::copy(get_test_data_path(StorageFileType::FlagMap, 1), &flag_map).unwrap();
+        fs::copy(get_test_data_path(StorageFileType::FlagVal, 1), &flag_val).unwrap();
+        fs::copy(get_test_data_path(StorageFileType::FlagInfo, 1), &flag_info).unwrap();
 
         return storage_dir;
     }
@@ -511,9 +516,33 @@ mod tests {
     #[test]
     // this test point locks down flag storage file version number query api
     fn test_storage_version_query() {
-        assert_eq!(get_storage_file_version("./tests/data/v1/package_v1.map").unwrap(), 1);
-        assert_eq!(get_storage_file_version("./tests/data/v1/flag_v1.map").unwrap(), 1);
-        assert_eq!(get_storage_file_version("./tests/data/v1/flag_v1.val").unwrap(), 1);
-        assert_eq!(get_storage_file_version("./tests/data/v1/flag_v1.info").unwrap(), 1);
+        assert_eq!(
+            get_storage_file_version(
+                &get_test_data_path(StorageFileType::PackageMap, 1).to_string_lossy()
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            get_storage_file_version(
+                &get_test_data_path(StorageFileType::FlagMap, 1).to_string_lossy()
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            get_storage_file_version(
+                &get_test_data_path(StorageFileType::FlagVal, 1).to_string_lossy()
+            )
+            .unwrap(),
+            1
+        );
+        assert_eq!(
+            get_storage_file_version(
+                &get_test_data_path(StorageFileType::FlagInfo, 1).to_string_lossy()
+            )
+            .unwrap(),
+            1
+        );
     }
 }

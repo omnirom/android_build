@@ -40,7 +40,7 @@ pub fn parsed_flags_proto_paths() -> Result<Vec<PathBuf>> {
         let dir = dir?;
 
         // Only scan the currently active version of each mainline module; skip the @version dirs.
-        if dir.file_name().as_encoded_bytes().iter().any(|&b| b == b'@') {
+        if dir.file_name().as_encoded_bytes().contains(&b'@') {
             continue;
         }
 

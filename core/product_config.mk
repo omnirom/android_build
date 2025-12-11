@@ -276,7 +276,22 @@ ifneq ($(ALLOW_RULES_IN_PRODUCT_CONFIG),)
 _product_config_saved_KATI_ALLOW_RULES :=
 endif
 
+# Sort/dedup all PRODUCT_PACKAGES variables. This is every PRODUCT_PACKAGES_* variable that appears
+# in product-installed-modules.
+PRODUCT_PACKAGES := $(sort $(PRODUCT_PACKAGES))
+PRODUCT_PACKAGES_DEBUG := $(sort $(PRODUCT_PACKAGES_DEBUG))
+PRODUCT_PACKAGES_ENG := $(sort $(PRODUCT_PACKAGES_ENG))
+PRODUCT_PACKAGES_TESTS := $(sort $(PRODUCT_PACKAGES_TESTS))
+PRODUCT_PACKAGES_DEBUG_ASAN := $(sort $(PRODUCT_PACKAGES_DEBUG_ASAN))
+PRODUCT_PACKAGES_DEBUG_JAVA_COVERAGE := $(sort $(PRODUCT_PACKAGES_DEBUG_JAVA_COVERAGE))
+PRODUCT_PACKAGES_ARM64 := $(sort $(PRODUCT_PACKAGES_ARM64))
+PRODUCT_PACKAGES_SHIPPING_API_LEVEL_29 := $(sort $(PRODUCT_PACKAGES_SHIPPING_API_LEVEL_29))
+PRODUCT_PACKAGES_SHIPPING_API_LEVEL_33 := $(sort $(PRODUCT_PACKAGES_SHIPPING_API_LEVEL_33))
+PRODUCT_PACKAGES_SHIPPING_API_LEVEL_34 := $(sort $(PRODUCT_PACKAGES_SHIPPING_API_LEVEL_34))
+
 ############################################################################
+PRODUCT_MAKEFILE_PATH := $(current_product_makefile)
+$(KATI_visibility_prefix PRODUCT_MAKEFILE_PATH,build/make/core/product_config.mk build/make/core/dumpvar.mk)
 
 current_product_makefile :=
 
@@ -287,7 +302,7 @@ current_product_makefile :=
 # TODO(b/308187268): Remove this denylist mechanism
 # Use PRODUCT_PACKAGES to determine if this is an aosp product. aosp products do not use google signed apexes.
 ignore_apex_contributions :=
-ifeq (,$(findstring com.google.android.conscrypt,$(PRODUCT_PACKAGES))$(findstring com.google.android.go.conscrypt,$(PRODUCT_PACKAGES)))
+ifeq (,$(filter com.google.android.conscrypt% com.google.android.go.conscrypt% com.google.android.extservices% com.google.android.go.extservices%,$(PRODUCT_PACKAGES)))
   ignore_apex_contributions := true
 endif
 ifeq (true,$(PRODUCT_MODULE_BUILD_FROM_SOURCE))
@@ -495,10 +510,6 @@ ifdef PRODUCT_INSTALL_DEBUG_POLICY_TO_SYSTEM_EXT
   endif
 endif
 
-ifndef PRODUCT_USE_DYNAMIC_PARTITIONS
-  PRODUCT_USE_DYNAMIC_PARTITIONS := $(PRODUCT_RETROFIT_DYNAMIC_PARTITIONS)
-endif
-
 # All requirements of PRODUCT_USE_DYNAMIC_PARTITIONS falls back to
 # PRODUCT_USE_DYNAMIC_PARTITIONS if not defined.
 ifndef PRODUCT_USE_DYNAMIC_PARTITION_SIZE
@@ -532,21 +543,53 @@ ifdef OVERRIDE_PRODUCT_EXTRA_VNDK_VERSIONS
 endif
 
 ###########################################
-# APEXes are by default not compressed
+# PRODUCT_COMPRESSED_APEX: Use compressed apexes in pre-installed partitions.
+#
+# Note: this doesn't mean that all pre-installed apexes will be compressed.
+#  Whether an apex is compressed or not is controlled at apex Soong module
+#  via compresible property.
 #
 # APEX compression can be forcibly enabled (resp. disabled) by
 # setting OVERRIDE_PRODUCT_COMPRESSED_APEX to true (resp. false), e.g. by
 # setting the OVERRIDE_PRODUCT_COMPRESSED_APEX environment variable.
-ifdef OVERRIDE_PRODUCT_COMPRESSED_APEX
-  PRODUCT_COMPRESSED_APEX := $(OVERRIDE_PRODUCT_COMPRESSED_APEX)
+
+_default_compressed_apex := true
+# To mount APEXes before /data partition is mounted, there should be no compressed
+# apexes.
+ifeq (true,$(RELEASE_APEX_MOUNT_BEFORE_DATA))
+  _default_compressed_apex := false
 endif
 
+ifdef OVERRIDE_PRODUCT_COMPRESSED_APEX
+  PRODUCT_COMPRESSED_APEX := $(OVERRIDE_PRODUCT_COMPRESSED_APEX)
+else ifeq (,$(PRODUCT_COMPRESSED_APEX))
+  PRODUCT_COMPRESSED_APEX := $(_default_compressed_apex)
+endif
+ifeq (,$(filter true false,$(PRODUCT_COMPRESSED_APEX)))
+  $(error PRODUCT_COMPRESSED_APEX should be either true or false)
+endif
+PRODUCT_SYSTEM_PROPERTIES += apexd.config.compressed_apex=$(PRODUCT_COMPRESSED_APEX)
+# This is a system property but cannot be defined in the system makefile because
+# the PRODUCT_COMPRESSED_APEX is not available. Add it to the allowed list.
+PRODUCT_ARTIFACT_PATH_REQUIREMENT_SYSPROP_ALLOWED_LIST += apexd.config.compressed_apex
+
+###########################################
+# Set the default payload type for APEXes
+#
+_default_payload_fs_type := ext4
+ifeq (true,$(RELEASE_APEX_USE_EROFS_PREINSTALLED))
+  _default_payload_fs_type := erofs
+endif
+
+# Default APEX payload type can be forcibly set with
+# OVERRIDE_PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE.
 ifdef OVERRIDE_PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE
   PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE := $(OVERRIDE_PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE)
 else ifeq ($(PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE),)
-  # Use ext4 as a default payload fs type
-  PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE := ext4
+  PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE := $(_default_payload_fs_type)
 endif
+_default_payload_fs_type :=
+
 ifeq ($(filter ext4 erofs,$(PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE)),)
   $(error PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE should be either erofs or ext4,\
     not $(PRODUCT_DEFAULT_APEX_PAYLOAD_TYPE).)
@@ -609,26 +652,23 @@ ifneq ($(call sdk-to-vendor-api-level,10000),10000000)
 $(error sdk-to-vendor-api-level is broken for current $(call sdk-to-vendor-api-level,10000))
 endif
 
-ifdef PRODUCT_SHIPPING_VENDOR_API_LEVEL
-# Follow the version that is set manually.
-  VSR_VENDOR_API_LEVEL := $(PRODUCT_SHIPPING_VENDOR_API_LEVEL)
-else
-  # VSR API level is the vendor api level of the product shipping API level.
-  VSR_VENDOR_API_LEVEL := $(call sdk-to-vendor-api-level,$(PLATFORM_SDK_VERSION))
-  ifdef PRODUCT_SHIPPING_API_LEVEL
-    VSR_VENDOR_API_LEVEL := $(call sdk-to-vendor-api-level,$(PRODUCT_SHIPPING_API_LEVEL))
+# VSR API level is the vendor api level of the product shipping API level.
+VSR_VENDOR_API_LEVEL := $(call sdk-to-vendor-api-level,$(PLATFORM_SDK_VERSION))
+ifdef PRODUCT_SHIPPING_API_LEVEL
+  VSR_VENDOR_API_LEVEL := $(call sdk-to-vendor-api-level,$(PRODUCT_SHIPPING_API_LEVEL))
+endif
+ifdef BOARD_SHIPPING_API_LEVEL
+  # Vendors with GRF must define BOARD_SHIPPING_API_LEVEL for the vendor API level.
+  # In this case, the VSR API level is the minimum of the PRODUCT_SHIPPING_API_LEVEL
+  # and RELEASE_BOARD_API_LEVEL
+  board_api_level := $(RELEASE_BOARD_API_LEVEL)
+  ifdef BOARD_API_LEVEL_PROP_OVERRIDE
+    # This must be used only for testing purpose. Product must not be released
+    # with the modified api level value.
+    board_api_level := $(BOARD_API_LEVEL_PROP_OVERRIDE)
   endif
-  ifdef BOARD_SHIPPING_API_LEVEL
-    # Vendors with GRF must define BOARD_SHIPPING_API_LEVEL for the vendor API level.
-    # In this case, the VSR API level is the minimum of the PRODUCT_SHIPPING_API_LEVEL
-    # and RELEASE_BOARD_API_LEVEL
-    board_api_level := $(RELEASE_BOARD_API_LEVEL)
-    ifdef BOARD_API_LEVEL_PROP_OVERRIDE
-      board_api_level := $(BOARD_API_LEVEL_PROP_OVERRIDE)
-    endif
-    VSR_VENDOR_API_LEVEL := $(call math_min,$(VSR_VENDOR_API_LEVEL),$(board_api_level))
-    board_api_level :=
-  endif
+  VSR_VENDOR_API_LEVEL := $(call math_min,$(VSR_VENDOR_API_LEVEL),$(board_api_level))
+  board_api_level :=
 endif
 .KATI_READONLY := VSR_VENDOR_API_LEVEL
 

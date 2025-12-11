@@ -1,0 +1,22 @@
+package {
+    default_applicable_licenses: ["Android-Apache-2.0"],
+    default_team: "trendy_team_updatable_sdk_apis",
+}
+
+rust_test_host {
+    name: "finalization-test",
+    edition: "2021",
+    clippy_lints: "android",
+    lints: "android",
+    srcs: [
+        "test.rs",
+    ],
+    data: [
+        ":all_release_configs",
+    ],
+    rustlibs: [
+        "liball_release_configs_proto",
+        "libprotobuf",
+    ],
+    test_suites: ["general-tests"],
+}

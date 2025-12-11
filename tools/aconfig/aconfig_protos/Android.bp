@@ -16,6 +16,7 @@ java_library {
     min_sdk_version: "UpsideDownCake",
     apex_available: [
         "com.android.configinfrastructure",
+        "com.android.crashrecovery",
         "//apex_available:platform",
     ],
 }

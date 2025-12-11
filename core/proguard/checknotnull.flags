@@ -1,13 +1,11 @@
 # Tell R8 that the following methods are check not null methods, and to
 # replace invocations to them with a more concise nullness check that produces
-# (slightly) less informative error messages
+# (slightly) less informative error messages.
+# Note that we omit such optimizations for `Objects.requireNonNull`, as such
+# messages are explicit and surfaced in the framework across API boundaries.
 
 -convertchecknotnull class com.google.common.base.Preconditions {
   ** checkNotNull(...);
-}
-
--convertchecknotnull class java.util.Objects {
-  ** requireNonNull(...);
 }
 
 -convertchecknotnull class kotlin.jvm.internal.Intrinsics {

@@ -32,15 +32,32 @@ import java.util.List;
 import java.util.Set;
 
 /** @hide */
+@android.ravenwood.annotation.RavenwoodKeepWholeClass
 public class StorageFileProvider {
+    /**
+     * Method to allow using a different "top" directly on Ravenwood.
+     */
+    @android.ravenwood.annotation.RavenwoodReplace
+    private static String getStorageRoot() {
+        return ""; // No extra path is needed, unless on Ravenwood.
+    }
 
-    private static final String DEFAULT_MAP_PATH = "/metadata/aconfig/maps/";
-    private static final String DEFAULT_BOOT_PATH = "/metadata/aconfig/boot/";
+    private static String getStorageRoot$ravenwood() {
+        // RavenwoodHelper has a utility method for this, but we just hardcode it here to avoid
+        // the extra dependency.
+        return System.getProperty("android.ravenwood.runtime_path") + "/aconfig";
+    }
+
+    private static final String DEFAULT_MAP_PATH = getStorageRoot() + "/metadata/aconfig/maps/";
+    private static final String DEFAULT_BOOT_PATH = getStorageRoot() + "/metadata/aconfig/boot/";
     private static final String PMAP_FILE_EXT = ".package.map";
     private static final String FMAP_FILE_EXT = ".flag.map";
     private static final String VAL_FILE_EXT = ".val";
     private static final StorageFileProvider DEFAULT_INSTANCE =
             new StorageFileProvider(DEFAULT_MAP_PATH, DEFAULT_BOOT_PATH);
+
+    /** On Ravenwood, we only have one container file with this filename. */
+    private static final String RAVENWOOD_STORAGE_FILE = "all_aconfig_declarations";
 
     private final String mMapPath;
     private final String mBootPath;
@@ -82,23 +99,36 @@ public class StorageFileProvider {
         return result;
     }
 
+    /**
+     * On Ravenwood, we only have one kind of container file. We use this method to absorb
+     * the difference.
+     */
+    @android.ravenwood.annotation.RavenwoodReplace
+    private static Path buildPath(String path, String container, String extension) {
+        return Paths.get(path, container + extension);
+    }
+
+    private static Path buildPath$ravenwood(String path, String container, String extension) {
+        return Paths.get(path, RAVENWOOD_STORAGE_FILE + extension);
+    }
+
     /** @hide */
     public PackageTable getPackageTable(String container) {
         return PackageTable.fromBytes(
                 mapStorageFile(
-                        Paths.get(mMapPath, container + PMAP_FILE_EXT), FileType.PACKAGE_MAP));
+                        buildPath(mMapPath, container, PMAP_FILE_EXT), FileType.PACKAGE_MAP));
     }
 
     /** @hide */
     public FlagTable getFlagTable(String container) {
         return FlagTable.fromBytes(
-                mapStorageFile(Paths.get(mMapPath, container + FMAP_FILE_EXT), FileType.FLAG_MAP));
+                mapStorageFile(buildPath(mMapPath, container, FMAP_FILE_EXT), FileType.FLAG_MAP));
     }
 
     /** @hide */
     public FlagValueList getFlagValueList(String container) {
         return FlagValueList.fromBytes(
-                mapStorageFile(Paths.get(mBootPath, container + VAL_FILE_EXT), FileType.FLAG_VAL));
+                mapStorageFile(buildPath(mBootPath, container, VAL_FILE_EXT), FileType.FLAG_VAL));
     }
 
     // Map a storage file given file path

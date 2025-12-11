@@ -51,7 +51,7 @@ Common options that apply to both of non-A/B and A/B OTAs
       don't enforce a data wipe with this flag. Because we know for sure this is
       NOT an actual downgrade case, but two builds happen to be cut in a reverse
       order (e.g. from two branches). A legit use case is that we cut a new
-      build C (after having A and B), but want to enfore an update path of A ->
+      build C (after having A and B), but want to enforce an update path of A ->
       C -> B. Specifying --downgrade may not help since that would enforce a
       data wipe for C -> B update.
 
@@ -63,13 +63,6 @@ Common options that apply to both of non-A/B and A/B OTAs
   --wipe_user_data
       Generate an OTA package that will wipe the user data partition when
       installed.
-
-  --retrofit_dynamic_partitions
-      Generates an OTA package that updates a device to support dynamic
-      partitions (default False). This flag is implied when generating
-      an incremental OTA where the base build does not support dynamic
-      partitions but the target build does. For A/B, when this flag is set,
-      --skip_postinstall is implied.
 
   --skip_compatibility_check
       Skip checking compatibility of the input target files package.
@@ -249,9 +242,9 @@ A/B OTA specific options
       older SPL.
 
   --vabc_compression_param
-      Compression algorithm to be used for VABC. Available options: gz, lz4, zstd, brotli, none. 
-      Compression level can be specified by appending ",$LEVEL" to option. 
-      e.g. --vabc_compression_param=gz,9 specifies level 9 compression with gz algorithm
+      Compression algorithm to be used for VABC. Available options: lz4, zstd, none.
+      Compression level can be specified by appending ",$LEVEL" to option.
+      e.g. --vabc_compression_param=zstd,9 specifies level 9 compression with zstd algorithm
 
   --security_patch_level
       Override the security patch level in target files
@@ -276,9 +269,7 @@ import logging
 import multiprocessing
 import os
 import os.path
-import re
 import shutil
-import subprocess
 import sys
 import zipfile
 
@@ -288,7 +279,7 @@ import ota_utils
 import payload_signer
 from ota_utils import (VABC_COMPRESSION_PARAM_SUPPORT, FinalizeMetadata, GetPackageMetadata,
                        PayloadGenerator, SECURITY_PATCH_LEVEL_PROP_NAME, ExtractTargetFiles, CopyTargetFilesDir, TARGET_FILES_IMAGES_SUBDIR)
-from common import DoesInputFileContain, IsSparseImage
+from common import DoesInputFileContain
 import target_files_diff
 from non_ab_ota import GenerateNonAbOtaPackage
 from payload_signer import PayloadSigner
@@ -353,7 +344,6 @@ AB_PARTITIONS = 'META/ab_partitions.txt'
 TARGET_DIFFING_UNZIP_PATTERN = ['BOOT', 'RECOVERY', 'SYSTEM/*', 'VENDOR/*',
                                 'PRODUCT/*', 'SYSTEM_EXT/*', 'ODM/*',
                                 'VENDOR_DLKM/*', 'ODM_DLKM/*', 'SYSTEM_DLKM/*']
-RETROFIT_DAP_UNZIP_PATTERN = ['OTA/super_*.img', AB_PARTITIONS]
 
 # Images to be excluded from secondary payload. We essentially only keep
 # 'system_other' and bootloader partitions.
@@ -377,7 +367,7 @@ def ModifyKeyvalueList(content: str, key: str, value: str):
   """ Update update the key value list with specified key and value
   Args:
     content: The string content of dynamic_partitions_info.txt. Each line
-      should be a key valur pair, where string before the first '=' are keys,
+      should be a key value pair, where string before the first '=' are keys,
       remaining parts are values.
     key: the key of the key value pair to modify
     value: the new value to replace with
@@ -459,7 +449,7 @@ def GetTargetFilesZipForSecondaryImages(input_file, skip_postinstall=False):
   slot will be used. This is to ensure that we always have valid boot, vbmeta,
   bootloader images in the inactive slot.
 
-  After writing system_other to inactive slot's system partiiton,
+  After writing system_other to inactive slot's system partition,
   PackageManagerService will read `ro.cp_system_other_odex`, and set
   `sys.cppreopt` to "requested". Then, according to
   system/extras/cppreopts/cppreopts.rc , init will mount system_other at
@@ -480,7 +470,7 @@ def GetTargetFilesZipForSecondaryImages(input_file, skip_postinstall=False):
       content = f.read()
     # Remove virtual_ab flag from secondary payload so that OTA client
     # don't use snapshots for secondary update
-    delete_keys = ['virtual_ab', "virtual_ab_retrofit"]
+    delete_keys = ['virtual_ab']
     return UpdatesInfoForSpecialUpdates(
         content, lambda p: p not in SECONDARY_PAYLOAD_SKIPPED_IMAGES,
         delete_keys)
@@ -693,77 +683,6 @@ def GetTargetFilesZipForPartialUpdates(input_file, ab_partitions):
   return input_file
 
 
-def GetTargetFilesZipForRetrofitDynamicPartitions(input_file,
-                                                  super_block_devices,
-                                                  dynamic_partition_list):
-  """Returns a target-files.zip for retrofitting dynamic partitions.
-
-  This allows brillo_update_payload to generate an OTA based on the exact
-  bits on the block devices. Postinstall is disabled.
-
-  Args:
-    input_file: The input target-files.zip filename.
-    super_block_devices: The list of super block devices
-    dynamic_partition_list: The list of dynamic partitions
-
-  Returns:
-    The filename of target-files.zip with *.img replaced with super_*.img for
-    each block device in super_block_devices.
-  """
-  assert super_block_devices, "No super_block_devices are specified."
-
-  replace = {'OTA/super_{}.img'.format(dev): 'IMAGES/{}.img'.format(dev)
-             for dev in super_block_devices}
-
-  # Remove partitions from META/ab_partitions.txt that is in
-  # dynamic_partition_list but not in super_block_devices so that
-  # brillo_update_payload won't generate update for those logical partitions.
-  ab_partitions_lines = common.ReadFromInputFile(
-      input_file, AB_PARTITIONS).split("\n")
-  ab_partitions = [line.strip() for line in ab_partitions_lines]
-  # Assert that all super_block_devices are in ab_partitions
-  super_device_not_updated = [partition for partition in super_block_devices
-                              if partition not in ab_partitions]
-  assert not super_device_not_updated, \
-      "{} is in super_block_devices but not in {}".format(
-          super_device_not_updated, AB_PARTITIONS)
-  # ab_partitions -= (dynamic_partition_list - super_block_devices)
-  to_delete = [AB_PARTITIONS]
-
-  # Always skip postinstall for a retrofit update.
-  to_delete += [POSTINSTALL_CONFIG]
-
-  # Delete dynamic_partitions_info.txt so that brillo_update_payload thinks this
-  # is a regular update on devices without dynamic partitions support.
-  to_delete += [DYNAMIC_PARTITION_INFO]
-
-  # Remove the existing partition images as well as the map files.
-  to_delete += list(replace.values())
-  to_delete += ['IMAGES/{}.map'.format(dev) for dev in super_block_devices]
-  for item in to_delete:
-    os.unlink(os.path.join(input_file, item))
-
-  # Write super_{foo}.img as {foo}.img.
-  for src, dst in replace.items():
-    assert DoesInputFileContain(input_file, src), \
-        'Missing {} in {}; {} cannot be written'.format(src, input_file, dst)
-    source_path = os.path.join(input_file, *src.split("/"))
-    target_path = os.path.join(input_file, *dst.split("/"))
-    os.rename(source_path, target_path)
-
-  # Write new ab_partitions.txt file
-  new_ab_partitions = os.path.join(input_file, AB_PARTITIONS)
-  with open(new_ab_partitions, 'w') as f:
-    for partition in ab_partitions:
-      if (partition in dynamic_partition_list and
-              partition not in super_block_devices):
-        logger.info("Dropping %s from ab_partitions.txt", partition)
-        continue
-      f.write(partition + "\n")
-
-  return input_file
-
-
 def GetTargetFilesZipForCustomImagesUpdates(input_file, custom_images: dict):
   """Returns a target-files.zip for custom partitions update.
 
@@ -815,45 +734,6 @@ def GeneratePartitionTimestampFlagsDowngrade(
       ",".join([key + ":" + val for (key, val)
                 in partition_timestamps.items()])
   ]
-
-
-def SupportsMainlineGkiUpdates(target_file):
-  """Return True if the build supports MainlineGKIUpdates.
-
-  This function scans the product.img file in IMAGES/ directory for
-  pattern |*/apex/com.android.gki.*.apex|. If there are files
-  matching this pattern, conclude that build supports mainline
-  GKI and return True
-
-  Args:
-    target_file: Path to a target_file.zip, or an extracted directory
-  Return:
-    True if thisb uild supports Mainline GKI Updates.
-  """
-  if target_file is None:
-    return False
-  if os.path.isfile(target_file):
-    target_file = common.UnzipTemp(target_file, ["IMAGES/product.img"])
-  if not os.path.isdir(target_file):
-    assert os.path.isdir(target_file), \
-        "{} must be a path to zip archive or dir containing extracted"\
-        " target_files".format(target_file)
-  image_file = os.path.join(target_file, "IMAGES", "product.img")
-
-  if not os.path.isfile(image_file):
-    return False
-
-  if IsSparseImage(image_file):
-    # Unsparse the image
-    tmp_img = common.MakeTempFile(suffix=".img")
-    subprocess.check_output(["simg2img", image_file, tmp_img])
-    image_file = tmp_img
-
-  cmd = ["debugfs_static", "-R", "ls -p /apex", image_file]
-  output = subprocess.check_output(cmd).decode()
-
-  pattern = re.compile(r"com\.android\.gki\..*\.apex")
-  return pattern.search(output) is not None
 
 
 def ExtractOrCopyTargetFiles(target_file):
@@ -935,7 +815,7 @@ def GenerateAbOtaPackage(target_file, output_file, source_file=None):
         logger.info("Source and Target have different cow VABC_COW_VERSION specified, default to minimum version")
         OPTIONS.vabc_cow_version = min(source_info.vabc_cow_version, target_info.vabc_cow_version)
 
-    # Virtual AB Compression was introduced in Androd S.
+    # Virtual AB Compression was introduced in Android S.
     # Later, we backported VABC to Android R. But verity support was not
     # backported, so if VABC is used and we are on Android R, disable
     # verity computation.
@@ -1045,11 +925,7 @@ def GenerateAbOtaPackage(target_file, output_file, source_file=None):
     target_file = GetTargetFilesZipForCustomImagesUpdates(
         target_file, OPTIONS.custom_images)
 
-  if OPTIONS.retrofit_dynamic_partitions:
-    target_file = GetTargetFilesZipForRetrofitDynamicPartitions(
-        target_file, target_info.get("super_block_devices").strip().split(),
-        target_info.get("dynamic_partition_list").strip().split())
-  elif OPTIONS.partial:
+  if OPTIONS.partial:
     target_file = GetTargetFilesZipForPartialUpdates(target_file,
                                                      OPTIONS.partial)
   if vabc_compression_param != target_info.vabc_compression_param:
@@ -1137,8 +1013,6 @@ def GenerateAbOtaPackage(target_file, output_file, source_file=None):
     env_override["LD_PRELOAD"] = liblz4_path + \
         ":" + os.environ.get("LD_PRELOAD", "")
 
-  if OPTIONS.disable_vabc:
-    additional_args += ["--disable_vabc=true"]
   if OPTIONS.enable_vabc_xor:
     additional_args += ["--enable_vabc_xor=true"]
   if OPTIONS.compressor_types:
@@ -1265,8 +1139,6 @@ def main(argv):
       OPTIONS.extracted_input = a
     elif o == "--skip_postinstall":
       OPTIONS.skip_postinstall = True
-    elif o == "--retrofit_dynamic_partitions":
-      OPTIONS.retrofit_dynamic_partitions = True
     elif o == "--skip_compatibility_check":
       OPTIONS.skip_compatibility_check = True
     elif o == "--output_metadata_path":
@@ -1291,7 +1163,9 @@ def main(argv):
       custom_partition, custom_image = a.split("=")
       OPTIONS.custom_images[custom_partition] = custom_image
     elif o == "--disable_vabc":
-      OPTIONS.disable_vabc = True
+      raise ValueError("disabling Virtual AB compression is no longer supported."
+                       "VABC has greatly improved over the years and greatly outperforms"
+                       "VAB in every aspect. We have deprecated plain VAB in android 16")
     elif o == "--spl_downgrade":
       OPTIONS.spl_downgrade = True
       OPTIONS.wipe_user_data = True
@@ -1372,7 +1246,6 @@ def main(argv):
                                  "log_diff=",
                                  "extracted_input_target_files=",
                                  "skip_postinstall",
-                                 "retrofit_dynamic_partitions",
                                  "skip_compatibility_check",
                                  "output_metadata_path=",
                                  "disable_fec_computation",
@@ -1429,7 +1302,7 @@ def main(argv):
   if OPTIONS.incremental_source is None and OPTIONS.downgrade:
     raise ValueError("Cannot generate downgradable full OTAs")
 
-  # TODO(xunchang) for retrofit and partial updates, maybe we should rebuild the
+  # TODO(xunchang) for partial updates, maybe we should rebuild the
   # target-file and reload the info_dict. So the info will be consistent with
   # the modified target-file.
 
@@ -1459,22 +1332,12 @@ def main(argv):
   # Load OEM dicts if provided.
   OPTIONS.oem_dicts = _LoadOemDicts(OPTIONS.oem_source)
 
-  # Assume retrofitting dynamic partitions when base build does not set
-  # use_dynamic_partitions but target build does.
   if (OPTIONS.source_info_dict and
       OPTIONS.source_info_dict.get("use_dynamic_partitions") != "true" and
           OPTIONS.target_info_dict.get("use_dynamic_partitions") == "true"):
-    if OPTIONS.target_info_dict.get("dynamic_partition_retrofit") != "true":
-      raise common.ExternalError(
-          "Expect to generate incremental OTA for retrofitting dynamic "
-          "partitions, but dynamic_partition_retrofit is not set in target "
-          "build.")
-    logger.info("Implicitly generating retrofit incremental OTA.")
-    OPTIONS.retrofit_dynamic_partitions = True
-
-  # Skip postinstall for retrofitting dynamic partitions.
-  if OPTIONS.retrofit_dynamic_partitions:
-    OPTIONS.skip_postinstall = True
+    logger.error("Retrofitting dynamic partitions is no longer supported.")
+    raise common.ExternalError(
+        "Both source and target builds must have dynamic partition support")
 
   ab_update = OPTIONS.info_dict.get("ab_update") == "true"
   allow_non_ab = OPTIONS.info_dict.get("allow_non_ab") == "true"
@@ -1534,7 +1397,7 @@ def main(argv):
           "such OTA will likely cause device fail to boot. Pass --spl_downgrade "
           "to override this check. This script expects security patch level to "
           "be in format yyyy-mm-dd (e.x. 2021-02-05). It's possible to use "
-          "separators other than -, so as long as it's used consistenly across "
+          "separators other than -, so as long as it's used consistently across "
           "all SPL dates".format(target_spl, source_spl))
     elif not is_spl_downgrade and OPTIONS.spl_downgrade:
       raise ValueError("--spl_downgrade specified but no actual SPL downgrade"

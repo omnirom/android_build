@@ -7,36 +7,65 @@ rust_defaults {
     edition: "2021",
     clippy_lints: "android",
     lints: "android",
+    crate_root: "src/main.rs",
     srcs: [
-        "src/main.rs",
         ":finalized_flags_record.json",
+        "templates/*.template",
+
     ],
     rustlibs: [
         "libaconfig_protos",
-        "libaconfig_storage_file",
         "libanyhow",
         "libclap",
         "libitertools",
+        "liblazy_static",
         "libprotobuf",
         "libserde",
         "libserde_json",
         "libtinytemplate",
         "libconvert_finalized_flags",
     ],
+    cfgs: select(release_flag("RELEASE_ACONFIG_FINGERPRINT_RUST"), {
+        true: ["enable_fingerprint_rust"],
+        default: [],
+    }) +
+        select(release_flag("RELEASE_ACONFIG_FINGERPRINT_CPP"), {
+            true: ["enable_fingerprint_cpp"],
+            default: [],
+        }) +
+        select(release_flag("RELEASE_JARJAR_FLAGS_IN_FRAMEWORK"), {
+            true: ["enable_jarjar_flags_in_framwork"],
+            default: [],
+        }),
+    features: select(release_flag("RELEASE_ACONFIG_DEFAULT_EXPORTED_READS_TO_DISABLED"), {
+        true: ["default_exported_reads_to_disabled"],
+        default: [],
+    }),
 }
 
 rust_binary_host {
     name: "aconfig",
     defaults: ["aconfig.defaults"],
+    rustlibs: [
+        "libaconfig_storage_file",
+    ],
 }
 
 rust_test_host {
     name: "aconfig.test",
     defaults: ["aconfig.defaults"],
     rustlibs: [
+        "libaconfig_storage_file_with_test_utils",
         "libitertools",
     ],
+    srcs: [
+        "tests/*.aconfig",
+        "tests/*.values",
+    ],
     test_suites: ["general-tests"],
+    data: [
+        "tests/mainline_beta_namespaces.json",
+    ],
 }
 
 // integration tests: general
@@ -63,31 +92,33 @@ aconfig_declarations {
     srcs: ["tests/test_force_read_only.aconfig"],
 }
 
-aconfig_values {
-    name: "aconfig.test.flag.values",
-    package: "com.android.aconfig.test",
-    srcs: [
-        "tests/first.values",
-        "tests/second.values",
-    ],
+aconfig_declarations {
+    name: "mainline_beta_mockup_flags",
+    package: "com.android.aconfig.test.mainline_beta",
+    container: "com.android.mainline_beta_mockup",
+    srcs: ["tests/mainline_beta_mockup.aconfig"],
 }
 
-aconfig_values {
-    name: "aconfig.test.flag.second_values",
-    package: "com.android.aconfig.test",
-    srcs: [
-        "tests/third.values",
-    ],
-}
-
-aconfig_value_set {
-    name: "aconfig.test.flag.value_set",
-    values: [
-        "aconfig.test.flag.values",
-    ],
+aconfig_declarations {
+    name: "mainline_beta_exported_mockup_flags",
+    package: "com.android.aconfig.test.exported.mainline_beta",
+    container: "com.android.mainline_beta_mockup",
+    srcs: ["tests/mainline_beta_exported_mockup.aconfig"],
+    exportable: true,
 }
 
 // integration tests: java
+
+java_aconfig_library {
+    name: "aconfig_test_mainline_beta_java_library",
+    aconfig_declarations: "mainline_beta_mockup_flags",
+}
+
+java_aconfig_library {
+    name: "aconfig_test_mainline_beta_java_library_exported",
+    aconfig_declarations: "mainline_beta_exported_mockup_flags",
+    mode: "exported",
+}
 
 java_aconfig_library {
     name: "aconfig_test_java_library",
@@ -117,6 +148,8 @@ android_test {
         "aconfig_test_java_library",
         "aconfig_test_java_library_exported",
         "aconfig_test_java_library_forcereadonly",
+        "aconfig_test_mainline_beta_java_library",
+        "aconfig_test_mainline_beta_java_library_exported",
         "androidx.test.rules",
         "testng",
     ],

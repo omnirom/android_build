@@ -464,7 +464,10 @@ soong_config_module_type {
     module_type: "android_filesystem_defaults",
     config_namespace: "ANDROID",
     bool_variables: ["TARGET_ADD_ROOT_EXTRA_VENDOR_SYMLINKS"],
-    properties: ["symlinks"],
+    properties: [
+        "symlinks",
+        "file_contexts",
+    ],
 }
 
 genrule {
@@ -487,12 +490,13 @@ system_image_defaults {
     soong_config_variables: {
         TARGET_ADD_ROOT_EXTRA_VENDOR_SYMLINKS: {
             symlinks: generic_symlinks + extra_vendor_symlinks,
+            file_contexts: ":plat_and_vendor_file_contexts",
             conditions_default: {
                 symlinks: generic_symlinks,
+                file_contexts: ":plat_file_contexts",
             },
         },
     },
-    file_contexts: ":plat_and_vendor_file_contexts",
     linker_config: {
         gen_linker_config: true,
         linker_config_srcs: [":system_linker_config_json_file"],
@@ -517,6 +521,7 @@ system_image_defaults {
     },
     build_logtags: true,
     gen_aconfig_flags_pb: true,
+    check_vintf: true,
 
     compile_multilib: "both",
 
@@ -536,6 +541,7 @@ system_image_defaults {
         "android.software.window_magnification.prebuilt.xml", // handheld_system
         "android.system.suspend-service",
         "apexd",
+        "apexd.mainline_patch_level_2",
         "appops",
         "approved-ogki-builds.xml", // base_system
         "appwidget",
@@ -578,7 +584,6 @@ system_image_defaults {
         "fsck.erofs",
         "fsck.f2fs", // for media_system
         "fsck_msdos",
-        "fsverity-release-cert-der",
         "gatekeeperd",
         "gpu_counter_producer",
         "gpuservice",
@@ -691,7 +696,6 @@ system_image_defaults {
         "uinput", // base_system
         "uncrypt", // base_system
         "update_engine", // generic_system
-        "update_engine_sideload", // recovery
         "update_verifier", // generic_system
         "usbd", // base_system
         "vdc", // base_system
@@ -731,6 +735,7 @@ system_image_defaults {
             "layertracegenerator",
             "logpersist.start",
             "logtagd.rc",
+            "lpmodify",
             "ot-cli-ftd",
             "ot-ctl",
             "overlay_remounter",
@@ -766,6 +771,11 @@ system_image_defaults {
         default: [
             "uprobestats", // base_system internal
         ],
+    }) + select(release_flag("RELEASE_NATIVE_FRAMEWORK_PROTOTYPE"), {
+        true: [
+            "zygote_next", // base_system (RELEASE_NATIVE_FRAMEWORK_PROTOTYPE)
+        ],
+        default: [],
     }),
     multilib: {
         common: {
@@ -815,6 +825,7 @@ system_image_defaults {
                 "PartnerBookmarksProvider", // generic_system
                 "PrintRecommendationService", // handheld_system
                 "PrintSpooler", // handheld_system
+                "PrivateSpace", // handheld_system
                 "ProxyHandler", // handheld_system
                 "SecureElement", // handheld_system
                 "SettingsProvider", // base_system
@@ -900,6 +911,33 @@ system_image_defaults {
             }) + select(release_flag("RELEASE_UPROBESTATS_MODULE"), {
                 true: [
                     "com.android.uprobestats", // base_system (RELEASE_UPROBESTATS_MODULE)
+                ],
+                default: [],
+            }) + select(release_flag("RELEASE_TELEPHONY_MODULE"), {
+                true: [
+                    "com.android.telephonycore", // base_system (RELEASE_TELEPHONY_MODULE)
+                ],
+                default: [
+                    "framework-platformtelephony",
+                ],
+            }) + select(release_flag("RELEASE_ACONFIG_INCLUDE_CONTACTS_PICKER_APP"), {
+                true: [
+                    "ContactsPicker", // handheld_system (RELEASE_ACONFIG_INCLUDE_CONTACTS_PICKER_APP)
+                ],
+                default: [],
+            }) + select(release_flag("RELEASE_PACKAGE_COMPUTER_CONTROL"), {
+                true: [
+                    "VirtualDeviceManager", // media_system (RELEASE_PACKAGE_COMPUTER_CONTROL)
+                ],
+                default: [],
+            }) + select(release_flag("RELEASE_CROSS_DEVICE_SYNC"), {
+                true: [
+                    "CrossDeviceSync", // base_system (RELEASE_CROSS_DEVICE_SYNC)
+                ],
+                default: [],
+            }) + select(release_flag("RELEASE_ACONFIG_INCLUDE_EYE_DROPPER_APP"), {
+                true: [
+                    "EyeDropper", // handheld_system (RELEASE_ACONFIG_INCLUDE_EYE_DROPPER_APP)
                 ],
                 default: [],
             }),

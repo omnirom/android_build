@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2019 The Android Open Source Project
+ * Copyright (C) 2025 The Android Open Source Project
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,6 +19,7 @@ syntax = "proto2";
 package com.android.dependencymapper;
 option java_package = "com.android.dependencymapper";
 option java_outer_classname = "DependencyProto";
+option go_package = "go.dependencymapper/protoimpl";
 
 /**
  * A com.android.dependencymapper.DependencyProto.FileDependency object.
@@ -34,6 +35,8 @@ message FileDependency {
   repeated string generated_classes = 3;
   // dependencies of this file.
   repeated string file_dependencies = 4;
+  // class dependencies - likely from kotlin.
+  repeated string cross_module_class_deps = 5;
 }
 
 /**

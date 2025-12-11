@@ -6,6 +6,7 @@ edition = "2021"
 [features]
 default = ["cargo"]
 cargo = []
+default_exported_reads_to_disabled = []
 
 [dependencies]
 anyhow = "1.0.69"
@@ -15,8 +16,9 @@ protobuf = "3.2.0"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 tinytemplate = "1.2.1"
+lazy_static = "1.5.0"
 aconfig_protos = { path = "../aconfig_protos" }
-aconfig_storage_file = { path = "../aconfig_storage_file" }
+aconfig_storage_file = { path = "../aconfig_storage_file", features = ["test_utils"] }
 convert_finalized_flags = { path = "../convert_finalized_flags" }
 
 [build-dependencies]
@@ -25,3 +27,11 @@ itertools = "0.10.5"
 serde = { version = "1.0.152", features = ["derive"] }
 serde_json = "1.0.93"
 convert_finalized_flags = { path = "../convert_finalized_flags" }
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = [
+    "cfg(enable_fingerprint_rust)",
+    "cfg(enable_fingerprint_cpp)",
+    "cfg(enable_jarjar_flags_in_framwork)",
+]

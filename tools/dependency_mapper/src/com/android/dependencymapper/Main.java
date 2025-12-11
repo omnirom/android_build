@@ -17,11 +17,10 @@ package com.android.dependencymapper;
 
 import static com.android.dependencymapper.Utils.listClassesInJar;
 
-import com.android.dependencymapper.DependencyProto;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
@@ -41,11 +40,13 @@ public class Main {
         public Path srcList;
         public Path classesJar;
         public Path dependencyMapProto;
+        public Path crossModuleJarList;
 
-        public InputData(Path srcList, Path classesJar, Path dependencyMapProto) {
+        public InputData(Path srcList, Path classesJar, Path dependencyMapProto, Path crossModuleJarList) {
             this.srcList = srcList;
             this.classesJar = classesJar;
             this.dependencyMapProto = dependencyMapProto;
+            this.crossModuleJarList = crossModuleJarList;
         }
     }
 
@@ -57,13 +58,14 @@ public class Main {
             }
         }
 
-        if (args.length != 6) { // Explicitly check for the correct number of arguments
+        if (args.length != 8) { // Explicitly check for the correct number of arguments
             throw new IllegalArgumentException("Incorrect number of arguments");
         }
 
         Path srcList = null;
         Path classesJar = null;
         Path dependencyMapProto = null;
+        Path crossModuleJars = null;
 
         for (int i = 0; i < args.length; i += 2) {
             String arg = args[i].trim();
@@ -73,6 +75,7 @@ public class Main {
                 case "--src-path" -> srcList = Path.of(argValue);
                 case "--jar-path" -> classesJar = Path.of(argValue);
                 case "--dependency-map-path" -> dependencyMapProto = Path.of(argValue);
+                case "--cross-module-jar-list" -> crossModuleJars = Path.of(argValue);
                 default -> throw new IllegalArgumentException("Unknown argument: " + arg);
             }
         }
@@ -81,7 +84,7 @@ public class Main {
         validateFile(srcList, "--src-path");
         validateFile(classesJar, "--jar-path");
 
-        return new InputData(srcList, classesJar, dependencyMapProto);
+        return new InputData(srcList, classesJar, dependencyMapProto, crossModuleJars);
     }
 
     private static void validateFile(Path path, String argName) {
@@ -99,11 +102,20 @@ public class Main {
     private static void generateDependencyMap(InputData input) {
         // First collect all classes in the jar.
         Set<String> classesInJar = listClassesInJar(input.classesJar);
+        Set<String> crossModuleJars = Utils.parseRspFile(input.crossModuleJarList);
+        Set<String> crossModuleClasses = new HashSet<>();
+        for (String jar : crossModuleJars) {
+            crossModuleClasses.addAll(listClassesInJar(Path.of(jar)));
+        }
+
         // Perform dependency analysis.
-        List<ClassDependencyData> classDependencyDataList = ClassDependencyAnalyzer
-                .analyze(input.classesJar, new ClassRelevancyFilter(classesInJar));
+        List<ClassDependencyData> classDependencyDataList = ClassDependencyAnalyzer.analyze(
+                input.classesJar,
+                new ClassRelevancyFilter(classesInJar),
+                new ClassRelevancyFilter(crossModuleClasses));
+
         // Perform java source analysis.
-        List<JavaSourceData> javaSourceDataList = JavaSourceAnalyzer.analyze(input.srcList);
+        List<JavaSourceData> javaSourceDataList = JavaSourceAnalyzer.parse(input.srcList);
         // Collect all dependencies and map them as DependencyProto.FileDependencyList
         DependencyMapper dp = new DependencyMapper(classDependencyDataList, javaSourceDataList);
         DependencyProto.FileDependencyList dependencyList =  dp.buildDependencyMaps();
@@ -115,9 +127,10 @@ public class Main {
     private static void showUsage() {
         System.err.println(
                 "Usage: dependency-mapper "
-                        + "--src-path [src-list.rsp] "
-                        + "--jar-path [classes.jar] "
-                        + "--dependency-map-path [dependency-map.proto]");
+                        + "--src-path <src-list.rsp> "
+                        + "--jar-path <classes.jar> "
+                        + "--cross-module-jar-list <jar-list.rsp>"
+                        + "--dependency-map-path <dependency-map.proto> ");
     }
 
 }
